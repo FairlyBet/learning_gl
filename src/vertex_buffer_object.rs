@@ -6,15 +6,15 @@ use gl::types::{GLenum, GLuint};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferType {
     /// Array Buffers holds arrays of vertex data for drawing.
-    ArrayBuffer = gl::ARRAY_BUFFER as isize,
+    ArrayBuffer = gl::ARRAY_BUFFER,
     /// Element Array Buffers hold indexes of what vertexes to use for drawing.
-    ElementArrayBuffer = gl::ELEMENT_ARRAY_BUFFER as isize,
+    ElementArrayBuffer = gl::ELEMENT_ARRAY_BUFFER,
 }
 
 /// Basic wrapper for a [Buffer
 /// Object](https://www.khronos.org/opengl/wiki/Buffer_Object).
-pub struct Buffer(pub GLuint);
-impl Buffer {
+pub struct VertexBufferObject(pub GLuint);
+impl VertexBufferObject {
     /// Makes a new vertex buffer
     pub fn new() -> Option<Self> {
         let mut vbo = 0;
@@ -30,12 +30,12 @@ impl Buffer {
 
     /// Bind this vertex buffer for the given type
     pub fn bind(&self, type_: BufferType) {
-        unsafe { gl::BindBuffer(type_ as GLenum, self.0) }
+        unsafe { gl::BindBuffer(type_, self.0) }
     }
 
     /// Clear the current vertex buffer binding for the given type.
-    pub fn clear_binding(ty: BufferType) {
-        unsafe { gl::BindBuffer(ty as GLenum, 0) }
+    pub fn clear_binding(type_: BufferType) {
+        unsafe { gl::BindBuffer(type_  , 0) }
     }
 
     /// Delete buffer

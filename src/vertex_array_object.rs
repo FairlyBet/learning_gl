@@ -2,9 +2,9 @@ use gl::types::GLuint;
 
 /// Basic wrapper for a [Vertex Array
 /// Object](https://www.khronos.org/opengl/wiki/Vertex_Specification#Vertex_Array_Object).
-pub struct VertexArray(GLuint);
+pub struct VertexArrayObject(GLuint);
 
-impl VertexArray {
+impl VertexArrayObject {
     /// Creates a new vertex array object
     pub fn new() -> Option<Self> {
         let mut vao = 0;
