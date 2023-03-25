@@ -38,7 +38,10 @@ fn main() {
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
 
     let rect = Rectangle::setup(0.0);
-
+    // let obj = get_object(data, shader_program, attribute_configuration);
+    // let additional_parameter = T::new();
+    // obj.draw(Option<T1> additional_parameter, Option<T2> additional_logic);
+    // obj.clear();
     main_loop(&mut glfw, &mut window, &receiver, &rect);
 
     rect.end();
