@@ -87,7 +87,7 @@ struct Rectangle {
 impl Rectangle {
     fn setup(offset: f32) -> Rectangle {
         let vertex_shader =
-            Shader::from_source(ShaderType::VertexShader, VERTEX_SHADER_SRC, ||->()).unwrap();
+            Shader::from_source(ShaderType::VertexShader, VERTEX_SHADER_SRC).unwrap();
         let fragment_shader =
             Shader::from_source(ShaderType::FragmentShader, MONO_COLOR_FRAG_SHDR_SRC).unwrap();
         let program = ShaderProgram::new().unwrap();
