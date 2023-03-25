@@ -16,7 +16,7 @@ use shader::{Shader, ShaderType};
 use shader_program::ShaderProgram;
 use shaders_src::*;
 use vertex_array_object::VertexArrayObject;
-use vertex_buffer_object::{VertexBufferObject, BufferType};
+use vertex_buffer_object::{BufferType, VertexBufferObject};
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -39,16 +39,16 @@ fn main() {
 
     let rect = Rectangle::setup(0.0);
 
-    main_loop(&mut window, &receiver, &mut glfw, &rect);
+    main_loop(&mut glfw, &mut window, &receiver, &rect);
 
     rect.end();
     gl_loader::end_gl();
 }
 
 fn main_loop(
+    glfw: &mut Glfw,
     window: &mut Window,
     receiver: &Receiver<(f64, WindowEvent)>,
-    glfw: &mut Glfw,
     rect: &Rectangle,
 ) {
     while !window.should_close() {
@@ -87,7 +87,7 @@ struct Rectangle {
 impl Rectangle {
     fn setup(offset: f32) -> Rectangle {
         let vertex_shader =
-            Shader::from_source(ShaderType::VertexShader, VERTEX_SHADER_SRC).unwrap();
+            Shader::from_source(ShaderType::VertexShader, VERTEX_SHADER_SRC, ||->()).unwrap();
         let fragment_shader =
             Shader::from_source(ShaderType::FragmentShader, MONO_COLOR_FRAG_SHDR_SRC).unwrap();
         let program = ShaderProgram::new().unwrap();
@@ -126,6 +126,7 @@ impl Rectangle {
             0, 1, 3, // first triangle
             1, 2, 3, // second triangle
         ];
+
         let vao = VertexArrayObject::new().unwrap();
         let vbo = VertexBufferObject::new().unwrap();
         let ebo = VertexBufferObject::new().unwrap();

@@ -76,28 +76,28 @@ impl ShaderProgram {
         unsafe { gl::DeleteProgram(self.0) };
     }
 
-    /// Takes a vertex shader source string and a fragment shader source string
-    /// and either gets you a working program object or gets you an error message.
-    ///
-    /// This is the preferred way to create a simple shader program in the common
-    /// case. It's just less error prone than doing all the steps yourself.
-    pub fn from_vert_frag(vert: &str, frag: &str) -> Result<Self, String> {
-        let p = Self::new().ok_or_else(|| "Couldn't allocate a program".to_string())?;
-        let v = Shader::from_source(ShaderType::VertexShader, vert)
-            .map_err(|e| format!("Vertex Compile Error: {}", e))?;
-        let f = Shader::from_source(ShaderType::FragmentShader, frag)
-            .map_err(|e| format!("Fragment Compile Error: {}", e))?;
-        p.attach_shader(&v);
-        p.attach_shader(&f);
-        p.link();
-        v.delete();
-        f.delete();
-        if p.link_success() {
-            Ok(p)
-        } else {
-            let out = format!("Program Link Error: {}", p.info_log());
-            p.delete();
-            Err(out)
-        }
-    }
+    // / Takes a vertex shader source string and a fragment shader source string
+    // / and either gets you a working program object or gets you an error message.
+    // /
+    // / This is the preferred way to create a simple shader program in the common
+    // / case. It's just less error prone than doing all the steps yourself.
+    // pub fn from_vert_frag(vert: &str, frag: &str) -> Result<Self, String> {
+    //     let p = Self::new().ok_or_else(|| "Couldn't allocate a program".to_string())?;
+    //     let v = Shader::from_source(ShaderType::VertexShader, vert)
+    //         .map_err(|e| format!("Vertex Compile Error: {}", e))?;
+    //     let f = Shader::from_source(ShaderType::FragmentShader, frag)
+    //         .map_err(|e| format!("Fragment Compile Error: {}", e))?;
+    //     p.attach_shader(&v);
+    //     p.attach_shader(&f);
+    //     p.link();
+    //     v.delete();
+    //     f.delete();
+    //     if p.link_success() {
+    //         Ok(p)
+    //     } else {
+    //         let out = format!("Program Link Error: {}", p.info_log());
+    //         p.delete();
+    //         Err(out)
+    //     }
+    // }
 }

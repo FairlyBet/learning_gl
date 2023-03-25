@@ -21,7 +21,7 @@ impl Shader {
     ///
     /// Possibly skip the direct creation of the shader object and use
     /// [`ShaderProgram::from_vert_frag`](ShaderProgram::from_vert_frag).
-    pub fn new(type_: ShaderType) -> Option<Self> {
+    pub fn new<F>(type_: ShaderType, attrib_configurer: Option<F>) -> Option<Self> where  F: Fn()->() {
         let shader = unsafe { gl::CreateShader(type_ as GLenum) };
         if shader != 0 {
             Some(Self(shader))
@@ -96,8 +96,8 @@ impl Shader {
     /// Prefer [`ShaderProgram::from_vert_frag`](ShaderProgram::from_vert_frag),
     /// it makes a complete program from the vertex and fragment sources all at
     /// once.
-    pub fn from_source(type_: ShaderType, source: &str) -> Result<Self, String> {
-        let id = Self::new(type_).ok_or_else(|| "Couldn't allocate new shader".to_string())?;
+    pub fn from_source<F>(type_: ShaderType, source: &str, attrib_configurer: Option<F>) -> Result<Self, String> where F:Fn()->(){
+        let id = Self::new(type_, attrib_configurer).ok_or_else(|| "Couldn't allocate new shader".to_string())?;
         id.set_source(source);
         id.compile();
         if id.compile_success() {
@@ -107,5 +107,11 @@ impl Shader {
             id.delete();
             Err(out)
         }
+    }
+
+    pub fn set_attribute_configurer<F>(attrib_configurer: F)
+    where
+        F: Fn() -> (),
+    {
     }
 }

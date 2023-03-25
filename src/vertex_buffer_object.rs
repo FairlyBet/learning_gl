@@ -1,4 +1,6 @@
-use gl::types::{GLenum, GLuint};
+use std::ffi::c_void;
+
+use gl::types::{GLenum, GLsizeiptr, GLuint};
 
 /// Basic wrapper for a [Vertex Array
 /// Object](https://www.khronos.org/opengl/wiki/Vertex_Specification#Vertex_Array_Object).
@@ -6,9 +8,9 @@ use gl::types::{GLenum, GLuint};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferType {
     /// Array Buffers holds arrays of vertex data for drawing.
-    ArrayBuffer = gl::ARRAY_BUFFER,
+    ArrayBuffer = gl::ARRAY_BUFFER as isize,
     /// Element Array Buffers hold indexes of what vertexes to use for drawing.
-    ElementArrayBuffer = gl::ELEMENT_ARRAY_BUFFER,
+    ElementArrayBuffer = gl::ELEMENT_ARRAY_BUFFER as isize,
 }
 
 /// Basic wrapper for a [Buffer
@@ -30,16 +32,22 @@ impl VertexBufferObject {
 
     /// Bind this vertex buffer for the given type
     pub fn bind(&self, type_: BufferType) {
-        unsafe { gl::BindBuffer(type_, self.0) }
+        unsafe { gl::BindBuffer(type_ as GLenum, self.0) }
     }
 
     /// Clear the current vertex buffer binding for the given type.
     pub fn clear_binding(type_: BufferType) {
-        unsafe { gl::BindBuffer(type_  , 0) }
+        unsafe { gl::BindBuffer(type_ as GLenum, 0) }
     }
 
     /// Delete buffer
     pub fn delete(self) {
         unsafe { gl::DeleteBuffers(1, &self.0) }
+    }
+
+    pub fn buffer_data(target: GLenum, data: *const c_void, size: GLsizeiptr, usage: GLenum) {
+        unsafe {
+            gl::BufferData(target, size, data, usage);
+        }
     }
 }
