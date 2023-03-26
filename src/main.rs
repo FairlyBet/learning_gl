@@ -10,7 +10,11 @@ use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
-use std::{ffi::CString, mem::size_of_val, sync::mpsc::Receiver};
+use std::{
+    ffi::{c_void, CString},
+    mem::size_of_val,
+    sync::mpsc::Receiver,
+};
 
 use shader::{Shader, ShaderType};
 use shader_program::ShaderProgram;
@@ -37,23 +41,17 @@ fn main() {
     gl_loader::init_gl();
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
 
-    let rect = Rectangle::setup(0.0);
+    //let rect = Rectangle::setup(0.0);
     // let obj = get_object(data, shader_program, attribute_configuration);
     // let additional_parameter = T::new();
     // obj.draw(Option<T1> additional_parameter, Option<T2> additional_logic);
     // obj.clear();
-    main_loop(&mut glfw, &mut window, &receiver, &rect);
+    main_loop(&mut glfw, &mut window, &receiver);
 
-    rect.end();
     gl_loader::end_gl();
 }
 
-fn main_loop(
-    glfw: &mut Glfw,
-    window: &mut Window,
-    receiver: &Receiver<(f64, WindowEvent)>,
-    rect: &Rectangle,
-) {
+fn main_loop(glfw: &mut Glfw, window: &mut Window, receiver: &Receiver<(f64, WindowEvent)>) {
     while !window.should_close() {
         handle_window_events(receiver, window);
         unsafe {
@@ -61,7 +59,6 @@ fn main_loop(
         }
         let time = glfw.get_time();
         let green_component = (time / 2.0).sin() / 2.0 + 0.5;
-        rect.draw((0.0, green_component as f32, 0.0, 1.0));
         window.swap_buffers();
         glfw.poll_events();
     }
@@ -79,103 +76,150 @@ fn handle_window_events(receiver: &Receiver<(f64, WindowEvent)>, window: &mut Wi
     }
 }
 
-struct Rectangle {
+struct Object<'a> {
     vao: VertexArrayObject,
-    vbo: VertexBufferObject,
-    ebo: VertexBufferObject,
-    color_location: i32,
-    program: ShaderProgram,
+    program: &'a ShaderProgram,
+    draw_fn: fn() -> (),
 }
 
-impl Rectangle {
-    fn setup(offset: f32) -> Rectangle {
-        let vertex_shader =
-            Shader::from_source(ShaderType::VertexShader, VERTEX_SHADER_SRC).unwrap();
-        let fragment_shader =
-            Shader::from_source(ShaderType::FragmentShader, MONO_COLOR_FRAG_SHDR_SRC).unwrap();
-        let program = ShaderProgram::new().unwrap();
-        let location: i32;
-
-        vertex_shader.compile();
-        fragment_shader.compile();
-        program.attach_shader(&vertex_shader);
-        program.attach_shader(&fragment_shader);
-        program.link();
-        program.use_();
-
-        vertex_shader.delete();
-        fragment_shader.delete();
-
-        let name = CString::new("inputColor").unwrap();
-        unsafe {
-            location = gl::GetUniformLocation(program.get_id(), name.as_ptr());
-        }
-
-        let vertices: [f32; 12] = [
-            1.0,
-            0.5 + offset,
-            0.0,
-            1.0,
-            -0.5 + offset,
-            0.0,
-            -1.0,
-            -0.5 + offset,
-            0.0,
-            -1.0,
-            0.5 + offset,
-            0.0,
-        ];
-        let indeces: [u32; 6] = [
-            0, 1, 3, // first triangle
-            1, 2, 3, // second triangle
-        ];
-
+impl<'a> Object<'a> {
+    pub fn new(
+        data: &Vec<VertexBufferObject>,
+        program: &'a ShaderProgram,
+        attribute_configurer: &fn() -> (),
+        draw_fn: fn() -> (),
+    ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
-        let vbo = VertexBufferObject::new().unwrap();
-        let ebo = VertexBufferObject::new().unwrap();
         vao.bind();
-        vbo.bind(BufferType::ArrayBuffer);
-        unsafe {
-            gl::BufferData(
-                gl::ARRAY_BUFFER,
-                size_of_val(&vertices) as isize,
-                vertices.as_ptr().cast(),
-                gl::STATIC_DRAW,
-            );
-
-            ebo.bind(BufferType::ElementArrayBuffer);
-            gl::BufferData(
-                gl::ELEMENT_ARRAY_BUFFER,
-                size_of_val(&indeces) as isize,
-                indeces.as_ptr().cast(),
-                gl::STATIC_DRAW,
-            );
-
-            gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0 as i32, 0 as *const _);
-            gl::EnableVertexAttribArray(0);
-
-            gl::ClearColor(0.2_f32, 0.3_f32, 0.3_f32, 1_f32);
+        for buffer in data {
+            buffer.bind();
         }
-        Rectangle {
+        attribute_configurer();
+
+        Object {
             vao,
-            vbo,
-            ebo,
-            color_location: location,
             program,
+            draw_fn,
         }
     }
 
-    fn draw(&self, color: (f32, f32, f32, f32)) {
-        unsafe {
-            gl::Uniform4f(self.color_location, color.0, color.1, color.2, color.3);
-            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
-        }
+    pub fn bind(&self) {
+        self.vao.bind();
+        self.program.use_();
     }
 
-    fn end(self) {
-        self.ebo.delete();
-        self.vbo.delete();
-        self.vao.delete();
-        self.program.delete();
+    pub fn draw<T>(&self, addtional_input: Option<T>, input_processing: Option<fn(T) -> ()>) {
+        match input_processing {
+            Some(processing) => {
+                if let Some(input) = addtional_input {
+                    processing(input)
+                }
+            }
+            _ => {}
+        }
+        (self.draw_fn)();
     }
+
+    pub fn clear() {}
 }
+
+// struct Rectangle {
+//     vao: VertexArrayObject,
+//     vbo: VertexBufferObject,
+//     ebo: VertexBufferObject,
+//     color_location: i32,
+//     program: ShaderProgram,
+// }
+
+// impl Rectangle {
+//     fn setup(offset: f32) -> Rectangle {
+//         let vertex_shader =
+//             Shader::from_source(ShaderType::VertexShader, VERTEX_SHADER_SRC).unwrap();
+//         let fragment_shader =
+//             Shader::from_source(ShaderType::FragmentShader, MONO_COLOR_FRAG_SHDR_SRC).unwrap();
+//         let program = ShaderProgram::new().unwrap();
+//         let location: i32;
+
+//         vertex_shader.compile();
+//         fragment_shader.compile();
+//         program.attach_shader(&vertex_shader);
+//         program.attach_shader(&fragment_shader);
+//         program.link();
+//         program.use_();
+
+//         vertex_shader.delete();
+//         fragment_shader.delete();
+
+//         let name = CString::new("inputColor").unwrap();
+//         unsafe {
+//             location = gl::GetUniformLocation(program.get_id(), name.as_ptr());
+//         }
+
+//         let vertices: [f32; 12] = [
+//             1.0,
+//             0.5 + offset,
+//             0.0,
+//             1.0,
+//             -0.5 + offset,
+//             0.0,
+//             -1.0,
+//             -0.5 + offset,
+//             0.0,
+//             -1.0,
+//             0.5 + offset,
+//             0.0,
+//         ];
+//         let indeces: [u32; 6] = [
+//             0, 1, 3, // first triangle
+//             1, 2, 3, // second triangle
+//         ];
+
+//         let vao = VertexArrayObject::new().unwrap();
+//         let vbo = VertexBufferObject::new().unwrap();
+//         let ebo = VertexBufferObject::new().unwrap();
+//         vao.bind();
+//         vbo.bind(BufferType::ArrayBuffer);
+//         unsafe {
+//             gl::BufferData(
+//                 gl::ARRAY_BUFFER,
+//                 size_of_val(&vertices) as isize,
+//                 vertices.as_ptr().cast(),
+//                 gl::STATIC_DRAW,
+//             );
+
+//             ebo.bind(BufferType::ElementArrayBuffer);
+//             gl::BufferData(
+//                 gl::ELEMENT_ARRAY_BUFFER,
+//                 size_of_val(&indeces) as isize,
+//                 indeces.as_ptr().cast(),
+//                 gl::STATIC_DRAW,
+//             );
+
+//             gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0 as i32, 0 as *const _);
+//             gl::EnableVertexAttribArray(0);
+
+//             gl::ClearColor(0.2_f32, 0.3_f32, 0.3_f32, 1_f32);
+//         }
+//         Rectangle {
+//             vao,
+//             vbo,
+//             ebo,
+//             color_location: location,
+//             program,
+//         }
+//     }
+
+//     fn draw(&self, color: (f32, f32, f32, f32)) {
+//         unsafe {
+//             gl::Uniform4f(self.color_location, color.0, color.1, color.2, color.3);
+//             gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
+//         }
+//     }
+
+//     fn end(self) {
+//         self.ebo.delete();
+//         self.vbo.delete();
+//         self.vao.delete();
+//         self.program.delete();
+//     }
+// }

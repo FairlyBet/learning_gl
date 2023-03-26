@@ -15,39 +15,39 @@ pub enum BufferType {
 
 /// Basic wrapper for a [Buffer
 /// Object](https://www.khronos.org/opengl/wiki/Buffer_Object).
-pub struct VertexBufferObject(pub GLuint);
+pub struct VertexBufferObject(GLuint, GLenum);
 impl VertexBufferObject {
     /// Makes a new vertex buffer
-    pub fn new() -> Option<Self> {
+    pub fn new(type_: BufferType) -> Option<Self> {
         let mut vbo = 0;
         unsafe {
             gl::GenBuffers(1, &mut vbo);
         }
         if vbo != 0 {
-            Some(Self(vbo))
+            Some(Self(vbo, type_ as GLenum))
         } else {
             None
         }
     }
 
     /// Bind this vertex buffer for the given type
-    pub fn bind(&self, type_: BufferType) {
-        unsafe { gl::BindBuffer(type_ as GLenum, self.0) }
+    pub fn bind(&self) {
+        unsafe { gl::BindBuffer(self.1 as GLenum, self.0) }
     }
 
     /// Clear the current vertex buffer binding for the given type.
-    pub fn clear_binding(type_: BufferType) {
-        unsafe { gl::BindBuffer(type_ as GLenum, 0) }
+    pub fn clear_binding(&self) {
+        unsafe { gl::BindBuffer(self.1 as GLenum, 0) }
+    }
+
+    pub fn buffer_data(&self, data: *const c_void, size: GLsizeiptr, usage: GLenum) {
+        unsafe {
+            gl::BufferData(self.1, size, data, usage);
+        }
     }
 
     /// Delete buffer
     pub fn delete(self) {
         unsafe { gl::DeleteBuffers(1, &self.0) }
-    }
-
-    pub fn buffer_data(target: GLenum, data: *const c_void, size: GLsizeiptr, usage: GLenum) {
-        unsafe {
-            gl::BufferData(target, size, data, usage);
-        }
     }
 }
