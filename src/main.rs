@@ -40,25 +40,81 @@ fn main() {
 
     gl_loader::init_gl();
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
+    unsafe {
+        gl::ClearColor(0.1, 0.1, 0.1, 1.0);
+    }
 
-    //let rect = Rectangle::setup(0.0);
-    // let obj = get_object(data, shader_program, attribute_configuration);
-    // let additional_parameter = T::new();
-    // obj.draw(Option<T1> additional_parameter, Option<T2> additional_logic);
-    // obj.clear();
-    main_loop(&mut glfw, &mut window, &receiver);
+    let vertices: [f32; 12] = [
+        1.0, 0.5, 0.0, 1.0, -0.5, 0.0, -1.0, -0.5, 0.0, -1.0, 0.5, 0.0,
+    ];
+    let indeces: [u32; 6] = [
+        0, 1, 3, // first triangle
+        1, 2, 3, // second triangle
+    ];
+    let program = ShaderProgram::new().unwrap();
+    let vertex_shader = Shader::from_source(ShaderType::VertexShader, VERTEX_SHADER_SRC).unwrap();
+    let fragment_shader =
+        Shader::from_source(ShaderType::FragmentShader, MONO_COLOR_FRAG_SHDR_SRC).unwrap();
+
+    vertex_shader.compile();
+    fragment_shader.compile();
+
+    program.attach_shader(&vertex_shader);
+    program.attach_shader(&fragment_shader);
+    program.link();
+    vertex_shader.delete();
+    fragment_shader.delete();
+
+    let vbo = VertexBufferObject::new(BufferType::ArrayBuffer).unwrap();
+    let ebo = VertexBufferObject::new(BufferType::ElementArrayBuffer).unwrap();
+    vbo.bind();
+    vbo.buffer_data(
+        vertices.as_ptr().cast(),
+        size_of_val(&vertices),
+        gl::STATIC_DRAW,
+    );
+    ebo.bind();
+    ebo.buffer_data(
+        indeces.as_ptr().cast(),
+        size_of_val(&vertices),
+        gl::STATIC_DRAW,
+    );
+    let data = vec![&vbo, &ebo];
+    let draw = || unsafe {
+        gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
+    };
+    let attrib: fn() -> () = || unsafe {
+        gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0 as i32, 0 as *const _);
+        gl::EnableVertexAttribArray(0);
+    };
+    let object = Object::new(&data, &program, &attrib, draw);
+
+    main_loop(&mut glfw, &mut window, &receiver, &object, &program);
 
     gl_loader::end_gl();
 }
 
-fn main_loop(glfw: &mut Glfw, window: &mut Window, receiver: &Receiver<(f64, WindowEvent)>) {
+fn main_loop(
+    glfw: &mut Glfw,
+    window: &mut Window,
+    receiver: &Receiver<(f64, WindowEvent)>,
+    object: &Object, program : &ShaderProgram
+) {
     while !window.should_close() {
         handle_window_events(receiver, window);
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
         let time = glfw.get_time();
-        let green_component = (time / 2.0).sin() / 2.0 + 0.5;
+        let green_component = ((time / 2.0).sin() / 2.0 + 0.5) as f32;
+        let input_proc= |green: Option<&f32>| {
+            let location: i32;
+            let name = CString::new("inputColor").unwrap();
+            unsafe {
+                location = gl::GetUniformLocation(program.get_id(), name.as_ptr());
+            }
+        };
+        object.draw::<f32>(Some(&green_component), Some(&input_proc));
         window.swap_buffers();
         glfw.poll_events();
     }
@@ -84,7 +140,7 @@ struct Object<'a> {
 
 impl<'a> Object<'a> {
     pub fn new(
-        data: &Vec<VertexBufferObject>,
+        data: &Vec<&VertexBufferObject>,
         program: &'a ShaderProgram,
         attribute_configurer: &fn() -> (),
         draw_fn: fn() -> (),
@@ -95,7 +151,7 @@ impl<'a> Object<'a> {
             buffer.bind();
         }
         attribute_configurer();
-
+        VertexArrayObject::clear_binding();
         Object {
             vao,
             program,
@@ -108,19 +164,17 @@ impl<'a> Object<'a> {
         self.program.use_();
     }
 
-    pub fn draw<T>(&self, addtional_input: Option<T>, input_processing: Option<fn(T) -> ()>) {
+    pub fn draw<T>(
+        &self,
+        addtional_input: Option<&T>,
+        input_processing: Option<&fn(Option<&T>) -> ()>,
+    ) {
         match input_processing {
-            Some(processing) => {
-                if let Some(input) = addtional_input {
-                    processing(input)
-                }
-            }
+            Some(processing) => processing(addtional_input),
             _ => {}
         }
         (self.draw_fn)();
     }
-
-    pub fn clear() {}
 }
 
 // struct Rectangle {

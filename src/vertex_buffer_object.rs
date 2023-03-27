@@ -32,18 +32,19 @@ impl VertexBufferObject {
 
     /// Bind this vertex buffer for the given type
     pub fn bind(&self) {
-        unsafe { gl::BindBuffer(self.1 as GLenum, self.0) }
+        unsafe { gl::BindBuffer(self.1, self.0) }
     }
 
     /// Clear the current vertex buffer binding for the given type.
     pub fn clear_binding(&self) {
-        unsafe { gl::BindBuffer(self.1 as GLenum, 0) }
+        unsafe { gl::BindBuffer(self.1, 0) }
     }
 
-    pub fn buffer_data(&self, data: *const c_void, size: GLsizeiptr, usage: GLenum) {
+    pub fn buffer_data(&self, data: *const c_void, size: usize, usage: GLenum) {
         unsafe {
-            gl::BufferData(self.1, size, data, usage);
+            gl::BufferData(self.1, size as isize, data, usage);
         }
+       
     }
 
     /// Delete buffer
