@@ -1,6 +1,6 @@
 use std::ffi::c_void;
 
-use gl::types::{GLenum, GLsizeiptr, GLuint};
+use gl::types::{GLenum, GLuint};
 
 /// Basic wrapper for a [Vertex Array
 /// Object](https://www.khronos.org/opengl/wiki/Vertex_Specification#Vertex_Array_Object).
@@ -44,7 +44,6 @@ impl VertexBufferObject {
         unsafe {
             gl::BufferData(self.1, size as isize, data, usage);
         }
-       
     }
 
     /// Delete buffer

@@ -1,4 +1,4 @@
-use crate::shader::{Shader, ShaderType};
+use crate::shader::Shader;
 use gl::types::GLuint;
 
 /// A handle to a [Program
@@ -36,31 +36,31 @@ impl ShaderProgram {
     }
 
     /// Checks if the last linking operation was successful.
-    pub fn link_success(&self) -> bool {
-        let mut success = 0;
-        unsafe { gl::GetProgramiv(self.0, gl::LINK_STATUS, &mut success) };
-        success == i32::from(gl::TRUE)
-    }
+    // pub fn link_success(&self) -> bool {
+    //     let mut success = 0;
+    //     unsafe { gl::GetProgramiv(self.0, gl::LINK_STATUS, &mut success) };
+    //     success == i32::from(gl::TRUE)
+    // }
 
     /// Gets the log data for this program.
     ///
     /// This is usually used to check the message when a program failed to link.
-    pub fn info_log(&self) -> String {
-        let mut needed_len = 0;
-        unsafe { gl::GetProgramiv(self.0, gl::INFO_LOG_LENGTH, &mut needed_len) };
-        let mut v: Vec<u8> = Vec::with_capacity(needed_len.try_into().unwrap());
-        let mut len_written = 0_i32;
-        unsafe {
-            gl::GetProgramInfoLog(
-                self.0,
-                v.capacity() as i32,
-                &mut len_written,
-                v.as_mut_ptr().cast(),
-            );
-            v.set_len(len_written.try_into().unwrap());
-        }
-        String::from_utf8_lossy(&v).into_owned()
-    }
+    // pub fn info_log(&self) -> String {
+    //     let mut needed_len = 0;
+    //     unsafe { gl::GetProgramiv(self.0, gl::INFO_LOG_LENGTH, &mut needed_len) };
+    //     let mut v: Vec<u8> = Vec::with_capacity(needed_len.try_into().unwrap());
+    //     let mut len_written = 0_i32;
+    //     unsafe {
+    //         gl::GetProgramInfoLog(
+    //             self.0,
+    //             v.capacity() as i32,
+    //             &mut len_written,
+    //             v.as_mut_ptr().cast(),
+    //         );
+    //         v.set_len(len_written.try_into().unwrap());
+    //     }
+    //     String::from_utf8_lossy(&v).into_owned()
+    // }
 
     /// Sets the program as the program to use when drawing.
     pub fn use_(&self) {
