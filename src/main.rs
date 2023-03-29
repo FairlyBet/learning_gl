@@ -16,7 +16,6 @@ use std::{
 };
 
 use shader_program::ShaderProgram;
-use shaders_src::*;
 use vertex_array_object::VertexArrayObject;
 use vertex_buffer_object::{BufferType, VertexBufferObject};
 
@@ -38,12 +37,16 @@ fn main() {
 
     gl_loader::init_gl();
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
-    
+
     unsafe {
         gl::ClearColor(0.2, 0.3, 0.3, 1.0);
     }
 
-    let program = ShaderProgram::from_vert_frag(VERTEX_SHADER_WITH_COL_SRC, MONO_COLOR_FRAG_SHDR_SRC).unwrap();
+    let program = ShaderProgram::from_vert_frag_file(
+        "\\src\\shaders\\vert_with_color.vert",
+        "\\src\\shaders\\frag_mono_color.frag",
+    )
+    .unwrap();
 
     let vertices: [f32; 18] = [
         // positions                // colors

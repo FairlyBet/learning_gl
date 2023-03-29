@@ -1,4 +1,5 @@
 use gl::types::{GLenum, GLuint};
+use std::{fs::File, io::Read, path::Path};
 
 /// The types of shader object.
 pub enum ShaderType {
@@ -107,5 +108,29 @@ impl Shader {
             id.delete();
             Err(out)
         }
+    }
+
+    pub fn from_file(type_: ShaderType, file_name: &str) -> Result<Self, String> {
+        let source = Shader::get_src(file_name);
+        Shader::from_source(type_, &source)
+    }
+
+    pub fn get_src(file_name: &str) -> String {
+        let path = Path::new(file_name);
+        let display = path.display();
+
+        // Open the path in read-only mode, returns `io::Result<File>`
+        let mut file = match File::open(&path) {
+            Err(why) => panic!("couldn't open {}: {}", display, why),
+            Ok(file) => file,
+        };
+
+        // Read the file contents into a string, returns `io::Result<usize>`
+        let mut source = String::new();
+        match file.read_to_string(&mut source) {
+            Err(why) => panic!("couldn't read {}: {}", display, why),
+            Ok(_) => {}
+        }
+        source
     }
 }

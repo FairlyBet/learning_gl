@@ -76,11 +76,11 @@ impl ShaderProgram {
         unsafe { gl::DeleteProgram(self.0) };
     }
 
-    // / Takes a vertex shader source string and a fragment shader source string
-    // / and either gets you a working program object or gets you an error message.
-    // /
-    // / This is the preferred way to create a simple shader program in the common
-    // / case. It's just less error prone than doing all the steps yourself.
+    /// Takes a vertex shader source string and a fragment shader source string
+    /// and either gets you a working program object or gets you an error message.
+    ///
+    /// This is the preferred way to create a simple shader program in the common
+    /// case. It's just less error prone than doing all the steps yourself.
     pub fn from_vert_frag(vert: &str, frag: &str) -> Result<Self, String> {
         let p = Self::new().ok_or_else(|| "Couldn't allocate a program".to_string())?;
         let v = Shader::from_source(ShaderType::VertexShader, vert)
@@ -99,5 +99,11 @@ impl ShaderProgram {
             p.delete();
             Err(out)
         }
+    }
+
+    pub fn from_vert_frag_file(vert_file_name: &str, frag_file_name: &str) -> Result<Self, String> {
+        let vert = Shader::get_src(vert_file_name);
+        let frag = Shader::get_src(frag_file_name);
+        ShaderProgram::from_vert_frag(vert.as_str(), frag.as_str())
     }
 }
