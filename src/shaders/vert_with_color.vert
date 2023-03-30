@@ -1,10 +1,11 @@
 #version 330 core
+
 layout(location = 0) in vec3 pos;
 layout(location = 1) in vec3 col;
 
-out vec3 out_color;
+out vec3 input_color;
 
 void main() {
     gl_Position = vec4(pos, 1.0);
-    out_color = col;
+    input_color = col;
 }

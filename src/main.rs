@@ -19,8 +19,11 @@ use shader_program::ShaderProgram;
 use vertex_array_object::VertexArrayObject;
 use vertex_buffer_object::{BufferType, VertexBufferObject};
 
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 600;
+const WIDTH: u32 = 480;
+const HEIGHT: u32 = 480;
+
+static VERT_W_COLOR: &str = include_str!("shaders\\vert_with_color.vert");
+static FRAG_MONO_COLOR: &str = include_str!("shaders\\frag_mono_color.frag");
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -41,18 +44,17 @@ fn main() {
     unsafe {
         gl::ClearColor(0.2, 0.3, 0.3, 1.0);
     }
-
-    let program = ShaderProgram::from_vert_frag_file(
-        "\\src\\shaders\\vert_with_color.vert",
-        "\\src\\shaders\\frag_mono_color.frag",
+    let program = ShaderProgram::from_vert_frag(
+        VERT_W_COLOR,
+        FRAG_MONO_COLOR,
     )
     .unwrap();
-
+    let h = 3.0_f32.sqrt() * 0.5; 
     let vertices: [f32; 18] = [
         // positions                // colors
-        0.5, -0.5, 0.0, 1.0, 0.0, 0.0, // bottom right
-        -0.5, -0.5, 0.0, 0.0, 1.0, 0.0, // bottom let
-        0.0, 0.5, 0.0, 0.0, 0.0, 1.0, // top
+        0.0 - h / 2.0, 0.5, 0.0, 1.0, 1.0, 1.0, // bottom right
+        0.0 - h / 2.0, -0.5, 0.0, 0.0, 0.0, 0.0, // bottom let
+        h / 2.0, 0.0, 0.0, 1.0, 0.0, 0.0, // top
     ];
 
     let vbo = VertexBufferObject::new(BufferType::ArrayBuffer).unwrap();
