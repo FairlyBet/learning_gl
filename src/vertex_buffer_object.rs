@@ -36,14 +36,16 @@ impl VertexBufferObject {
     }
 
     /// Clear the current vertex buffer binding for the given type.
-    pub fn clear_binding(&self) {
+    pub fn unbind(&self) {
         unsafe { gl::BindBuffer(self.1, 0) }
     }
 
     pub fn buffer_data(&self, data: *const c_void, size: usize, usage: GLenum) {
+        self.bind();
         unsafe {
             gl::BufferData(self.1, size as isize, data, usage);
         }
+        self.unbind();
     }
 
     /// Delete buffer

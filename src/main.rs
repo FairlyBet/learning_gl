@@ -1,8 +1,9 @@
 #![windows_subsystem = "windows"]
 
+mod object;
 mod shader;
 mod shader_program;
-mod shaders_src;
+mod texture;
 mod vertex_array_object;
 mod vertex_buffer_object;
 
@@ -10,7 +11,10 @@ use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
+use object::Object;
+use stb::image::Channels;
 use std::{
+    fs::File,
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
 };
@@ -19,11 +23,11 @@ use shader_program::ShaderProgram;
 use vertex_array_object::VertexArrayObject;
 use vertex_buffer_object::{BufferType, VertexBufferObject};
 
-const WIDTH: u32 = 800;
+const WIDTH: u32 = 600;
 const HEIGHT: u32 = 600;
 
-static VERT_W_COLOR: &str = include_str!("shaders\\vert_with_color.vert");
-static FRAG_MONO_COLOR: &str = include_str!("shaders\\frag_mono_color.frag");
+static VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
+static FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -44,41 +48,41 @@ fn main() {
     unsafe {
         gl::ClearColor(0.2, 0.3, 0.3, 1.0);
     }
-    let program = ShaderProgram::from_vert_frag(VERT_W_COLOR, FRAG_MONO_COLOR).unwrap();
-    let h = 3.0_f32.sqrt() * 0.5;
-    let vertices: [f32; 18] = [
-        // positions                // colors
-        0.0 - h / 2.0,
-        0.5,
-        0.0,
-        1.0,
-        1.0,
-        1.0, // bottom right
-        0.0 - h / 2.0,
-        -0.5,
-        0.0,
-        0.0,
-        0.0,
-        0.0, // bottom let
-        h / 2.0,
-        0.0,
-        0.0,
-        1.0,
-        0.0,
-        0.0, // top
+
+    let mut file = File::open("res\\container.jpg").unwrap();
+    let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
+    let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data);
+    texture.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
+    texture.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
+    texture.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
+    texture.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+    texture.bind();
+
+    let program = ShaderProgram::from_vert_frag(VERT_SHDR_SRC, FRAG_SHDR_SRC).unwrap();
+
+    let vertices: [f32; 32] = [
+        0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
+        0.5, -0.5, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
+        -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
+        -0.5, 0.5, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
     ];
+    let elements: [u32; 6] = [0, 1, 3, 1, 2, 3];
 
     let vbo = VertexBufferObject::new(BufferType::ArrayBuffer).unwrap();
-    vbo.bind();
     vbo.buffer_data(
         vertices.as_ptr().cast(),
         size_of_val(&vertices),
         gl::STATIC_DRAW,
     );
-
-    let data = vec![&vbo];
+    let ebo = VertexBufferObject::new(BufferType::ElementArrayBuffer).unwrap();
+    ebo.buffer_data(
+        elements.as_ptr().cast(),
+        size_of_val(&elements),
+        gl::STATIC_DRAW,
+    );
+    let data = vec![&vbo, &ebo];
     let draw = || unsafe {
-        gl::DrawArrays(gl::TRIANGLES, 0, 3);
+        gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
     };
     let attrib: fn() -> () = || unsafe {
         gl::VertexAttribPointer(
@@ -86,7 +90,7 @@ fn main() {
             3,
             gl::FLOAT,
             gl::FALSE,
-            (6 * size_of::<f32>()) as i32,
+            (8 * size_of::<f32>()) as i32,
             0 as *const _,
         );
         gl::EnableVertexAttribArray(0);
@@ -95,17 +99,28 @@ fn main() {
             3,
             gl::FLOAT,
             gl::FALSE,
-            (6 * size_of::<f32>()) as i32,
+            (8 * size_of::<f32>()) as i32,
             (3 * size_of::<f32>()) as i32 as *const _,
         );
         gl::EnableVertexAttribArray(1);
+        gl::VertexAttribPointer(
+            2,
+            2,
+            gl::FLOAT,
+            gl::FALSE,
+            (8 * size_of::<f32>()) as i32,
+            (6 * size_of::<f32>()) as i32 as *const _,
+        );
+        gl::EnableVertexAttribArray(2);
     };
     let object = Object::new(&data, &program, &attrib, draw);
 
     main_loop(&mut glfw, &mut window, &receiver, &object);
 
     vbo.delete();
+    ebo.delete();
     object.delete();
+    texture.delete();
     program.delete();
     gl_loader::end_gl();
 }
@@ -139,49 +154,5 @@ fn handle_window_events(receiver: &Receiver<(f64, WindowEvent)>, window: &mut Wi
             },
             _ => {}
         }
-    }
-}
-
-struct Object<'a> {
-    vao: VertexArrayObject,
-    program: &'a ShaderProgram,
-    draw_fn: fn() -> (),
-}
-
-impl<'a> Object<'a> {
-    pub fn new(
-        data: &Vec<&VertexBufferObject>,
-        program: &'a ShaderProgram,
-        attribute_configurer: &fn() -> (),
-        draw_fn: fn() -> (),
-    ) -> Self {
-        let vao = VertexArrayObject::new().unwrap();
-        vao.bind();
-        for buffer in data {
-            buffer.bind();
-        }
-        attribute_configurer();
-        VertexArrayObject::clear_binding();
-        for buffer in data {
-            buffer.clear_binding();
-        }
-        Object {
-            vao,
-            program,
-            draw_fn,
-        }
-    }
-
-    pub fn bind(&self) {
-        self.vao.bind();
-        self.program.use_();
-    }
-
-    pub fn draw(&self) {
-        (self.draw_fn)();
-    }
-
-    pub fn delete(self) {
-        self.vao.delete();
     }
 }
