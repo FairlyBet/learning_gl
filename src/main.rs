@@ -14,17 +14,17 @@ use glfw::{
 use object::Object;
 use stb::image::Channels;
 use std::{
+    ffi::CString,
     fs::File,
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
 };
 
 use shader_program::ShaderProgram;
-use vertex_array_object::VertexArrayObject;
 use vertex_buffer_object::{BufferType, VertexBufferObject};
 
-const WIDTH: u32 = 600;
-const HEIGHT: u32 = 600;
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 800;
 
 static VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
 static FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
@@ -45,20 +45,38 @@ fn main() {
     gl_loader::init_gl();
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
 
-    unsafe {
-        gl::ClearColor(0.2, 0.3, 0.3, 1.0);
-    }
+    stb::image::stbi_set_flip_vertically_on_load(true);
 
     let mut file = File::open("res\\container.jpg").unwrap();
     let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
-    let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data);
-    texture.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
-    texture.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
-    texture.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
-    texture.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
-    texture.bind();
+    let texture1 = texture::Texture::new(gl::TEXTURE_2D, texture_data);
+    texture1.bind();
+    texture1.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
+    texture1.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
+    texture1.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
+    texture1.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
 
+    let mut file = File::open("res\\awesomeface.png").unwrap();
+    let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
+    let texture2 = texture::Texture::new(gl::TEXTURE_2D, texture_data);
+    texture2.bind();
+    texture2.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
+    texture2.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
+    texture2.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
+    texture2.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+    
+    texture1.bind_to_unit(gl::TEXTURE0);
+    texture2.bind_to_unit(gl::TEXTURE1);
+    
     let program = ShaderProgram::from_vert_frag(VERT_SHDR_SRC, FRAG_SHDR_SRC).unwrap();
+    unsafe {
+        gl::ClearColor(0.2, 0.3, 0.3, 1.0);
+        program.use_();
+        let name = CString::new("texture1").unwrap();
+        gl::Uniform1i(gl::GetUniformLocation(program.get_id(), name.as_ptr()), 0);
+        let name = CString::new("texture2").unwrap();
+        gl::Uniform1i(gl::GetUniformLocation(program.get_id(), name.as_ptr()), 1);
+    }
 
     let vertices: [f32; 32] = [
         0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
@@ -80,11 +98,13 @@ fn main() {
         size_of_val(&elements),
         gl::STATIC_DRAW,
     );
+
     let data = vec![&vbo, &ebo];
-    let draw = || unsafe {
+
+    let draw_fn: fn() -> () = || unsafe {
         gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
     };
-    let attrib: fn() -> () = || unsafe {
+    let attrib_fn: fn() -> () = || unsafe {
         gl::VertexAttribPointer(
             0,
             3,
@@ -113,14 +133,15 @@ fn main() {
         );
         gl::EnableVertexAttribArray(2);
     };
-    let object = Object::new(&data, &program, &attrib, draw);
+    let object = Object::new(&data, &program, &attrib_fn, &draw_fn);
 
     main_loop(&mut glfw, &mut window, &receiver, &object);
 
     vbo.delete();
     ebo.delete();
     object.delete();
-    texture.delete();
+    texture1.delete();
+    texture2.delete();
     program.delete();
     gl_loader::end_gl();
 }

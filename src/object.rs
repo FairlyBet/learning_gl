@@ -3,22 +3,22 @@ use crate::{vertex_array_object::VertexArrayObject, shader_program::ShaderProgra
 pub struct Object<'a> {
     vao: VertexArrayObject,
     program: &'a ShaderProgram,
-    draw_fn: fn() -> (),
+    draw_fn: &'a fn() -> (),
 }
 
 impl<'a> Object<'a> {
     pub fn new(
         data: &Vec<&VertexBufferObject>,
         program: &'a ShaderProgram,
-        attribute_configurer: &fn() -> (),
-        draw_fn: fn() -> (),
+        attrib_fn: &fn() -> (),
+        draw_fn: &'a fn() -> (),
     ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
         for buffer in data {
             buffer.bind();
         }
-        attribute_configurer();
+        attrib_fn();
         VertexArrayObject::clear_binding();
         for buffer in data {
             buffer.unbind();

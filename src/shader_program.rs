@@ -20,8 +20,7 @@ impl ShaderProgram {
         }
     }
 
-    /// Returns shaders ID given by OpenGL
-    pub fn get_id(&self) -> u32 {
+    pub fn get_id(&self) -> GLuint {
         self.0
     }
 

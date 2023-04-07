@@ -3,8 +3,9 @@
 in vec3 color;
 in vec2 tex_coord;
 
-uniform sampler2D in_texture;
+uniform sampler2D texture1;
+uniform sampler2D texture2;
 
 void main() {
-    gl_FragColor = texture(in_texture, tex_coord) * vec4(color, 1.0);
+    gl_FragColor = mix(texture2D(texture1, tex_coord), texture2D(texture2, tex_coord), .2);
 }
