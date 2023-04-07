@@ -1,4 +1,7 @@
-use crate::{vertex_array_object::VertexArrayObject, shader_program::ShaderProgram, vertex_buffer_object::VertexBufferObject};
+use crate::{
+    shader_program::ShaderProgram, vertex_array_object::VertexArrayObject,
+    vertex_buffer_object::VertexBufferObject,
+};
 
 pub struct Object<'a> {
     vao: VertexArrayObject,
@@ -30,6 +33,10 @@ impl<'a> Object<'a> {
         }
     }
 
+    pub fn get_program(&self) -> &ShaderProgram {
+        self.program
+    }
+
     pub fn bind(&self) {
         self.vao.bind();
         self.program.use_();
@@ -37,6 +44,12 @@ impl<'a> Object<'a> {
 
     pub fn draw(&self) {
         (self.draw_fn)();
+    }
+
+    pub fn draw_extra<T>(&self, extra: T, f: fn(T, &Object)->())
+    {
+        f(extra, self);
+        self.draw();
     }
 
     pub fn delete(self) {
