@@ -28,8 +28,8 @@ const HEIGHT: u32 = 800;
 
 static VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
 static FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
-static WALL: &[u8; 256989] = include_bytes!("..\\res\\wall.jpg");
-static SMILE: &[u8; 59277] = include_bytes!("..\\res\\awesomeface.png");
+// static WALL: &[u8; 256989] = include_bytes!("..\\res\\wall.jpg");
+// static SMILE: &[u8; 59277] = include_bytes!("..\\res\\awesomeface.png");
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -50,9 +50,9 @@ fn main() {
 
     stb::image::stbi_set_flip_vertically_on_load(true);
 
-    //let mut file = File::open("res\\wall.jpg").unwrap();
-    //let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
-    let texture_data = stb::image::stbi_load_from_memory(WALL, Channels::Default).unwrap();
+    let mut file = File::open("res\\wall.jpg").unwrap();
+    let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
+    // let texture_data = stb::image::stbi_load_from_memory(WALL, Channels::Default).unwrap();
     let texture1 = texture::Texture::new(gl::TEXTURE_2D, texture_data);
     texture1.bind();
     texture1.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
@@ -60,9 +60,9 @@ fn main() {
     texture1.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
     texture1.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
 
-    //let mut file = File::open("res\\awesomeface.png").unwrap();
-    //let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
-    let texture_data = stb::image::stbi_load_from_memory(SMILE, Channels::Default).unwrap();
+    let mut file = File::open("res\\awesomeface.png").unwrap();
+    let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
+    // let texture_data = stb::image::stbi_load_from_memory(SMILE, Channels::Default).unwrap();
     let texture2 = texture::Texture::new(gl::TEXTURE_2D, texture_data);
     texture2.bind();
     texture2.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
@@ -173,8 +173,6 @@ fn main_loop(
         object.draw_extra(oppacity, fn_);
         window.swap_buffers();
 
-        glfw.poll_events();
-
         let key_up = window.get_key(Key::Up);
         let key_down = window.get_key(Key::Down);
         if let Action::Repeat | Action::Press = key_up {
@@ -184,6 +182,8 @@ fn main_loop(
             oppacity -= 0.01;
         }
         oppacity = oppacity.clamp(0.0, 1.0);
+
+        glfw.poll_events();
         handle_window_events(receiver, window);
     }
 }
