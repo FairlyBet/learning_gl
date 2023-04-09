@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 
+mod camera;
 mod object;
 mod shader;
 mod shader_program;
@@ -7,10 +8,13 @@ mod texture;
 mod vertex_array_object;
 mod vertex_buffer_object;
 
+extern crate nalgebra_glm as glm;
+
 use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
+use nalgebra_glm::Mat4;
 use object::Object;
 use stb::image::Channels;
 use std::{
@@ -77,10 +81,10 @@ fn main() {
     unsafe {
         gl::ClearColor(0.2, 0.3, 0.3, 1.0);
         program.use_();
-        let name = CString::new("texture1").unwrap();
-        gl::Uniform1i(gl::GetUniformLocation(program.get_id(), name.as_ptr()), 0);
-        let name = CString::new("texture2").unwrap();
-        gl::Uniform1i(gl::GetUniformLocation(program.get_id(), name.as_ptr()), 1);
+        let location = program.get_uniform("texture1");
+        gl::Uniform1i(location, 0);
+        let location = program.get_uniform("texture2");
+        gl::Uniform1i(location, 1);
     }
 
     let vertices: [f32; 32] = [
@@ -109,36 +113,36 @@ fn main() {
     let draw_fn: fn() -> () = || unsafe {
         gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
     };
-    let attrib_fn: fn() -> () = || unsafe {
-        gl::VertexAttribPointer(
-            0,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            (8 * size_of::<f32>()) as i32,
-            0 as *const _,
-        );
-        gl::EnableVertexAttribArray(0);
-        gl::VertexAttribPointer(
-            1,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            (8 * size_of::<f32>()) as i32,
-            (3 * size_of::<f32>()) as i32 as *const _,
-        );
-        gl::EnableVertexAttribArray(1);
-        gl::VertexAttribPointer(
-            2,
-            2,
-            gl::FLOAT,
-            gl::FALSE,
-            (8 * size_of::<f32>()) as i32,
-            (6 * size_of::<f32>()) as i32 as *const _,
-        );
-        gl::EnableVertexAttribArray(2);
-    };
-    let object = Object::new(&data, &program, &attrib_fn, &draw_fn);
+
+    let object = Object::new(&data, &program, &draw_fn);
+    object.bind();
+    ShaderProgram::configure_attribute(
+        0,
+        3,
+        gl::FLOAT,
+        gl::FALSE,
+        (8 * size_of::<f32>()) as i32,
+        0 as *const _,
+    );
+    ShaderProgram::configure_attribute(
+        1,
+        3,
+        gl::FLOAT,
+        gl::FALSE,
+        (8 * size_of::<f32>()) as i32,
+        (3 * size_of::<f32>()) as i32 as *const _,
+    );
+    ShaderProgram::configure_attribute(
+        2,
+        2,
+        gl::FLOAT,
+        gl::FALSE,
+        (8 * size_of::<f32>()) as i32,
+        (6 * size_of::<f32>()) as i32 as *const _,
+    );
+    ShaderProgram::enable_attribute(0);
+    ShaderProgram::enable_attribute(1);
+    ShaderProgram::enable_attribute(2);
 
     main_loop(&mut glfw, &mut window, &receiver, &object);
 
@@ -158,30 +162,24 @@ fn main_loop(
     object: &Object,
 ) {
     object.bind();
-    let mut oppacity = 0.0;
-    let fn_: fn(f32, &Object) -> () = |op, obj| unsafe {
-        let name = CString::new("oppacity").unwrap();
-        gl::Uniform1f(
-            gl::GetUniformLocation(obj.get_program().get_id(), name.as_ptr()),
-            op,
-        );
-    };
+
     while !window.should_close() {
+        camera::update(window);
+        let camera_pos = camera::get_position();
+        // let camera_translate = Mat4::new_translation(&camera_pos);
+        let camera_translate = Mat4::from_diagonal_element(0.0f32);
+        let object_translate = Mat4::from_diagonal_element(1.0f32);
+
         unsafe {
+            let location = object.get_program().get_uniform("camera_pos");
+            gl::UniformMatrix4fv(location, 16, gl::FALSE, camera_translate.as_ptr());
+            let location = object.get_program().get_uniform("translation");
+            gl::UniformMatrix4fv(location, 16, gl::FALSE, object_translate.as_ptr());
+
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
-        object.draw_extra(oppacity, fn_);
+        object.draw();
         window.swap_buffers();
-
-        let key_up = window.get_key(Key::Up);
-        let key_down = window.get_key(Key::Down);
-        if let Action::Repeat | Action::Press = key_up {
-            oppacity += 0.01;
-        }
-        if let Action::Repeat | Action::Press = key_down {
-            oppacity -= 0.01;
-        }
-        oppacity = oppacity.clamp(0.0, 1.0);
 
         glfw.poll_events();
         handle_window_events(receiver, window);

@@ -13,7 +13,6 @@ impl<'a> Object<'a> {
     pub fn new(
         data: &Vec<&VertexBufferObject>,
         program: &'a ShaderProgram,
-        attrib_fn: &fn() -> (),
         draw_fn: &'a fn() -> (),
     ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
@@ -21,7 +20,6 @@ impl<'a> Object<'a> {
         for buffer in data {
             buffer.bind();
         }
-        attrib_fn();
         VertexArrayObject::clear_binding();
         for buffer in data {
             buffer.unbind();

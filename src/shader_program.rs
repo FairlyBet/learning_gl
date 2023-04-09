@@ -1,5 +1,7 @@
+use std::ffi::{c_void, CString};
+
 use crate::shader::{Shader, ShaderType};
-use gl::types::GLuint;
+use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 
 /// A handle to a [Program
 /// Object](https://www.khronos.org/opengl/wiki/GLSL_Object#Program_objects)
@@ -22,6 +24,30 @@ impl ShaderProgram {
 
     pub fn get_id(&self) -> GLuint {
         self.0
+    }
+
+    pub fn get_uniform(&self, name: &str) -> GLint {
+        let c_name = CString::new(name).unwrap();
+        unsafe { gl::GetUniformLocation(self.0, c_name.as_ptr().cast()) }
+    }
+
+    pub fn configure_attribute(
+        index: GLuint,
+        size: GLint,
+        type_: GLenum,
+        normalized: GLboolean,
+        stride: GLsizei,
+        pointer: *const c_void,
+    ) {
+        unsafe {
+            gl::VertexAttribPointer(index, size, type_, normalized, stride, pointer);
+        }
+    }
+
+    pub fn enable_attribute(index: GLuint) {
+        unsafe {
+            gl::EnableVertexAttribArray(index);
+        }
     }
 
     /// Attaches a shader object to this program object.
