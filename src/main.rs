@@ -10,25 +10,27 @@ mod vertex_buffer_object;
 
 extern crate nalgebra_glm as glm;
 
+use gl::types::GLsizei;
 use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
+use glm::{vec3, vec4, Vec3};
 use nalgebra_glm::Mat4;
 use object::Object;
 use stb::image::Channels;
 use std::{
-    ffi::CString,
     fs::File,
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
 };
+use vertex_array_object::VertexArrayObject;
 
 use shader_program::ShaderProgram;
 use vertex_buffer_object::{BufferType, VertexBufferObject};
 
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 800;
+const WIDTH: u32 = 600;
+const HEIGHT: u32 = 600;
 
 static VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
 static FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
@@ -51,106 +53,73 @@ fn main() {
 
     gl_loader::init_gl();
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
+    unsafe {
+        gl::ClearColor(0.2, 0.3, 0.3, 1.0);
+    }
 
     stb::image::stbi_set_flip_vertically_on_load(true);
 
-    let mut file = File::open("res\\wall.jpg").unwrap();
-    let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
-    // let texture_data = stb::image::stbi_load_from_memory(WALL, Channels::Default).unwrap();
-    let texture1 = texture::Texture::new(gl::TEXTURE_2D, texture_data);
-    texture1.bind();
-    texture1.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
-    texture1.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
-    texture1.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
-    texture1.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
-
     let mut file = File::open("res\\awesomeface.png").unwrap();
     let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
-    // let texture_data = stb::image::stbi_load_from_memory(SMILE, Channels::Default).unwrap();
-    let texture2 = texture::Texture::new(gl::TEXTURE_2D, texture_data);
-    texture2.bind();
-    texture2.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
-    texture2.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
-    texture2.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
-    texture2.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+    let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data);
+    texture.bind();
+    texture.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
+    texture.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
+    texture.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
+    texture.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
 
-    texture1.bind_to_unit(gl::TEXTURE0);
-    texture2.bind_to_unit(gl::TEXTURE1);
-
-    let program = ShaderProgram::from_vert_frag(VERT_SHDR_SRC, FRAG_SHDR_SRC).unwrap();
-    unsafe {
-        gl::ClearColor(0.2, 0.3, 0.3, 1.0);
-        program.use_();
-        let location = program.get_uniform("texture1");
-        gl::Uniform1i(location, 0);
-        let location = program.get_uniform("texture2");
-        gl::Uniform1i(location, 1);
-    }
-
-    let vertices: [f32; 32] = [
-        0.75, 0.75, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, // top right
-        0.75, -0.75, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, // bottom right
-        -0.75, -0.75, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // bottom left
-        -0.75, 0.75, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, // top left
+    let vertices = [
+        1.0f32, 1.0, 0.0, 1.0, 1.0, //
+        1.0, -1.0, 0.0, 1.0, 0.0, //
+        -1.0, -1.0, 0.0, 0.0, 0.0, //
+        -1.0, 1.0, 0.0, 0.0, 1.0, //
     ];
-    let elements: [u32; 6] = [0, 1, 3, 1, 2, 3];
+    let elements = [0u32, 1, 3, 1, 2, 3];
 
+    let vao = VertexArrayObject::new().unwrap();
+    vao.bind();
     let vbo = VertexBufferObject::new(BufferType::ArrayBuffer).unwrap();
+    vbo.bind();
     vbo.buffer_data(
         vertices.as_ptr().cast(),
         size_of_val(&vertices),
         gl::STATIC_DRAW,
     );
     let ebo = VertexBufferObject::new(BufferType::ElementArrayBuffer).unwrap();
+    ebo.bind();
     ebo.buffer_data(
         elements.as_ptr().cast(),
         size_of_val(&elements),
         gl::STATIC_DRAW,
     );
 
-    let data = vec![&vbo, &ebo];
-
-    let draw_fn: fn() -> () = || unsafe {
-        gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
-    };
-
-    let object = Object::new(&data, &program, &draw_fn);
-    object.bind();
+    let program = ShaderProgram::from_vert_frag(VERT_SHDR_SRC, FRAG_SHDR_SRC).unwrap();
+    program.use_();
     ShaderProgram::configure_attribute(
         0,
         3,
         gl::FLOAT,
         gl::FALSE,
-        (8 * size_of::<f32>()) as i32,
+        5 * size_of::<f32>() as GLsizei,
         0 as *const _,
     );
     ShaderProgram::configure_attribute(
         1,
-        3,
-        gl::FLOAT,
-        gl::FALSE,
-        (8 * size_of::<f32>()) as i32,
-        (3 * size_of::<f32>()) as i32 as *const _,
-    );
-    ShaderProgram::configure_attribute(
-        2,
         2,
         gl::FLOAT,
         gl::FALSE,
-        (8 * size_of::<f32>()) as i32,
-        (6 * size_of::<f32>()) as i32 as *const _,
+        5 * size_of::<f32>() as GLsizei,
+        (3 * size_of::<f32>()) as *const _,
     );
     ShaderProgram::enable_attribute(0);
     ShaderProgram::enable_attribute(1);
-    ShaderProgram::enable_attribute(2);
 
-    main_loop(&mut glfw, &mut window, &receiver, &object);
+    main_loop(&mut glfw, &mut window, &receiver, &program);
 
     vbo.delete();
     ebo.delete();
-    object.delete();
-    texture1.delete();
-    texture2.delete();
+    vao.delete();
+    texture.delete();
     program.delete();
     gl_loader::end_gl();
 }
@@ -159,30 +128,48 @@ fn main_loop(
     glfw: &mut Glfw,
     window: &mut Window,
     receiver: &Receiver<(f64, WindowEvent)>,
-    object: &Object,
+    program: &ShaderProgram,
 ) {
-    object.bind();
+    let location = program.get_uniform("translation");
 
+    const VELOCITY: f32 = 1.0;
+    const SCALE: f32 = 0.25;
+    let scale_vec = vec4(SCALE, SCALE, SCALE, 1.0);
+    let scale = Mat4::from_diagonal(&scale_vec);
+
+    let iden = Mat4::from_diagonal_element(1.0);
+    let mut factor = calculate_factor(window.get_framebuffer_size());
+    let mut position = Vec3::from_element(0.0);
+    let mut translation = scale * Mat4::new_translation(&position);
+    let mut delta_time = 0.0;
     while !window.should_close() {
-        camera::update(window);
-        let camera_pos = camera::get_position();
-        // let camera_translate = Mat4::new_translation(&camera_pos);
-        let camera_translate = Mat4::from_diagonal_element(0.0f32);
-        let object_translate = Mat4::from_diagonal_element(1.0f32);
+        glfw.set_time(0.0);
+
+        if let Action::Press | Action::Repeat = window.get_key(Key::W) {
+            position.y += VELOCITY * delta_time;
+        }
+        if let Action::Press | Action::Repeat = window.get_key(Key::A) {
+            position.x -= VELOCITY * delta_time;
+        }
+        if let Action::Press | Action::Repeat = window.get_key(Key::S) {
+            position.y -= VELOCITY * delta_time;
+        }
+        if let Action::Press | Action::Repeat = window.get_key(Key::D) {
+            position.x += VELOCITY * delta_time;
+        }
+        factor = calculate_factor(window.get_framebuffer_size());
+        translation = factor * glm::translate(&iden, &position) * scale;
 
         unsafe {
-            let location = object.get_program().get_uniform("camera_pos");
-            gl::UniformMatrix4fv(location, 16, gl::FALSE, camera_translate.as_ptr());
-            let location = object.get_program().get_uniform("translation");
-            gl::UniformMatrix4fv(location, 16, gl::FALSE, object_translate.as_ptr());
-
+            gl::UniformMatrix4fv(location, 1, gl::FALSE, translation.as_ptr());
             gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
         }
-        object.draw();
         window.swap_buffers();
 
         glfw.poll_events();
         handle_window_events(receiver, window);
+        delta_time = glfw.get_time() as f32;
     }
 }
 
@@ -196,4 +183,16 @@ fn handle_window_events(receiver: &Receiver<(f64, WindowEvent)>, window: &mut Wi
             _ => {}
         }
     }
+}
+
+fn calculate_factor(framebuffer_size: (i32, i32)) -> Mat4 {
+    let mut x = 1.0;
+    let mut y = 1.0;
+    if framebuffer_size.0 > framebuffer_size.1 {
+        x = framebuffer_size.1 as f32 / framebuffer_size.0 as f32;
+    }
+    if framebuffer_size.0 < framebuffer_size.1 {
+        y = framebuffer_size.0 as f32 / framebuffer_size.1 as f32;
+    }
+    Mat4::from_diagonal(&vec4(x, y, 1.0, 1.0))
 }

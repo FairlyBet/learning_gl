@@ -26,5 +26,5 @@ pub fn update(window: &Window) {
 }
 
 pub fn get_position() -> Vec3 {
-    unsafe { vec3(X, Y, Z) * VELOCITY }
+    unsafe { vec3(X, Y, Z).normalize() * VELOCITY }
 }

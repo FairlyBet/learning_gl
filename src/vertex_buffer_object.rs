@@ -41,11 +41,9 @@ impl VertexBufferObject {
     }
 
     pub fn buffer_data(&self, data: *const c_void, size: usize, usage: GLenum) {
-        self.bind();
         unsafe {
             gl::BufferData(self.1, size as isize, data, usage);
         }
-        self.unbind();
     }
 
     /// Delete buffer

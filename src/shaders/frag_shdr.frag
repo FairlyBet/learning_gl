@@ -1,12 +1,9 @@
 #version 330
 
-in vec3 color;
-in vec2 tex_coord;
+in vec2 coord;
 
-uniform sampler2D texture1;
-uniform sampler2D texture2;
-uniform float oppacity;
+uniform sampler2D tex;
 
 void main() {
-    gl_FragColor = mix(texture2D(texture1, tex_coord), texture2D(texture2, tex_coord), oppacity);
+    gl_FragColor = texture2D(tex, coord);
 }
