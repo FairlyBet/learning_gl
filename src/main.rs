@@ -1,7 +1,6 @@
 #![windows_subsystem = "windows"]
 
 mod camera;
-mod object;
 mod shader;
 mod shader_program;
 mod texture;
@@ -15,11 +14,11 @@ use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
-use glm::{vec3, vec4, Vec3};
+use glm::{vec3, Vec3};
 use nalgebra_glm::Mat4;
-use object::Object;
 use stb::image::Channels;
 use std::{
+    f32::consts,
     fs::File,
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
@@ -34,8 +33,6 @@ const HEIGHT: u32 = 600;
 
 static VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
 static FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
-// static WALL: &[u8; 256989] = include_bytes!("..\\res\\wall.jpg");
-// static SMILE: &[u8; 59277] = include_bytes!("..\\res\\awesomeface.png");
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -47,7 +44,6 @@ fn main() {
         .unwrap();
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
-    window.set_sticky_keys(true);
     window.make_current();
     glfw.set_swap_interval(SwapInterval::Sync(1));
 
@@ -130,54 +126,42 @@ fn main_loop(
     receiver: &Receiver<(f64, WindowEvent)>,
     program: &ShaderProgram,
 ) {
-    let location = program.get_uniform("translation");
+    let location = program.get_uniform("MVP");
+    let aspect = calculate_aspect(window.get_framebuffer_size());
+    let mut model: Mat4 = glm::identity();
+    let view: Mat4 = glm::identity();
+    let mut projection = glm::perspective(aspect, glm::pi::<f32>() / 4.0, 0.1, 100.0);
+    let mut mvp: Mat4;
 
-    const VELOCITY: f32 = 1.0;
-    const SCALE: f32 = 0.25;
-    let scale_vec = vec4(SCALE, SCALE, SCALE, 1.0);
-    let scale = Mat4::from_diagonal(&scale_vec);
+    model = glm::translate(&model, &vec3(0.0, 0.0, -5.0));
+    model = glm::rotate(&model, -to_rad(80.0), &Vec3::x_axis());
 
-    let iden = Mat4::from_diagonal_element(1.0);
-    let mut factor = calculate_factor(window.get_framebuffer_size());
-    let mut position = Vec3::from_element(0.0);
-    let mut translation = scale * Mat4::new_translation(&position);
-    let mut delta_time = 0.0;
     while !window.should_close() {
-        glfw.set_time(0.0);
-
-        if let Action::Press | Action::Repeat = window.get_key(Key::W) {
-            position.y += VELOCITY * delta_time;
-        }
-        if let Action::Press | Action::Repeat = window.get_key(Key::A) {
-            position.x -= VELOCITY * delta_time;
-        }
-        if let Action::Press | Action::Repeat = window.get_key(Key::S) {
-            position.y -= VELOCITY * delta_time;
-        }
-        if let Action::Press | Action::Repeat = window.get_key(Key::D) {
-            position.x += VELOCITY * delta_time;
-        }
-        factor = calculate_factor(window.get_framebuffer_size());
-        translation = factor * glm::translate(&iden, &position) * scale;
+        mvp = projection * view * model;
 
         unsafe {
-            gl::UniformMatrix4fv(location, 1, gl::FALSE, translation.as_ptr());
+            gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
         }
-        window.swap_buffers();
 
+        window.swap_buffers();
         glfw.poll_events();
-        handle_window_events(receiver, window);
-        delta_time = glfw.get_time() as f32;
+        handle_window_events(receiver, window, &mut projection);
     }
 }
 
-fn handle_window_events(receiver: &Receiver<(f64, WindowEvent)>, window: &mut Window) {
+fn handle_window_events(
+    receiver: &Receiver<(f64, WindowEvent)>,
+    window: &mut Window,
+    projection: &mut Mat4,
+) {
     for (_, event) in glfw::flush_messages(receiver) {
         match event {
             WindowEvent::Key(Key::Escape, _, Action::Press, _) => window.set_should_close(true),
             WindowEvent::FramebufferSize(width, height) => unsafe {
+                let aspect = calculate_aspect((width, height));
+                *projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
                 gl::Viewport(0, 0, width, height);
             },
             _ => {}
@@ -185,14 +169,12 @@ fn handle_window_events(receiver: &Receiver<(f64, WindowEvent)>, window: &mut Wi
     }
 }
 
-fn calculate_factor(framebuffer_size: (i32, i32)) -> Mat4 {
-    let mut x = 1.0;
-    let mut y = 1.0;
-    if framebuffer_size.0 > framebuffer_size.1 {
-        x = framebuffer_size.1 as f32 / framebuffer_size.0 as f32;
-    }
-    if framebuffer_size.0 < framebuffer_size.1 {
-        y = framebuffer_size.0 as f32 / framebuffer_size.1 as f32;
-    }
-    Mat4::from_diagonal(&vec4(x, y, 1.0, 1.0))
+fn calculate_aspect(framebuffer_size: (i32, i32)) -> f32 {
+    framebuffer_size.0 as f32 / framebuffer_size.1 as f32
+}
+
+const DEG_TO_RAD: f32 = 180.0 / consts::PI;
+
+fn to_rad(deg: f32) -> f32 {
+    deg / DEG_TO_RAD
 }
