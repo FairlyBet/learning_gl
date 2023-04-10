@@ -51,6 +51,7 @@ fn main() {
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
     unsafe {
         gl::ClearColor(0.2, 0.3, 0.3, 1.0);
+        gl::Enable(gl::DEPTH_TEST);
     }
 
     stb::image::stbi_set_flip_vertically_on_load(true);
@@ -65,12 +66,48 @@ fn main() {
     texture.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
 
     let vertices = [
-        1.0f32, 1.0, 0.0, 1.0, 1.0, //
-        1.0, -1.0, 0.0, 1.0, 0.0, //
-        -1.0, -1.0, 0.0, 0.0, 0.0, //
-        -1.0, 1.0, 0.0, 0.0, 1.0, //
+        -0.5, -0.5, -0.5,  0.0, 0.0,
+         0.5, -0.5, -0.5,  1.0, 0.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+        -0.5,  0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 0.0,
+
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 1.0,
+         0.5,  0.5,  0.5,  1.0, 1.0,
+        -0.5,  0.5,  0.5,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+
+        -0.5,  0.5,  0.5,  1.0, 0.0,
+        -0.5,  0.5, -0.5,  1.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+        -0.5,  0.5,  0.5,  1.0, 0.0,
+
+         0.5,  0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5,  0.5,  0.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5, -0.5,  1.0, 1.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+
+        -0.5,  0.5, -0.5,  0.0, 1.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+        -0.5,  0.5,  0.5,  0.0, 0.0,
+        -0.5,  0.5, -0.5,  0.0, 1.0,
     ];
-    let elements = [0u32, 1, 3, 1, 2, 3];
 
     let vao = VertexArrayObject::new().unwrap();
     vao.bind();
@@ -79,13 +116,6 @@ fn main() {
     vbo.buffer_data(
         vertices.as_ptr().cast(),
         size_of_val(&vertices),
-        gl::STATIC_DRAW,
-    );
-    let ebo = VertexBufferObject::new(BufferType::ElementArrayBuffer).unwrap();
-    ebo.bind();
-    ebo.buffer_data(
-        elements.as_ptr().cast(),
-        size_of_val(&elements),
         gl::STATIC_DRAW,
     );
 
@@ -113,7 +143,6 @@ fn main() {
     main_loop(&mut glfw, &mut window, &receiver, &program);
 
     vbo.delete();
-    ebo.delete();
     vao.delete();
     texture.delete();
     program.delete();
@@ -130,19 +159,19 @@ fn main_loop(
     let aspect = calculate_aspect(window.get_framebuffer_size());
     let mut model: Mat4 = glm::identity();
     let view: Mat4 = glm::identity();
-    let mut projection = glm::perspective(aspect, glm::pi::<f32>() / 4.0, 0.1, 100.0);
+    let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
     let mut mvp: Mat4;
 
     model = glm::translate(&model, &vec3(0.0, 0.0, -5.0));
-    model = glm::rotate(&model, -to_rad(80.0), &Vec3::x_axis());
+    // model = glm::rotate(&model, -to_rad(60.0), &Vec3::x_axis());
 
     while !window.should_close() {
-        mvp = projection * view * model;
-
+        // mvp = projection * view * model;
+mvp = glm::identity();
         unsafe {
-            gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-            gl::DrawElements(gl::TRIANGLES, 6, gl::UNSIGNED_INT, 0 as *const _);
+            // gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
 
         window.swap_buffers();
