@@ -1,30 +1,33 @@
-use glfw::{Action, Key, Window};
-use nalgebra_glm::{vec3, Vec3};
+use nalgebra_glm::{Mat4, Vec3};
 
-static mut X: f32 = 0.0;
-static mut Y: f32 = 0.0;
-static mut Z: f32 = 0.0;
-static VELOCITY: f32 = 0.2;
-
-pub fn update(window: &Window) {
-    unsafe {
-        if let Action::Repeat | Action::Press = window.get_key(Key::W) {
-            Y += 1.0;
-        }
-        if let Action::Repeat | Action::Press = window.get_key(Key::S) {
-            Y -= 1.0;
-        }
-        if let Action::Repeat | Action::Press = window.get_key(Key::A) {
-            X -= 1.0;
-        }
-        if let Action::Repeat | Action::Press = window.get_key(Key::D) {
-            X += 1.0;
-        }
-        Y = Y.clamp(-1.0, 1.0);
-        X = X.clamp(-1.0, 1.0);
-    }
+pub struct Camera {
+    position: Vec3,
+    view: Mat4,
 }
 
-pub fn get_position() -> Vec3 {
-    unsafe { vec3(X, Y, Z).normalize() * VELOCITY }
+impl Camera {
+    pub fn new() -> Camera {
+        Camera {
+            position: Vec3::zeros(),
+            view: Mat4::identity(),
+        }
+    }
+
+    pub fn get_view(&self) -> Mat4 {
+        self.view
+    }
+
+    pub fn look_at(&mut self, target: &Vec3) {
+        self.view = glm::look_at(&self.position, &target, &Vec3::y_axis());
+    }
+
+    pub fn move_(&mut self, delta: &Vec3) {
+        self.position += delta;
+        self.view = glm::translate(&Mat4::identity(), &-self.position);
+    }
+
+    pub fn translate(&mut self, position: &Vec3) {
+        self.position = *position;
+        self.view = glm::translate(&Mat4::identity(), &-self.position);
+    }
 }

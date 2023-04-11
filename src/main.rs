@@ -1,6 +1,8 @@
 #![windows_subsystem = "windows"]
 
 mod camera;
+mod camera_controller;
+mod input;
 mod shader;
 mod shader_program;
 mod texture;
@@ -14,8 +16,7 @@ use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
-use glm::{vec3, Vec3};
-use nalgebra_glm::Mat4;
+use glm::{vec3, Mat4};
 use stb::image::Channels;
 use std::{
     f32::consts,
@@ -23,16 +24,16 @@ use std::{
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
 };
-use vertex_array_object::VertexArrayObject;
 
+use camera::Camera;
 use shader_program::ShaderProgram;
+use vertex_array_object::VertexArrayObject;
 use vertex_buffer_object::{BufferType, VertexBufferObject};
 
-const WIDTH: u32 = 600;
+const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
-
-static VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
-static FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
+const VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
+const FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -56,7 +57,7 @@ fn main() {
 
     stb::image::stbi_set_flip_vertically_on_load(true);
 
-    let mut file = File::open("res\\awesomeface.png").unwrap();
+    let mut file = File::open("res\\container.jpg").unwrap();
     let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
     let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data);
     texture.bind();
@@ -66,52 +67,22 @@ fn main() {
     texture.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
 
     let vertices = [
-        -0.5, -0.5, -0.5,  0.0, 0.0,
-         0.5, -0.5, -0.5,  1.0, 0.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-        -0.5,  0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 0.0,
-
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 1.0,
-         0.5,  0.5,  0.5,  1.0, 1.0,
-        -0.5,  0.5,  0.5,  0.0, 1.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-
-        -0.5,  0.5,  0.5,  1.0, 0.0,
-        -0.5,  0.5, -0.5,  1.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-        -0.5,  0.5,  0.5,  1.0, 0.0,
-
-         0.5,  0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5,  0.5,  0.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5, -0.5,  1.0, 1.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-
-        -0.5,  0.5, -0.5,  0.0, 1.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-        -0.5,  0.5,  0.5,  0.0, 0.0,
-        -0.5,  0.5, -0.5,  0.0, 1.0,
+        -0.5f32, -0.5, -0.5, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
+        0.5, -0.5, 1.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 0.0, -0.5, -0.5,
+        0.5, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 1.0,
+        -0.5, 0.5, 0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5,
+        -0.5, 1.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, 0.5,
+        0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
+        -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5,
+        1.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 1.0, 1.0, 0.5, -0.5, 0.5, 1.0, 0.0,
+        0.5, -0.5, 0.5, 1.0, 0.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, 0.5,
+        -0.5, 0.0, 1.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0,
+        -0.5, 0.5, 0.5, 0.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0,
     ];
 
     let vao = VertexArrayObject::new().unwrap();
-    vao.bind();
     let vbo = VertexBufferObject::new(BufferType::ArrayBuffer).unwrap();
+    vao.bind();
     vbo.bind();
     vbo.buffer_data(
         vertices.as_ptr().cast(),
@@ -157,19 +128,18 @@ fn main_loop(
 ) {
     let location = program.get_uniform("MVP");
     let aspect = calculate_aspect(window.get_framebuffer_size());
-    let mut model: Mat4 = glm::identity();
-    let view: Mat4 = glm::identity();
+    let mut model: Mat4;
+    let mut camera = Camera::new();
+    camera.move_(&vec3(0.0, 0.0, 5.0));
     let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
     let mut mvp: Mat4;
 
-    model = glm::translate(&model, &vec3(0.0, 0.0, -5.0));
-    // model = glm::rotate(&model, -to_rad(60.0), &Vec3::x_axis());
-
     while !window.should_close() {
-        // mvp = projection * view * model;
-mvp = glm::identity();
+        model = Mat4::identity();
+
+        mvp = projection * camera.get_view() * model;
         unsafe {
-            // gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
+            gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
