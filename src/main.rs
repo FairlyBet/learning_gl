@@ -11,12 +11,14 @@ mod vertex_buffer_object;
 
 extern crate nalgebra_glm as glm;
 
+use camera_controller::CameraController;
 use gl::types::GLsizei;
 use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
 use glm::{vec3, Mat4};
+use input::Input;
 use stb::image::Channels;
 use std::{
     f32::consts,
@@ -28,7 +30,7 @@ use std::{
 use camera::Camera;
 use shader_program::ShaderProgram;
 use vertex_array_object::VertexArrayObject;
-use vertex_buffer_object::{BufferType, VertexBufferObject};
+use vertex_buffer_object::{VertexBufferObject};
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -81,12 +83,12 @@ fn main() {
     ];
 
     let vao = VertexArrayObject::new().unwrap();
-    let vbo = VertexBufferObject::new(BufferType::ArrayBuffer).unwrap();
+    let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
     vao.bind();
     vbo.bind();
     vbo.buffer_data(
-        vertices.as_ptr().cast(),
         size_of_val(&vertices),
+        vertices.as_ptr().cast(),
         gl::STATIC_DRAW,
     );
 
@@ -128,16 +130,23 @@ fn main_loop(
 ) {
     let location = program.get_uniform("MVP");
     let aspect = calculate_aspect(window.get_framebuffer_size());
-    let mut model: Mat4;
+
+    let model = Mat4::identity();
+
     let mut camera = Camera::new();
-    camera.move_(&vec3(0.0, 0.0, 5.0));
+    camera.move_(&vec3(0.0, 0.0, 2.0));
     let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
     let mut mvp: Mat4;
 
     while !window.should_close() {
-        model = Mat4::identity();
+        // {
+        //     let input = Input::new(window);
+        //     let mut controller = CameraController::new( &input);
+        //     controller.update(&mut camera);
+        // }
 
         mvp = projection * camera.get_view() * model;
+        camera.move_(&vec3(0.0, 0.0, 0.041515));
         unsafe {
             gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);

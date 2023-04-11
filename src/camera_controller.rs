@@ -3,52 +3,33 @@ use nalgebra_glm::Vec3;
 
 use crate::{camera::Camera, input::Input};
 
+const VELOCTITY: f32 = 0.1666;
+
 pub struct CameraController<'a> {
-    camera: &'a mut Camera,
     input: &'a Input<'a>,
-    key_bindings: Actions,
 }
 
 impl<'a> CameraController<'_> {
-    pub fn new(
-        camera: &'a mut Camera,
-        input: &'a Input,
-        key_bindings: Actions,
-    ) -> CameraController<'a> {
-        CameraController {
-            camera,
-            input,
-            key_bindings,
-        }
+    pub fn new(input: &'a Input) -> CameraController<'a> {
+        CameraController { input }
     }
 
-    pub fn update(&self) {
-        let mut direction = Vec3::zeros();
-        if self
-            .input
-            .get_key_with_action(Actions::map(Actions::Up), (Action::Press as i32| Action::Repeat as i32) as Action)
-        {
+    pub fn update(&mut self, camera: &mut Camera) {
+        let input = self.input;
+        let mut delta = Vec3::zeros();
+        if let Action::Press | Action::Release = input.get_key(Key::W) {
+            delta.z += 1.0;
         }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum Actions {
-    Up,
-    Right,
-    Down,
-    Left,
-    Shift,
-}
-
-impl Actions {
-    pub fn map(value: Actions) -> Key {
-        match value {
-            Actions::Up => Key::W,
-            Actions::Left => Key::A,
-            Actions::Down => Key::S,
-            Actions::Right => Key::D,
-            Actions::Shift => Key::LeftShift,
+        if let Action::Press | Action::Release = input.get_key(Key::A) {
+            delta.x -= 1.0;
         }
+        if let Action::Press | Action::Release = input.get_key(Key::S) {
+            delta.z -= 1.0;
+        }
+        if let Action::Press | Action::Release = input.get_key(Key::D) {
+            delta.x += 1.0;
+        }
+        delta = delta * VELOCTITY;
+        camera.move_(&delta);
     }
 }
