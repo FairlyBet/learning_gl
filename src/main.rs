@@ -1,24 +1,21 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
 mod camera;
-mod camera_controller;
-mod input;
 mod shader;
 mod shader_program;
 mod texture;
 mod vertex_array_object;
 mod vertex_buffer_object;
+mod window;
 
 extern crate nalgebra_glm as glm;
 
-use camera_controller::CameraController;
 use gl::types::GLsizei;
 use glfw::{
     Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
-use glm::{vec3, Mat4};
-use input::Input;
+use glm::{vec3, Mat4, Vec3};
 use stb::image::Channels;
 use std::{
     f32::consts,
@@ -30,7 +27,7 @@ use std::{
 use camera::Camera;
 use shader_program::ShaderProgram;
 use vertex_array_object::VertexArrayObject;
-use vertex_buffer_object::{VertexBufferObject};
+use vertex_buffer_object::VertexBufferObject;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -139,14 +136,8 @@ fn main_loop(
     let mut mvp: Mat4;
 
     while !window.should_close() {
-        // {
-        //     let input = Input::new(window);
-        //     let mut controller = CameraController::new( &input);
-        //     controller.update(&mut camera);
-        // }
-
+        update_camera(&mut camera, window);
         mvp = projection * camera.get_view() * model;
-        camera.move_(&vec3(0.0, 0.0, 0.041515));
         unsafe {
             gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -185,4 +176,27 @@ const DEG_TO_RAD: f32 = 180.0 / consts::PI;
 
 fn to_rad(deg: f32) -> f32 {
     deg / DEG_TO_RAD
+}
+
+fn update_camera(camera: &mut Camera, window: &Window) {
+    let mut delta = vec3(0.0, 0.0, 0.0);
+    if let Action::Press | Action::Release = window.get_key(Key::W) {
+        delta.z += 1.0;
+        println!("{}", delta.z);
+    }
+    if let Action::Press | Action::Release = window.get_key(Key::A) {
+        delta.x -= 1.0;
+        println!("{}", delta.x);
+    }
+    if let Action::Press | Action::Release = window.get_key(Key::S) {
+        delta.z -= 1.0;
+        println!("{}", delta.z);
+    }
+    if let Action::Press | Action::Release = window.get_key(Key::D) {
+        delta.x += 1.0;
+        println!("{}", delta.x);
+    }
+    delta = glm::normalize(&delta); // returning nan
+    println!("{} {} {}", delta.x, delta.y, delta.z);
+    camera.move_(&delta);
 }
