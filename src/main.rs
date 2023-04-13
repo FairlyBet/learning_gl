@@ -1,4 +1,4 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
 mod camera;
 mod shader;
@@ -6,16 +6,15 @@ mod shader_program;
 mod texture;
 mod vertex_array_object;
 mod vertex_buffer_object;
-mod window;
 
 extern crate nalgebra_glm as glm;
 
 use gl::types::GLsizei;
 use glfw::{
-    Action, Context, Glfw, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
+    Action, Context, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
 };
-use glm::{vec3, Mat4, Vec3};
+use glm::{vec3, Mat4};
 use stb::image::Channels;
 use std::{
     f32::consts,
@@ -58,7 +57,7 @@ fn main() {
 
     let mut file = File::open("res\\container.jpg").unwrap();
     let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
-    let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data);
+    let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data).unwrap();
     texture.bind();
     texture.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
     texture.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
@@ -109,22 +108,6 @@ fn main() {
     );
     ShaderProgram::enable_attribute(0);
     ShaderProgram::enable_attribute(1);
-
-    main_loop(&mut glfw, &mut window, &receiver, &program);
-
-    vbo.delete();
-    vao.delete();
-    texture.delete();
-    program.delete();
-    gl_loader::end_gl();
-}
-
-fn main_loop(
-    glfw: &mut Glfw,
-    window: &mut Window,
-    receiver: &Receiver<(f64, WindowEvent)>,
-    program: &ShaderProgram,
-) {
     let location = program.get_uniform("MVP");
     let aspect = calculate_aspect(window.get_framebuffer_size());
 
@@ -134,10 +117,16 @@ fn main_loop(
     camera.move_(&vec3(0.0, 0.0, 2.0));
     let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
     let mut mvp: Mat4;
-
+    let mut frame_time: f32 = 0.0;
     while !window.should_close() {
-        update_camera(&mut camera, window);
+        glfw.set_time(0.0);
+
+        glfw.poll_events();
+        update_camera(&mut camera, &window, frame_time);
+        handle_window_events(&receiver, &mut window, &mut projection);
+
         mvp = projection * camera.get_view() * model;
+
         unsafe {
             gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -145,9 +134,15 @@ fn main_loop(
         }
 
         window.swap_buffers();
-        glfw.poll_events();
-        handle_window_events(receiver, window, &mut projection);
+
+        frame_time = glfw.get_time() as f32;
     }
+
+    vbo.delete();
+    vao.delete();
+    texture.delete();
+    program.delete();
+    gl_loader::end_gl();
 }
 
 fn handle_window_events(
@@ -178,25 +173,30 @@ fn to_rad(deg: f32) -> f32 {
     deg / DEG_TO_RAD
 }
 
-fn update_camera(camera: &mut Camera, window: &Window) {
+fn update_camera(camera: &mut Camera, window: &Window, frame_time: f32) {
     let mut delta = vec3(0.0, 0.0, 0.0);
-    if let Action::Press | Action::Release = window.get_key(Key::W) {
+    let velocity = 5.0;
+    if let Action::Press | Action::Repeat = window.get_key(Key::W) {
         delta.z += 1.0;
-        println!("{}", delta.z);
     }
-    if let Action::Press | Action::Release = window.get_key(Key::A) {
+    if let Action::Press | Action::Repeat = window.get_key(Key::A) {
         delta.x -= 1.0;
-        println!("{}", delta.x);
     }
-    if let Action::Press | Action::Release = window.get_key(Key::S) {
+    if let Action::Press | Action::Repeat = window.get_key(Key::S) {
         delta.z -= 1.0;
-        println!("{}", delta.z);
     }
-    if let Action::Press | Action::Release = window.get_key(Key::D) {
+    if let Action::Press | Action::Repeat = window.get_key(Key::D) {
         delta.x += 1.0;
-        println!("{}", delta.x);
     }
-    delta = glm::normalize(&delta); // returning nan
-    println!("{} {} {}", delta.x, delta.y, delta.z);
-    camera.move_(&delta);
+    if let Action::Press | Action::Repeat = window.get_key(Key::LeftAlt) {
+        delta.y += 1.0;
+    }
+    if let Action::Press | Action::Repeat = window.get_key(Key::LeftControl) {
+        delta.y -= 1.0;
+    }
+    if delta.magnitude() > 0.0 {
+        delta = glm::normalize(&delta); // returning nan
+    }
+    delta *= velocity * frame_time;
+    camera.move_local(&delta);
 }

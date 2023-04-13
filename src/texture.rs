@@ -7,7 +7,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(target: GLenum, texture_data: (Info, Data<u8>)) -> Self {
+    pub fn new(target: GLenum, texture_data: (Info, Data<u8>)) -> Option<Self> {
         let mut id = 0;
         let channel = match texture_data.0.components {
             3 => gl::RGB,
@@ -31,7 +31,11 @@ impl Texture {
             gl::GenerateMipmap(target);
             gl::BindTexture(target, 0);
         }
-        Texture { id, target }
+        if id != 0 {
+            Some(Self { id, target })
+        } else {
+            None
+        }
     }
 
     pub fn bind(&self) {
