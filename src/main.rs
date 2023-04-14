@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 
 mod camera;
 mod shader;
@@ -11,10 +11,10 @@ extern crate nalgebra_glm as glm;
 
 use gl::types::GLsizei;
 use glfw::{
-    Action, Context, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
-    WindowMode,
+    Action, Context, CursorMode, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent,
+    WindowHint, WindowMode,
 };
-use glm::{vec3, Mat4};
+use glm::{vec3, Mat4, Vec3};
 use stb::image::Channels;
 use std::{
     f32::consts,
@@ -43,6 +43,9 @@ fn main() {
         .unwrap();
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
+    window.set_cursor_pos_polling(true);
+    window.set_cursor_mode(CursorMode::Disabled);
+    window.set_cursor_pos(0.0, 0.0);
     window.make_current();
     glfw.set_swap_interval(SwapInterval::Sync(1));
 
@@ -112,18 +115,21 @@ fn main() {
     let aspect = calculate_aspect(window.get_framebuffer_size());
 
     let model = Mat4::identity();
-
     let mut camera = Camera::new();
-    camera.move_(&vec3(0.0, 0.0, 2.0));
+    camera.translate(&vec3(0.0, 0.0, 2.0));
     let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
+
     let mut mvp: Mat4;
     let mut frame_time: f32 = 0.0;
+
     while !window.should_close() {
         glfw.set_time(0.0);
-
+        window.set_cursor_pos(0.0, 0.0);
         glfw.poll_events();
+
         update_camera(&mut camera, &window, frame_time);
-        handle_window_events(&receiver, &mut window, &mut projection);
+
+        handle_window_events(&receiver, &mut window, &mut projection, &camera);
 
         mvp = projection * camera.get_view() * model;
 
@@ -149,6 +155,7 @@ fn handle_window_events(
     receiver: &Receiver<(f64, WindowEvent)>,
     window: &mut Window,
     projection: &mut Mat4,
+    camera: &Camera,
 ) {
     for (_, event) in glfw::flush_messages(receiver) {
         match event {
@@ -158,6 +165,21 @@ fn handle_window_events(
                 *projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
                 gl::Viewport(0, 0, width, height);
             },
+            WindowEvent::Key(Key::C, _, Action::Press, _) => {
+                print!("{}[2J", 27 as char);
+                println!(
+                    "camera pos {} {} {}",
+                    camera.get_position().x,
+                    camera.get_position().y,
+                    camera.get_position().z
+                );
+                println!(
+                    "camera rot {} {} {}",
+                    camera.get_rotation().x,
+                    camera.get_rotation().y,
+                    camera.get_rotation().z
+                );
+            }
             _ => {}
         }
     }
@@ -174,7 +196,14 @@ fn to_rad(deg: f32) -> f32 {
 }
 
 fn update_camera(camera: &mut Camera, window: &Window, frame_time: f32) {
-    let mut delta = vec3(0.0, 0.0, 0.0);
+    let sensitivity = 3.0;
+    let pos = window.get_cursor_pos();
+    let x = pos.0 as f32;
+    let y = pos.1 as f32;
+    let local_rotation = vec3(-y, 0.0, 0.0) * sensitivity * frame_time;
+    let global_rotation = vec3(0.0, -x, 0.0) * sensitivity * frame_time;
+
+    let mut delta = Vec3::zeros();
     let velocity = 5.0;
     if let Action::Press | Action::Repeat = window.get_key(Key::W) {
         delta.z += 1.0;
@@ -188,15 +217,12 @@ fn update_camera(camera: &mut Camera, window: &Window, frame_time: f32) {
     if let Action::Press | Action::Repeat = window.get_key(Key::D) {
         delta.x += 1.0;
     }
-    if let Action::Press | Action::Repeat = window.get_key(Key::LeftAlt) {
-        delta.y += 1.0;
-    }
-    if let Action::Press | Action::Repeat = window.get_key(Key::LeftControl) {
-        delta.y -= 1.0;
-    }
     if delta.magnitude() > 0.0 {
         delta = glm::normalize(&delta); // returning nan
     }
     delta *= velocity * frame_time;
+
+    camera.rotate(&global_rotation);
+    camera.rotate_local(&local_rotation);
     camera.move_local(&delta);
 }
