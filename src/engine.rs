@@ -11,7 +11,7 @@ pub struct Engine {
     window: Option<Window>,
     receiver: Option<Receiver<(f64, WindowEvent)>>,
     camera: Camera,
-    camera_updater: Option< fn(Camera) -> ()>,
+    camera_updater: Option<fn(Camera) -> ()>,
     gl_is_loaded: bool,
 }
 
@@ -29,6 +29,10 @@ impl Engine {
             camera_updater: None,
             gl_is_loaded: false,
         };
+    }
+
+    pub fn set_camera_updater(&mut self, updater: fn(Camera) -> ()) {
+        self.camera_updater = Some(updater);
     }
 
     pub fn create_window(&mut self, width: u32, height: u32) {
@@ -60,4 +64,6 @@ impl Engine {
     }
 
     pub fn load_texture() {}
+
+    pub fn main_loop() {}
 }
