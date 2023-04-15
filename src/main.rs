@@ -6,6 +6,7 @@ mod shader_program;
 mod texture;
 mod vertex_array_object;
 mod vertex_buffer_object;
+mod engine;
 
 extern crate nalgebra_glm as glm;
 
@@ -41,11 +42,11 @@ fn main() {
     let (mut window, receiver) = glfw
         .create_window(WIDTH, HEIGHT, "", WindowMode::Windowed)
         .unwrap();
+
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
     window.set_cursor_pos_polling(true);
     window.set_cursor_mode(CursorMode::Disabled);
-    window.set_cursor_pos(0.0, 0.0);
     window.make_current();
     glfw.set_swap_interval(SwapInterval::Sync(1));
 
@@ -111,12 +112,15 @@ fn main() {
     );
     ShaderProgram::enable_attribute(0);
     ShaderProgram::enable_attribute(1);
+
     let location = program.get_uniform("MVP");
     let aspect = calculate_aspect(window.get_framebuffer_size());
 
     let model = Mat4::identity();
+    
     let mut camera = Camera::new();
     camera.translate(&vec3(0.0, 0.0, 2.0));
+    
     let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
 
     let mut mvp: Mat4;
@@ -129,13 +133,13 @@ fn main() {
 
         update_camera(&mut camera, &window, frame_time);
 
-        handle_window_events(&receiver, &mut window, &mut projection, &camera);
+        handle_window_events(&receiver, &mut window, &mut projection);
 
         mvp = projection * camera.get_view() * model;
 
         unsafe {
-            gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
 
@@ -155,7 +159,6 @@ fn handle_window_events(
     receiver: &Receiver<(f64, WindowEvent)>,
     window: &mut Window,
     projection: &mut Mat4,
-    camera: &Camera,
 ) {
     for (_, event) in glfw::flush_messages(receiver) {
         match event {
@@ -165,21 +168,6 @@ fn handle_window_events(
                 *projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
                 gl::Viewport(0, 0, width, height);
             },
-            WindowEvent::Key(Key::C, _, Action::Press, _) => {
-                print!("{}[2J", 27 as char);
-                println!(
-                    "camera pos {} {} {}",
-                    camera.get_position().x,
-                    camera.get_position().y,
-                    camera.get_position().z
-                );
-                println!(
-                    "camera rot {} {} {}",
-                    camera.get_rotation().x,
-                    camera.get_rotation().y,
-                    camera.get_rotation().z
-                );
-            }
             _ => {}
         }
     }
@@ -195,8 +183,12 @@ fn to_rad(deg: f32) -> f32 {
     deg / DEG_TO_RAD
 }
 
+fn to_deg(rad: f32) -> f32 {
+    rad * DEG_TO_RAD
+}
+
 fn update_camera(camera: &mut Camera, window: &Window, frame_time: f32) {
-    let sensitivity = 3.0;
+    let sensitivity = 2.0;
     let pos = window.get_cursor_pos();
     let x = pos.0 as f32;
     let y = pos.1 as f32;

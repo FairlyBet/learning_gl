@@ -19,7 +19,7 @@ impl VertexArrayObject {
         unsafe { gl::BindVertexArray(self.id) }
     }
 
-    pub fn clear_binding() {
+    pub fn unbind() {
         unsafe { gl::BindVertexArray(0) }
     }
 
