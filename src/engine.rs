@@ -9,8 +9,9 @@ use crate::camera::Camera;
 pub struct Engine {
     glfw: Glfw,
     window: Option<Window>,
-    camera: Option<Camera>,
     receiver: Option<Receiver<(f64, WindowEvent)>>,
+    camera: Camera,
+    camera_updater: Option< fn(Camera) -> ()>,
     gl_is_loaded: bool,
 }
 
@@ -23,25 +24,31 @@ impl Engine {
         Engine {
             glfw,
             window: None,
-            camera: None,
             receiver: None,
+            camera: Camera::new(),
+            camera_updater: None,
             gl_is_loaded: false,
         };
     }
 
     pub fn create_window(&mut self, width: u32, height: u32) {
-        let (window, receiver) = self
+        let (mut window, receiver) = self
             .glfw
             .create_window(width, height, "", WindowMode::Windowed)
             .unwrap();
-        self.window = window;
-        self.receiver = receiver;
+        window.set_key_polling(true);
+        window.set_framebuffer_size_polling(true);
+        window.set_cursor_pos_polling(true);
+        window.make_current();
 
-        self.window.set_key_polling(true);
-        self.window.set_framebuffer_size_polling(true);
-        self.window.set_cursor_pos_polling(true);
+        if !self.gl_is_loaded {
+            gl_loader::init_gl();
+            gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
+            self.gl_is_loaded = true;
+        }
 
-        self.window.make_current();
+        self.window = Some(window);
+        self.receiver = Some(receiver);
     }
 
     pub fn set_swap_interval(&mut self, interval: SwapInterval) {
@@ -49,7 +56,7 @@ impl Engine {
     }
 
     pub fn set_cursor_mode(&mut self, mode: CursorMode) {
-        self.window.set_cursor_mode(mode);
+        self.window.as_mut().unwrap().set_cursor_mode(mode);
     }
 
     pub fn load_texture() {}
