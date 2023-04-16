@@ -6,53 +6,45 @@ use std::sync::mpsc::Receiver;
 
 use crate::camera::Camera;
 
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 600;
+
 pub struct Engine {
     glfw: Glfw,
-    window: Option<Window>,
-    receiver: Option<Receiver<(f64, WindowEvent)>>,
+    window: Window,
+    receiver: Receiver<(f64, WindowEvent)>,
     camera: Camera,
-    camera_updater: Option<fn(Camera) -> ()>,
-    gl_is_loaded: bool,
+    camera_updater: Option<fn(&Camera, f32) -> ()>,
 }
 
 impl Engine {
-    pub fn new() {
+    pub fn new() -> Engine {
         let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
         glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfileHint::Core));
         glfw.window_hint(WindowHint::ContextVersion(3, 3));
 
-        Engine {
-            glfw,
-            window: None,
-            receiver: None,
-            camera: Camera::new(),
-            camera_updater: None,
-            gl_is_loaded: false,
-        };
-    }
-
-    pub fn set_camera_updater(&mut self, updater: fn(Camera) -> ()) {
-        self.camera_updater = Some(updater);
-    }
-
-    pub fn create_window(&mut self, width: u32, height: u32) {
-        let (mut window, receiver) = self
-            .glfw
-            .create_window(width, height, "", WindowMode::Windowed)
+        let (mut window, receiver) = glfw
+            .create_window(WIDTH, HEIGHT, "", WindowMode::Windowed)
             .unwrap();
         window.set_key_polling(true);
         window.set_framebuffer_size_polling(true);
         window.set_cursor_pos_polling(true);
         window.make_current();
 
-        if !self.gl_is_loaded {
-            gl_loader::init_gl();
-            gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
-            self.gl_is_loaded = true;
-        }
+        gl_loader::init_gl();
+        gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
 
-        self.window = Some(window);
-        self.receiver = Some(receiver);
+        Engine {
+            glfw,
+            window,
+            receiver,
+            camera: Camera::new(),
+            camera_updater: None,
+        }
+    }
+
+    pub fn set_camera_updater(&mut self, updater: fn(&Camera, f32) -> ()) {
+        self.camera_updater = Some(updater);
     }
 
     pub fn set_swap_interval(&mut self, interval: SwapInterval) {
@@ -60,10 +52,20 @@ impl Engine {
     }
 
     pub fn set_cursor_mode(&mut self, mode: CursorMode) {
-        self.window.as_mut().unwrap().set_cursor_mode(mode);
+        self.window.set_cursor_mode(mode);
     }
 
     pub fn load_texture() {}
 
-    pub fn main_loop() {}
+    pub fn main_loop(&mut self) {
+        let frametime = 0.0;
+        while !self.window.should_close() {
+            if let Some(updater) = self.camera_updater {
+                self.glfw.set_time(0.0);
+                self.window.set_cursor_pos(0.0, 0.0);
+                self.glfw.poll_events();
+                updater(&self.camera, frametime);
+            }
+        }
+    }
 }
