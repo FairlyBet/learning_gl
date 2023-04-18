@@ -34,6 +34,11 @@ impl Engine {
         gl_loader::init_gl();
         gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
 
+        unsafe {
+            gl::ClearColor(0.2, 0.3, 0.3, 1.0);
+            gl::Enable(gl::DEPTH_TEST);
+        }
+
         Engine {
             glfw,
             window,
@@ -60,10 +65,11 @@ impl Engine {
     pub fn main_loop(&mut self) {
         let frametime = 0.0;
         while !self.window.should_close() {
+            self.glfw.set_time(0.0);
+            self.window.set_cursor_pos(0.0, 0.0);
+            self.glfw.poll_events();
+
             if let Some(updater) = self.camera_updater {
-                self.glfw.set_time(0.0);
-                self.window.set_cursor_pos(0.0, 0.0);
-                self.glfw.poll_events();
                 updater(&self.camera, frametime);
             }
         }
