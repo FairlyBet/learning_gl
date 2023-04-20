@@ -7,6 +7,8 @@ mod texture;
 mod vertex_array_object;
 mod vertex_buffer_object;
 mod engine;
+mod renderer;
+mod object;
 
 extern crate nalgebra_glm as glm;
 

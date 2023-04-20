@@ -3,6 +3,7 @@ use std::ffi::{c_void, CString};
 use crate::shader::Shader;
 use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 
+#[derive(PartialEq, Eq)]
 pub struct ShaderProgram {
     id: GLuint,
 }
