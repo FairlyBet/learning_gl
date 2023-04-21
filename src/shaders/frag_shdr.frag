@@ -1,9 +1,8 @@
 #version 330
 
-in vec2 coord;
-
-uniform sampler2D tex;
+uniform vec3 self_color;
+uniform vec3 light_color;
 
 void main() {
-    gl_FragColor = texture2D(tex, coord);
+    gl_FragColor = vec4(self_color * light_color, 1.0);
 }
