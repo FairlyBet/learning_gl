@@ -64,9 +64,15 @@ impl Texture {
         }
     }
 
-    pub fn delete(self) {
+    fn delete(&self) {
         unsafe {
             gl::DeleteTextures(1, &self.id);
         }
+    }
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
+        self.delete();
     }
 }

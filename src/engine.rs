@@ -5,7 +5,7 @@ use glfw::{
 use nalgebra_glm::Mat4;
 use std::sync::mpsc::Receiver;
 
-use crate::{camera::Camera, object::{Object, self}, to_rad};
+use crate::{camera::Camera, object::Object, to_rad};
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -23,7 +23,7 @@ pub struct Engine<'a> {
     camera_updater: Option<fn(&Camera, f32) -> ()>,
     projection: Mat4,
 
-    objects: Vec<Object<'a>>,
+    objects: Vec<&'a Object<'a>>,
 }
 
 impl<'a> Engine<'a> {
@@ -76,7 +76,7 @@ impl<'a> Engine<'a> {
         self.window.set_cursor_mode(mode);
     }
 
-    pub fn add_object(&mut self, object: Object<'a>) {
+    pub fn add_object(&mut self, object: &'a Object<'a>) {
         self.objects.push(object);
     }
 
@@ -96,24 +96,31 @@ impl<'a> Engine<'a> {
             unsafe {
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
             }
-            for object  in &self.objects {
+            for object in &self.objects {
                 object.get_renderer().bind();
-                object.get_renderer().draw(); // Проброс трансформа в параметр
-                // Очистка ресурсов из objects и просто   
+                object.get_renderer().draw(&object.get_transform()); // Проброс трансформа в параметр
+                                                                     // Очистка ресурсов из objects и просто
             }
             self.window.swap_buffers();
 
             frametime = self.glfw.get_time() as f32;
         }
+        // end gl после очистки всех ресурсов
     }
 }
 
-fn handle_window_events(
-    engine: &mut Engine,
-) {
+impl<'a> Drop for Engine<'a> {
+    fn drop(&mut self) {
+        gl_loader::end_gl();
+    }
+}
+
+fn handle_window_events(engine: &mut Engine) {
     for (_, event) in glfw::flush_messages(&engine.receiver) {
         match event {
-            WindowEvent::Key(Key::Escape, _, Action::Press, _) => engine.window.set_should_close(true),
+            WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
+                engine.window.set_should_close(true)
+            }
             WindowEvent::FramebufferSize(width, height) => unsafe {
                 let aspect = calculate_aspect((width, height));
                 engine.projection = glm::perspective(aspect, to_rad(FOV_Y), NEAR, FAR);

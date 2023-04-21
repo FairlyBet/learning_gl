@@ -33,7 +33,13 @@ impl VertexBufferObject {
         }
     }
 
-    pub fn delete(self) {
+    fn delete(&self) {
         unsafe { gl::DeleteBuffers(1, &self.id) }
+    }
+}
+
+impl Drop for VertexBufferObject {
+    fn drop(&mut self) {
+        self.delete()
     }
 }

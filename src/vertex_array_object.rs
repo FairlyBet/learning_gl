@@ -23,9 +23,15 @@ impl VertexArrayObject {
         unsafe { gl::BindVertexArray(0) }
     }
 
-    pub fn delete(self) {
+    fn delete(&self) {
         unsafe {
             gl::DeleteVertexArrays(1, &self.id);
         }
+    }
+}
+
+impl Drop for VertexArrayObject {
+    fn drop(&mut self) {
+        self.delete();
     }
 }

@@ -81,7 +81,7 @@ impl ShaderProgram {
         unsafe { gl::UseProgram(self.id) };
     }
 
-    pub fn delete(self) {
+    fn delete(&self) {
         unsafe { gl::DeleteProgram(self.id) };
     }
 
@@ -121,5 +121,18 @@ impl ShaderProgram {
             p.delete();
             Err(out)
         }
+    }
+
+    pub fn unuse() {
+        unsafe {
+            gl::UseProgram(0);
+        }
+    }
+}
+
+impl Drop for ShaderProgram {
+    fn drop(&mut self) {
+        ShaderProgram::unuse();
+        self.delete();
     }
 }

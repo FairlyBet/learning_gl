@@ -1,23 +1,27 @@
 // #![windows_subsystem = "windows"]
 
 mod camera;
+mod engine;
+mod object;
+mod renderer;
+mod resorce_manager;
 mod shader;
 mod shader_program;
 mod texture;
 mod vertex_array_object;
 mod vertex_buffer_object;
-mod engine;
-mod renderer;
-mod object;
 
 extern crate nalgebra_glm as glm;
 
+use engine::Engine;
 use gl::types::GLsizei;
 use glfw::{
     Action, Context, CursorMode, Key, OpenGlProfileHint, SwapInterval, Window, WindowEvent,
     WindowHint, WindowMode,
 };
 use glm::{vec3, Mat4, Vec3};
+use object::Object;
+use renderer::Renderer;
 use stb::image::Channels;
 use std::{
     f32::consts,
@@ -25,10 +29,10 @@ use std::{
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
 };
+use vertex_array_object::VertexArrayObject;
 
 use camera::Camera;
 use shader_program::ShaderProgram;
-use vertex_array_object::VertexArrayObject;
 use vertex_buffer_object::VertexBufferObject;
 
 const WIDTH: u32 = 800;
@@ -54,106 +58,104 @@ fn main() {
 
     gl_loader::init_gl();
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
-    unsafe {
-        gl::ClearColor(0.2, 0.3, 0.3, 1.0);
-        gl::Enable(gl::DEPTH_TEST);
-    }
-
-    stb::image::stbi_set_flip_vertically_on_load(true);
-
-    let mut file = File::open("res\\container.jpg").unwrap();
-    let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
-    let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data).unwrap();
-    texture.bind();
-    texture.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
-    texture.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
-    texture.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
-    texture.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
-
-    let vertices = [
-        -0.5f32, -0.5, -0.5, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
-        0.5, -0.5, 1.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 0.0, -0.5, -0.5,
-        0.5, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 1.0,
-        -0.5, 0.5, 0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5,
-        -0.5, 1.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, 0.5,
-        0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
-        -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5,
-        1.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 1.0, 1.0, 0.5, -0.5, 0.5, 1.0, 0.0,
-        0.5, -0.5, 0.5, 1.0, 0.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, 0.5,
-        -0.5, 0.0, 1.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0,
-        -0.5, 0.5, 0.5, 0.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0,
-    ];
-
-    let vao = VertexArrayObject::new().unwrap();
-    let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-    vao.bind();
-    vbo.bind();
-    vbo.buffer_data(
-        size_of_val(&vertices),
-        vertices.as_ptr().cast(),
-        gl::STATIC_DRAW,
-    );
-
-    let program = ShaderProgram::from_vert_frag(VERT_SHDR_SRC, FRAG_SHDR_SRC).unwrap();
-    program.use_();
-    ShaderProgram::configure_attribute(
-        0,
-        3,
-        gl::FLOAT,
-        gl::FALSE,
-        5 * size_of::<f32>() as GLsizei,
-        0 as *const _,
-    );
-    ShaderProgram::configure_attribute(
-        1,
-        2,
-        gl::FLOAT,
-        gl::FALSE,
-        5 * size_of::<f32>() as GLsizei,
-        (3 * size_of::<f32>()) as *const _,
-    );
-    ShaderProgram::enable_attribute(0);
-    ShaderProgram::enable_attribute(1);
-
-    let location = program.get_uniform("MVP");
-    let aspect = calculate_aspect(window.get_framebuffer_size());
-
-    let model = Mat4::identity();
-    
-    let mut camera = Camera::new();
-    camera.translate(&vec3(0.0, 0.0, 2.0));
-    
-    let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
-
-    let mut mvp: Mat4;
-    let mut frame_time: f32 = 0.0;
-
-    while !window.should_close() {
-        glfw.set_time(0.0);
-        window.set_cursor_pos(0.0, 0.0);
-        glfw.poll_events();
-
-        update_camera(&mut camera, &window, frame_time);
-
-        handle_window_events(&receiver, &mut window, &mut projection);
-
-        mvp = projection * camera.get_view() * model;
-
+    {
         unsafe {
-            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-            gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
-            gl::DrawArrays(gl::TRIANGLES, 0, 36);
+            gl::ClearColor(0.2, 0.3, 0.3, 1.0);
+            gl::Enable(gl::DEPTH_TEST);
         }
 
-        window.swap_buffers();
+        stb::image::stbi_set_flip_vertically_on_load(true);
 
-        frame_time = glfw.get_time() as f32;
+        let mut file = File::open("res\\container.jpg").unwrap();
+        let texture_data = stb::image::stbi_load_from_reader(&mut file, Channels::Default).unwrap();
+        let texture = texture::Texture::new(gl::TEXTURE_2D, texture_data).unwrap();
+        texture.bind();
+        texture.parameter(gl::TEXTURE_WRAP_S, gl::REPEAT);
+        texture.parameter(gl::TEXTURE_WRAP_T, gl::REPEAT);
+        texture.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
+        texture.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
+
+        let vertices = [
+            -0.5f32, -0.5, -0.5, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0,
+            0.5, 0.5, -0.5, 1.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 0.0, -0.5,
+            -0.5, 0.5, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 0.5,
+            1.0, 1.0, -0.5, 0.5, 0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, 0.5, 0.5, 1.0,
+            0.0, -0.5, 0.5, -0.5, 1.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0,
+            -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5,
+            -0.5, 1.0, 1.0, 0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 0.5,
+            0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 1.0,
+            1.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, -0.5, -0.5, 0.5, 0.0, 0.0,
+            -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
+            0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 0.0, -0.5, 0.5, -0.5,
+            0.0, 1.0,
+        ];
+
+        let vao = VertexArrayObject::new().unwrap();
+        let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        vao.bind();
+        vbo.bind();
+        vbo.buffer_data(
+            size_of_val(&vertices),
+            vertices.as_ptr().cast(),
+            gl::STATIC_DRAW,
+        );
+
+        let program = ShaderProgram::from_vert_frag(VERT_SHDR_SRC, FRAG_SHDR_SRC).unwrap();
+        program.use_();
+        ShaderProgram::configure_attribute(
+            0,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            5 * size_of::<f32>() as GLsizei,
+            0 as *const _,
+        );
+        ShaderProgram::configure_attribute(
+            1,
+            2,
+            gl::FLOAT,
+            gl::FALSE,
+            5 * size_of::<f32>() as GLsizei,
+            (3 * size_of::<f32>()) as *const _,
+        );
+        ShaderProgram::enable_attribute(0);
+        ShaderProgram::enable_attribute(1);
+
+        let location = program.get_uniform("MVP");
+        let aspect = calculate_aspect(window.get_framebuffer_size());
+
+        let model = Mat4::identity();
+
+        let mut camera = Camera::new();
+        camera.translate(&vec3(0.0, 0.0, 2.0));
+
+        let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
+
+        let mut mvp: Mat4;
+        let mut frame_time: f32 = 0.0;
+
+        while !window.should_close() {
+            glfw.set_time(0.0);
+            window.set_cursor_pos(0.0, 0.0);
+            glfw.poll_events();
+
+            update_camera(&mut camera, &window, frame_time);
+
+            handle_window_events(&receiver, &mut window, &mut projection);
+
+            mvp = projection * camera.get_view() * model;
+
+            unsafe {
+                gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+                gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
+                gl::DrawArrays(gl::TRIANGLES, 0, 36);
+            }
+
+            window.swap_buffers();
+
+            frame_time = glfw.get_time() as f32;
+        }
     }
-
-    vbo.delete();
-    vao.delete();
-    texture.delete();
-    program.delete();
     gl_loader::end_gl();
 }
 

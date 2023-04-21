@@ -1,3 +1,5 @@
+use nalgebra_glm::Mat4;
+
 use crate::{
     shader_program::ShaderProgram, texture::Texture, vertex_array_object::VertexArrayObject,
     vertex_buffer_object::VertexBufferObject,
@@ -33,6 +35,7 @@ impl<'a> Renderer<'_> {
     }
 
     pub fn bind(&self) {
+        ShaderProgram::unuse();
         self.vao.bind();
         if let Some(texture) = self.texture {
             texture.bind();
@@ -47,7 +50,12 @@ impl<'a> Renderer<'_> {
     pub fn get_texture(&self) -> &Option<Texture> {
         self.texture
     }
-    pub fn draw(&self) {
+
+    pub fn draw(&self, transform: &Mat4) {
+        let location = self.shader_program.get_uniform("MVP");
+        unsafe {
+            gl::UniformMatrix4fv(location, 1, gl::FALSE, glm::value_ptr(transform).as_ptr());
+        }
         (self.draw_fn)();
     }
 }
