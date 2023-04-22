@@ -117,10 +117,11 @@ fn main() {
 
     let aspect = calculate_aspect(window.get_framebuffer_size());
 
-    let target_transform = glm::translate(&Mat4::identity(), &vec3(1.0, 1.5, -2.0));
-    let target_color = vec3(0.7, 0.5, 0.2);
+    let target_transform = glm::translate(&Mat4::identity(), &vec3(1.0, 0.0, -2.0));
+    let target_color = vec3(1.0, 0.5, 0.31);
 
-    let light_transform = Mat4::identity();
+    let light_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 4.0, 0.0));
+    let light_transform = glm::scale(&light_transform, &Vec3::from_element(0.3));
     let light_color = vec3(1.0, 1.0, 1.0);
 
     let mut camera = Camera::new();
