@@ -17,10 +17,8 @@ use glfw::{
     WindowHint, WindowMode,
 };
 use glm::{vec3, Mat4, Vec3};
-use stb::image::Channels;
 use std::{
     f32::consts,
-    fs::File,
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
 };
@@ -32,36 +30,27 @@ use vertex_buffer_object::VertexBufferObject;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
-const VERT_SHDR_SRC: &str = include_str!("shaders\\vert_shdr.vert");
-const FRAG_SHDR_SRC: &str = include_str!("shaders\\frag_shdr.frag");
 
-const VERTICES: [f32; 24] = [
-    0.5, 0.5, 0.5, //
-    0.5, 0.5, -0.5, //
-    -0.5, 0.5, -0.5, //
-    -0.5, 0.5, 0.5, //
-    // sdfgd
-    0.5, -0.5, 0.5, //
-    0.5, -0.5, -0.5, //
-    -0.5, -0.5, -0.5, //
-    -0.5, -0.5, 0.5, //
+const VERTICES: [f32; 216] = [
+    -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0,
+    -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, -0.5, 0.0,
+    0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.0,
+    0.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0,
+    0.0, 1.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, -0.5,
+    -1.0, 0.0, 0.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5,
+    0.5, -1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5,
+    -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5,
+    0.5, 1.0, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5,
+    -0.5, 0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, -0.5, -0.5, 0.5, 0.0, -1.0, 0.0,
+    -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0,
+    0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0,
+    -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
 ];
 
-const ELEMENTS: [u32; 36] = [
-    0, 1, 2, //
-    0, 2, 3, //
-    0, 1, 5, //
-    0, 4, 5, //
-    0, 3, 7, //
-    0, 4, 7, //
-    //asd
-    6, 1, 5, //
-    6, 1, 2, //
-    6, 2, 3, //
-    6, 3, 7, //
-    6, 4, 5, //
-    6, 4, 7, //
-];
+const PHONG_VERT_SRC: &str = include_str!("shaders\\phong_shader.vert");
+const PHONG_FRAG_SRC: &str = include_str!("shaders\\phong_shader.frag");
+const TRIVIAL_VERT_SRC: &str = include_str!("shaders\\trivial_shader.vert");
+const TRIVIAL_FRAG_SRC: &str = include_str!("shaders\\trivial_shader.frag");
 
 fn main() {
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -87,50 +76,81 @@ fn main() {
         gl::Enable(gl::DEPTH_TEST);
     }
 
-    let vao = VertexArrayObject::new().unwrap();
-    vao.bind();
-
-    let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-    vbo.bind();
-    vbo.buffer_data(
+    let array_buffer = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+    array_buffer.bind();
+    array_buffer.buffer_data(
         size_of_val(&VERTICES),
         VERTICES.as_ptr().cast(),
         gl::STATIC_DRAW,
     );
+    array_buffer.unbind();
 
-    let ebo = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
-    ebo.bind();
-    ebo.buffer_data(
-        size_of_val(&ELEMENTS),
-        ELEMENTS.as_ptr().cast(),
-        gl::STATIC_DRAW,
+    let lamp_vao = VertexArrayObject::new().unwrap();
+    lamp_vao.bind();
+
+    array_buffer.bind();
+
+    let trivial_program =
+        ShaderProgram::from_vert_frag(TRIVIAL_VERT_SRC, TRIVIAL_FRAG_SRC).unwrap();
+    trivial_program.use_();
+    ShaderProgram::configure_attribute(
+        0,
+        3,
+        gl::FLOAT,
+        gl::FALSE,
+        size_of::<f32>() * 6,
+        0 as *const _,
     );
-
-    let program = ShaderProgram::from_vert_frag(VERT_SHDR_SRC, FRAG_SHDR_SRC).unwrap();
-    program.use_();
-    ShaderProgram::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
     ShaderProgram::enable_attribute(0);
 
-    let mvp_location = program.get_uniform("MVP");
-    let color_location = program.get_uniform("self_color");
-    let light_location = program.get_uniform("light_color");
+    VertexArrayObject::unbind();
+
+    let cube_vao = VertexArrayObject::new().unwrap();
+    cube_vao.bind();
+
+    array_buffer.bind();
+
+    let phong_program = ShaderProgram::from_vert_frag(PHONG_VERT_SRC, PHONG_FRAG_SRC).unwrap();
+    phong_program.use_();
+    ShaderProgram::configure_attribute(
+        0,
+        3,
+        gl::FLOAT,
+        gl::FALSE,
+        size_of::<f32>() * 6,
+        0 as *const _,
+    );
+    ShaderProgram::configure_attribute(
+        1,
+        3,
+        gl::FLOAT,
+        gl::FALSE,
+        size_of::<f32>() * 6,
+        (size_of::<f32>() * 3) as *const _,
+    );
+    ShaderProgram::enable_attribute(0);
+    ShaderProgram::enable_attribute(1);
+
+    VertexArrayObject::unbind();
 
     let aspect = calculate_aspect(window.get_framebuffer_size());
 
-    let target_transform = glm::translate(&Mat4::identity(), &vec3(1.0, 0.0, -2.0));
-    let target_color = vec3(1.0, 0.5, 0.31);
+    let cube_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 0.0, 0.0));
+    let cube_color = vec3(1.0, 0.5, 0.31);
 
-    let light_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 4.0, 0.0));
-    let light_transform = glm::scale(&light_transform, &Vec3::from_element(0.3));
-    let light_color = vec3(1.0, 1.0, 1.0);
+    let lamp_position = vec3(1.0, 0.0, -2.0);
+    let lamp_scale = Vec3::from_element(0.5);
+    let mut lamp_transform = Mat4::identity();
+    lamp_transform = glm::translate(&lamp_transform, &lamp_position);
+    lamp_transform = glm::scale(&lamp_transform, &lamp_scale);
+    let lamp_color = vec3(1.0, 1.0, 1.0);
 
     let mut camera = Camera::new();
-    camera.translate(&vec3(0.0, 0.0, 2.0));
+    camera.translate(&vec3(0.0, 0.0, 3.0));
 
     let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
-    let mut mvp: Mat4;
 
-    let mut frame_time: f32 = 0.0;
+    let mut frame_time = 0.0_f32;
 
     while !window.should_close() {
         glfw.set_time(0.0);
@@ -141,24 +161,86 @@ fn main() {
 
         handle_window_events(&receiver, &mut window, &mut projection);
 
-        mvp = projection * camera.get_view() * target_transform;
-
         unsafe {
-            // draw object
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-            gl::UniformMatrix4fv(mvp_location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
-            gl::Uniform3fv(color_location, 1, target_color.as_ptr());
-            gl::Uniform3fv(light_location, 1, light_color.as_ptr());
 
-            gl::DrawElements(gl::TRIANGLES, 36, gl::UNSIGNED_INT, 0 as *const _);
+            trivial_program.use_();
+            lamp_vao.bind();
 
-            // draw light source
-            mvp = projection * camera.get_view() * light_transform;
-            gl::UniformMatrix4fv(mvp_location, 1, gl::FALSE, glm::value_ptr(&mvp).as_ptr());
-            gl::Uniform3fv(color_location, 1, vec3(1.0, 1.0, 1.0).as_ptr());
-            gl::Uniform3fv(light_location, 1, light_color.as_ptr());
+            let model_location = trivial_program.get_uniform("model");
+            let view_location = trivial_program.get_uniform("view");
+            let projection_location = trivial_program.get_uniform("projection");
+            let color_location = trivial_program.get_uniform("self_color");
 
-            gl::DrawElements(gl::TRIANGLES, 36, gl::UNSIGNED_INT, 0 as *const _);
+            gl::UniformMatrix4fv(
+                model_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&lamp_transform).as_ptr(),
+            );
+            gl::UniformMatrix4fv(
+                view_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&camera.get_view()).as_ptr(),
+            );
+            gl::UniformMatrix4fv(
+                projection_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&projection).as_ptr(),
+            );
+            gl::Uniform3fv(color_location, 1, glm::value_ptr(&lamp_color).as_ptr());
+
+            gl::DrawArrays(gl::TRIANGLES, 0, 36);
+
+            phong_program.use_();
+            cube_vao.bind();
+
+            let model_location = phong_program.get_uniform("model");
+            let view_location = phong_program.get_uniform("view");
+            let projection_location = phong_program.get_uniform("projection");
+            let color_location = phong_program.get_uniform("self_color");
+            let light_color_location = phong_program.get_uniform("light_color");
+            let light_position_location = phong_program.get_uniform("light_position");
+            let view_position_location = phong_program.get_uniform("view_position");
+
+            gl::UniformMatrix4fv(
+                model_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&cube_transform).as_ptr(),
+            );
+            gl::UniformMatrix4fv(
+                view_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&camera.get_view()).as_ptr(),
+            );
+            gl::UniformMatrix4fv(
+                projection_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&projection).as_ptr(),
+            );
+            gl::Uniform3fv(color_location, 1, glm::value_ptr(&cube_color).as_ptr());
+            gl::Uniform3fv(
+                light_color_location,
+                1,
+                glm::value_ptr(&lamp_color).as_ptr(),
+            );
+            gl::Uniform3fv(
+                light_position_location,
+                1,
+                glm::value_ptr(&lamp_position).as_ptr(),
+            );
+            gl::Uniform3fv(
+                view_position_location,
+                1,
+                glm::value_ptr(&camera.get_position()).as_ptr(),
+            );
+
+            gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
 
         window.swap_buffers();

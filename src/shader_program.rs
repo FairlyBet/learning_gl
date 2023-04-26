@@ -32,11 +32,11 @@ impl ShaderProgram {
         size: GLint,
         type_: GLenum,
         normalized: GLboolean,
-        stride: GLsizei,
+        stride: usize,
         pointer: *const c_void,
     ) {
         unsafe {
-            gl::VertexAttribPointer(index, size, type_, normalized, stride, pointer);
+            gl::VertexAttribPointer(index, size, type_, normalized, stride as GLsizei, pointer);
         }
     }
 
