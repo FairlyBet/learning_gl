@@ -16,11 +16,13 @@ void main() {
     float diffuse_intensity = clamp(dot(normal, ray_direction), 0.0f, 1.0f);
     vec3 diffuse = diffuse_intensity * light_color;
 
-    float specular_brightness = 0.5f;
+    float specular_brightness = 0.65f;
     vec3 view_direction = normalize(view_position - position);
     vec3 reflect_direction = reflect(-ray_direction, normal);
-    float specular_intensity = pow(max(dot(view_direction, reflect_direction), 0.0), 32);
+    float specular_intensity = pow(max(dot(view_direction, reflect_direction), 0.0), 128);
     vec3 specular = specular_brightness * specular_intensity * light_color;
+    
+    
 
     vec3 frag_color = (ambient + diffuse + specular) * self_color;
 
