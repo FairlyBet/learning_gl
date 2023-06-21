@@ -1,5 +1,7 @@
+use std::{fs::File, io::BufReader};
+
 use gl::types::{GLenum, GLint, GLuint};
-use stb::image::{Data, Info};
+use stb::image::{Channels, Data, Info};
 
 pub struct Texture {
     id: GLuint,
@@ -12,7 +14,7 @@ impl Texture {
         let channel = match texture_data.0.components {
             3 => gl::RGB,
             4 => gl::RGBA,
-            _ => panic!("something with channels"),
+            _ => panic!("Something with channels"),
         };
         unsafe {
             gl::GenTextures(1, &mut id);
@@ -67,6 +69,15 @@ impl Texture {
     fn delete(&self) {
         unsafe {
             gl::DeleteTextures(1, &self.id);
+        }
+    }
+
+    pub fn from_file(path: &str) -> Option<Self> {
+        let mut f = File::open(path).unwrap();
+        if let Some(img) = stb::image::stbi_load_from_reader(&mut f, Channels::Default) {
+            Texture::new(gl::TEXTURE_2D, img)
+        } else {
+            panic!("Can't load image")
         }
     }
 }

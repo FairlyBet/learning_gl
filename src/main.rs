@@ -1,9 +1,6 @@
 // #![windows_subsystem = "windows"]
 
 mod camera;
-mod engine;
-mod object;
-mod renderer;
 mod shader;
 mod shader_program;
 mod texture;
@@ -22,6 +19,7 @@ use std::{
     mem::{size_of, size_of_val},
     sync::mpsc::Receiver,
 };
+use texture::Texture;
 
 use camera::Camera;
 use shader_program::ShaderProgram;
@@ -31,20 +29,23 @@ use vertex_buffer_object::VertexBufferObject;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-const VERTICES: [f32; 216] = [
-    -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0,
-    -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, -0.5, 0.0,
-    0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.0,
-    0.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0,
-    0.0, 1.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, -0.5,
-    -1.0, 0.0, 0.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5,
-    0.5, -1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5,
-    -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5,
-    0.5, 1.0, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5,
-    -0.5, 0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, -0.5, -0.5, 0.5, 0.0, -1.0, 0.0,
-    -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0,
-    0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0,
-    -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
+const VERTICES: [f32; 288] = [
+    -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 0.0, 0.5,
+    0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, 1.0, 1.0, -0.5, 0.5, -0.5,
+    0.0, 0.0, -1.0, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, 0.0,
+    0.0, 1.0, 0.0, 0.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0,
+    1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 1.0, -0.5,
+    -0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 0.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 1.0, 0.0, -0.5, 0.5, -0.5,
+    -1.0, 0.0, 0.0, 1.0, 1.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 1.0, -0.5, -0.5, -0.5, -1.0,
+    0.0, 0.0, 0.0, 1.0, -0.5, -0.5, 0.5, -1.0, 0.0, 0.0, 0.0, 0.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0,
+    1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 1.0, 1.0, 0.5,
+    -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 1.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5,
+    1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 1.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0,
+    0.0, 0.0, 1.0, 0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 1.0, 1.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 1.0,
+    0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 1.0, 0.0, -0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.0, 0.0, -0.5,
+    -0.5, -0.5, 0.0, -1.0, 0.0, 0.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 1.0, 0.5, 0.5, -0.5,
+    0.0, 1.0, 0.0, 1.0, 1.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0,
+    1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 1.0,
 ];
 
 const PHONG_VERT_SRC: &str = include_str!("shaders\\phong_shader.vert");
@@ -98,7 +99,7 @@ fn main() {
         3,
         gl::FLOAT,
         gl::FALSE,
-        size_of::<f32>() * 6,
+        size_of::<f32>() * 8,
         0 as *const _,
     );
     ShaderProgram::enable_attribute(0);
@@ -110,6 +111,11 @@ fn main() {
 
     array_buffer.bind();
 
+    let diffuse_map = Texture::from_file("res\\container2.png").unwrap();
+    let specular_map = Texture::from_file("res\\container2_specular.png").unwrap();
+    diffuse_map.bind_to_unit(gl::TEXTURE1);
+    specular_map.bind_to_unit(gl::TEXTURE2);
+
     let phong_program = ShaderProgram::from_vert_frag(PHONG_VERT_SRC, PHONG_FRAG_SRC).unwrap();
     phong_program.use_();
     ShaderProgram::configure_attribute(
@@ -117,7 +123,7 @@ fn main() {
         3,
         gl::FLOAT,
         gl::FALSE,
-        size_of::<f32>() * 6,
+        size_of::<f32>() * 8,
         0 as *const _,
     );
     ShaderProgram::configure_attribute(
@@ -125,11 +131,20 @@ fn main() {
         3,
         gl::FLOAT,
         gl::FALSE,
-        size_of::<f32>() * 6,
+        size_of::<f32>() * 8,
         (size_of::<f32>() * 3) as *const _,
+    );
+    ShaderProgram::configure_attribute(
+        2,
+        2,
+        gl::FLOAT,
+        gl::FALSE,
+        size_of::<f32>() * 8,
+        (size_of::<f32>() * 6) as *const _,
     );
     ShaderProgram::enable_attribute(0);
     ShaderProgram::enable_attribute(1);
+    ShaderProgram::enable_attribute(2);
 
     VertexArrayObject::unbind();
 
@@ -142,7 +157,7 @@ fn main() {
     let mut lamp_transform = Mat4::identity();
     lamp_transform = glm::translate(&lamp_transform, &lamp_position);
     lamp_transform = glm::scale(&lamp_transform, &lamp_scale);
-    let lamp_color = vec3(1.0, 1.0, 1.0);
+    let lamp_color = vec3(0.6, 0.45, 0.3);
 
     let mut camera = Camera::new();
     camera.translate(&vec3(0.0, 0.0, 3.0));
@@ -200,13 +215,19 @@ fn main() {
             let view_location = phong_program.get_uniform("view");
             let projection_location = phong_program.get_uniform("projection");
 
-            let ambient = phong_program.get_uniform("material.ambient");
+            // let ambient = phong_program.get_uniform("material.ambient");
             let diffuse = phong_program.get_uniform("material.diffuse");
             let specular = phong_program.get_uniform("material.specular");
             let shininess = phong_program.get_uniform("material.shininess");
 
-            let light_color_location = phong_program.get_uniform("light_color");
-            let light_position_location = phong_program.get_uniform("light_position");
+            // let light_color_location = phong_program.get_uniform("light_color");
+            // let light_position_location = phong_program.get_uniform("light_position");
+
+            let light_ambient = phong_program.get_uniform("light.ambient");
+            let light_diffuse = phong_program.get_uniform("light.diffuse");
+            let light_specular = phong_program.get_uniform("light.specular");
+            let light_position = phong_program.get_uniform("light.position");
+
             let view_position_location = phong_program.get_uniform("view_position");
 
             gl::UniformMatrix4fv(
@@ -227,25 +248,21 @@ fn main() {
                 gl::FALSE,
                 glm::value_ptr(&projection).as_ptr(),
             );
-            gl::Uniform3fv(
-                light_color_location,
-                1,
-                glm::value_ptr(&lamp_color).as_ptr(),
-            );
-            gl::Uniform3fv(
-                light_position_location,
-                1,
-                glm::value_ptr(&lamp_position).as_ptr(),
-            );
+
+            gl::Uniform3f(light_ambient, 0.3, 0.2, 0.3);
+            gl::Uniform3fv(light_diffuse, 1, glm::value_ptr(&lamp_color).as_ptr());
+            gl::Uniform3f(light_specular, 1.0, 0.9, 0.8);
+            gl::Uniform3fv(light_position, 1, glm::value_ptr(&lamp_position).as_ptr());
+
             gl::Uniform3fv(
                 view_position_location,
                 1,
                 glm::value_ptr(&camera.get_position()).as_ptr(),
             );
-            gl::Uniform3f(ambient, 0.2125, 0.1275, 0.054);
-            gl::Uniform3f(diffuse, 0.714, 0.4284, 0.18144);
-            gl::Uniform3f(specular, 0.393548, 0.271906, 0.166721);
-            gl::Uniform1f(shininess, 0.2);
+
+            gl::Uniform1i(diffuse, 1);
+            gl::Uniform1i(specular, 2);
+            gl::Uniform1f(shininess, 64.0);
 
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
@@ -286,9 +303,9 @@ fn to_rad(deg: f32) -> f32 {
     deg / DEG_TO_RAD
 }
 
-fn to_deg(rad: f32) -> f32 {
-    rad * DEG_TO_RAD
-}
+// fn to_deg(rad: f32) -> f32 {
+//     rad * DEG_TO_RAD
+// }
 
 fn update_camera(camera: &mut Camera, window: &Window, frame_time: f32) {
     let sensitivity = 2.0;
