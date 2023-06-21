@@ -136,7 +136,6 @@ fn main() {
     let aspect = calculate_aspect(window.get_framebuffer_size());
 
     let cube_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 0.0, 0.0));
-    let cube_color = vec3(1.0, 0.5, 0.31);
 
     let lamp_position = vec3(1.0, 0.0, -2.0);
     let lamp_scale = Vec3::from_element(0.5);
@@ -200,7 +199,12 @@ fn main() {
             let model_location = phong_program.get_uniform("model");
             let view_location = phong_program.get_uniform("view");
             let projection_location = phong_program.get_uniform("projection");
-            let color_location = phong_program.get_uniform("self_color");
+
+            let ambient = phong_program.get_uniform("material.ambient");
+            let diffuse = phong_program.get_uniform("material.diffuse");
+            let specular = phong_program.get_uniform("material.specular");
+            let shininess = phong_program.get_uniform("material.shininess");
+
             let light_color_location = phong_program.get_uniform("light_color");
             let light_position_location = phong_program.get_uniform("light_position");
             let view_position_location = phong_program.get_uniform("view_position");
@@ -223,7 +227,6 @@ fn main() {
                 gl::FALSE,
                 glm::value_ptr(&projection).as_ptr(),
             );
-            gl::Uniform3fv(color_location, 1, glm::value_ptr(&cube_color).as_ptr());
             gl::Uniform3fv(
                 light_color_location,
                 1,
@@ -239,6 +242,10 @@ fn main() {
                 1,
                 glm::value_ptr(&camera.get_position()).as_ptr(),
             );
+            gl::Uniform3f(ambient, 0.2125, 0.1275, 0.054);
+            gl::Uniform3f(diffuse, 0.714, 0.4284, 0.18144);
+            gl::Uniform3f(specular, 0.393548, 0.271906, 0.166721);
+            gl::Uniform1f(shininess, 0.2);
 
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
