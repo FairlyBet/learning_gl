@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader};
+use std::fs::File;
 
 use gl::types::{GLenum, GLint, GLuint};
 use stb::image::{Channels, Data, Info};
@@ -51,6 +51,7 @@ impl Texture {
         unsafe {
             gl::ActiveTexture(unit);
             gl::BindTexture(self.target, self.id);
+            gl::ActiveTexture(gl::TEXTURE0);
         }
     }
 

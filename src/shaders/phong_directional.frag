@@ -10,7 +10,7 @@ struct Light {
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
-    vec3 position;
+    vec3 direction; // has to be normalized
 };
 
 in vec3 normal;
@@ -24,12 +24,11 @@ uniform Material material;
 void main() {
     vec3 ambient = light.ambient * texture2D(material.diffuse, tex_coord).rgb;
 
-    vec3 inv_ray_direction = normalize(light.position - position);
-    float diffuse_intensity = max(dot(normal, inv_ray_direction), 0.0f);
+    float diffuse_intensity = max(dot(normal, -light.direction), 0.0f);
     vec3 diffuse = light.diffuse * diffuse_intensity * texture(material.diffuse, tex_coord).rgb;
 
     vec3 inv_view_direction = normalize(view_position - position);
-    vec3 reflect_direction = (reflect(-inv_ray_direction, normal));
+    vec3 reflect_direction = (reflect(light.direction, normal));
     float specular_intensity = pow(max(dot(inv_view_direction, reflect_direction), 0.0f), material.shininess);
     vec3 specular = light.specular * specular_intensity * texture2D(material.specular, tex_coord).rgb;
 

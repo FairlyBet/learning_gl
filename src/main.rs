@@ -112,8 +112,8 @@ fn main() {
     array_buffer.bind();
 
     let diffuse_map = Texture::from_file("res\\container2.png").unwrap();
-    let specular_map = Texture::from_file("res\\container2_specular.png").unwrap();
     diffuse_map.bind_to_unit(gl::TEXTURE1);
+    let specular_map = Texture::from_file("res\\container2_specular.png").unwrap();
     specular_map.bind_to_unit(gl::TEXTURE2);
 
     let phong_program = ShaderProgram::from_vert_frag(PHONG_VERT_SRC, PHONG_FRAG_SRC).unwrap();
@@ -215,13 +215,9 @@ fn main() {
             let view_location = phong_program.get_uniform("view");
             let projection_location = phong_program.get_uniform("projection");
 
-            // let ambient = phong_program.get_uniform("material.ambient");
             let diffuse = phong_program.get_uniform("material.diffuse");
             let specular = phong_program.get_uniform("material.specular");
             let shininess = phong_program.get_uniform("material.shininess");
-
-            // let light_color_location = phong_program.get_uniform("light_color");
-            // let light_position_location = phong_program.get_uniform("light_position");
 
             let light_ambient = phong_program.get_uniform("light.ambient");
             let light_diffuse = phong_program.get_uniform("light.diffuse");
@@ -229,7 +225,7 @@ fn main() {
             let light_position = phong_program.get_uniform("light.position");
 
             let view_position_location = phong_program.get_uniform("view_position");
-
+            
             gl::UniformMatrix4fv(
                 model_location,
                 1,
