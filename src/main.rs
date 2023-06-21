@@ -50,6 +50,7 @@ const VERTICES: [f32; 288] = [
 
 const PHONG_VERT_SRC: &str = include_str!("shaders\\phong_shader.vert");
 const PHONG_FRAG_SRC: &str = include_str!("shaders\\phong_shader.frag");
+const PHONG_DIRECTIONAL_SRC: &str = include_str!("shaders\\phong_directional.frag");
 const TRIVIAL_VERT_SRC: &str = include_str!("shaders\\trivial_shader.vert");
 const TRIVIAL_FRAG_SRC: &str = include_str!("shaders\\trivial_shader.frag");
 
@@ -116,7 +117,8 @@ fn main() {
     let specular_map = Texture::from_file("res\\container2_specular.png").unwrap();
     specular_map.bind_to_unit(gl::TEXTURE2);
 
-    let phong_program = ShaderProgram::from_vert_frag(PHONG_VERT_SRC, PHONG_FRAG_SRC).unwrap();
+    let phong_program =
+        ShaderProgram::from_vert_frag(PHONG_VERT_SRC, PHONG_DIRECTIONAL_SRC).unwrap();
     phong_program.use_();
     ShaderProgram::configure_attribute(
         0,
@@ -222,10 +224,10 @@ fn main() {
             let light_ambient = phong_program.get_uniform("light.ambient");
             let light_diffuse = phong_program.get_uniform("light.diffuse");
             let light_specular = phong_program.get_uniform("light.specular");
-            let light_position = phong_program.get_uniform("light.position");
+            let light_direction = phong_program.get_uniform("light.direction");
 
             let view_position_location = phong_program.get_uniform("view_position");
-            
+
             gl::UniformMatrix4fv(
                 model_location,
                 1,
@@ -245,10 +247,11 @@ fn main() {
                 glm::value_ptr(&projection).as_ptr(),
             );
 
-            gl::Uniform3f(light_ambient, 0.3, 0.2, 0.3);
-            gl::Uniform3fv(light_diffuse, 1, glm::value_ptr(&lamp_color).as_ptr());
+            gl::Uniform3f(light_ambient, 0.65, 0.65, 0.8);
+            gl::Uniform3f(light_diffuse, 0.8, 0.7, 0.6);
             gl::Uniform3f(light_specular, 1.0, 0.9, 0.8);
-            gl::Uniform3fv(light_position, 1, glm::value_ptr(&lamp_position).as_ptr());
+            let direction = glm::normalize(&vec3(-1.0, -1.0, -1.0));
+            gl::Uniform3fv(light_direction, 1, direction.as_ptr());
 
             gl::Uniform3fv(
                 view_position_location,
