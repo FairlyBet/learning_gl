@@ -55,6 +55,8 @@ const TRIVIAL_VERT_SRC: &str = include_str!("shaders\\trivial_shader.vert");
 const TRIVIAL_FRAG_SRC: &str = include_str!("shaders\\trivial_shader.frag");
 
 fn main() {
+    
+
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
     glfw.window_hint(WindowHint::OpenGlProfile(OpenGlProfileHint::Core));
     glfw.window_hint(WindowHint::ContextVersion(3, 3));

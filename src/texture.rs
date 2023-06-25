@@ -1,5 +1,4 @@
 use std::fs::File;
-
 use gl::types::{GLenum, GLint, GLuint};
 use stb::image::{Channels, Data, Info};
 
@@ -11,6 +10,7 @@ pub struct Texture {
 impl Texture {
     pub fn new(target: GLenum, texture_data: (Info, Data<u8>)) -> Option<Self> {
         let mut id = 0;
+
         let channel = match texture_data.0.components {
             3 => gl::RGB,
             4 => gl::RGBA,
