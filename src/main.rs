@@ -68,6 +68,7 @@ fn main() {
     window.set_key_polling(true);
     window.set_framebuffer_size_polling(true);
     window.set_cursor_pos_polling(true);
+    
     window.set_cursor_mode(CursorMode::Disabled);
     window.make_current();
     glfw.set_swap_interval(SwapInterval::Sync(1));
