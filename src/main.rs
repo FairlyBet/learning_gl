@@ -1,16 +1,14 @@
 // #![windows_subsystem = "windows"]
 
+extern crate nalgebra_glm as glm;
+
 use std::{sync::mpsc::Receiver, f32::consts};
-
 use glfw::{Context, WindowEvent, Window};
-
 use crate::initializers::{GlfwInit, WindowCreator};
 
 mod initializers;
 mod data_structures;
 mod gl_wrappers;
-
-extern crate nalgebra_glm as glm;
 
 fn main() {
     let mut glfw = GlfwInit::init_from_config(_);

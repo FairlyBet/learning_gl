@@ -1,6 +1,7 @@
-use glfw::{CursorMode, OpenGlProfileHint, WindowMode};
-use nalgebra_glm::Mat4x4;
 extern crate nalgebra_glm as glm;
+use glfw::{CursorMode, OpenGlProfileHint, WindowMode};
+use glm::Vec3;
+use nalgebra_glm::Mat4x4;
 
 pub struct GlfwConfig {
     pub profile: OpenGlProfileHint,
@@ -17,5 +18,26 @@ pub struct WindowConfig<'a> {
 }
 
 pub struct Object {
-    transform: Mat4x4
+    transform: Transform,
+}
+
+pub struct Transform {
+    pub position: Vec3,
+    pub rotation: Vec3, // radians
+    pub scale: Vec3,
+}
+
+impl Object {
+    pub fn get_model(&self) -> Mat4x4 {
+        let mut res = Mat4x4::from_diagonal_element(1.0);
+        res = glm::translate(&res, &self.transform.position);
+
+        res = glm::rotate(&res, self.transform.rotation.x, &Vec3::x_axis());
+        res = glm::rotate(&res, self.transform.rotation.y, &Vec3::y_axis());
+        res = glm::rotate(&res, self.transform.rotation.z, &Vec3::z_axis());
+
+        res = glm::scale(&res, &self.transform.scale);
+
+        res
+    }
 }
