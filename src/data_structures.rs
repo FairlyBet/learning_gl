@@ -1,11 +1,8 @@
-extern crate nalgebra_glm as glm;
-use std::vec;
-
+use crate::updaters::{self, OnFrameBufferSizeChange, OnKeyPressed};
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::Mat4x4;
-
-use crate::updaters::{self, OnFrameBufferSizeChange, OnKeyPressed};
+use std::vec;
 
 pub struct GlfwConfig {
     pub profile: OpenGlProfileHint,
@@ -50,7 +47,7 @@ pub struct Transform {
 }
 
 pub struct Object {
-    transform: Transform,
+    pub transform: Transform,
     // extensions:
 }
 
@@ -70,8 +67,8 @@ impl Object {
 }
 
 pub struct ViewObject {
-    object: Object,
-    type_: ViewType,
+    pub object: Object,
+    pub type_: ViewType,
 }
 
 enum ViewType {
@@ -83,6 +80,26 @@ pub struct SceneConfig<'a> {
     objects: Vec<Object>,
     views: Vec<ViewObject>,
     active_view: &'a ViewObject,
+}
+
+impl Default for SceneConfig<'_> {
+    fn default() -> Self {
+        let view_obj = ViewObject {
+            object: Object {
+                transform: Transform {
+                    position: glm::vec3(0.0, 0.0, 0.0),
+                    rotation: glm::vec3(0.0, 0.0, 0.0),
+                    scale: glm::vec3(1.0, 1.0, 1.0),
+                },
+            },
+            type_: ViewType::Perspective(0.0, 0.0, 0.0, 0.0),
+        };
+        Self {
+            objects: vec![],
+            views: vec![view_obj],
+            active_view: &view_obj,
+        }
+    }
 }
 
 pub struct EngineApi<'a> {
@@ -147,7 +164,7 @@ impl EventContainer {
         todo!();
     }
 
-    pub fn temp_new() -> Self {
+    pub fn new_minimal() -> Self {
         let on_key_pressed = vec![OnKeyPressed {
             key: Key::Escape,
             action: Action::Press,

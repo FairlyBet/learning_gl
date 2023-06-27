@@ -15,7 +15,7 @@ fn main() {
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     let scene_config: SceneConfig;
-    let event_container = EventContainer::temp_new();
+    let event_container = EventContainer::new_minimal();
 
     // let aspect = calculate_aspect(window.get_framebuffer_size());
     // let cube_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 0.0, 0.0));
