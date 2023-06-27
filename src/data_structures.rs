@@ -8,6 +8,15 @@ pub struct GlfwConfig {
     pub version: (u32, u32),
 }
 
+impl Default for GlfwConfig {
+    fn default() -> Self {
+        Self {
+            profile: OpenGlProfileHint::Core,
+            version: (3, 3),
+        }
+    }
+}
+
 pub struct WindowConfig<'a> {
     pub width: u32,
     pub height: u32,
@@ -17,14 +26,28 @@ pub struct WindowConfig<'a> {
     pub vsync: bool,
 }
 
-pub struct Object {
-    transform: Transform,
+impl Default for WindowConfig<'_> {
+    fn default() -> Self {
+        Self {
+            width: 800,
+            height: 600,
+            title: Default::default(),
+            mode: WindowMode::Windowed,
+            cursor_mode: CursorMode::Normal,
+            vsync: true,
+        }
+    }
 }
 
 pub struct Transform {
     pub position: Vec3,
     pub rotation: Vec3, // radians
     pub scale: Vec3,
+}
+
+pub struct Object {
+    transform: Transform,
+    // extensions: 
 }
 
 impl Object {
@@ -40,4 +63,20 @@ impl Object {
 
         res
     }
+}
+
+struct ViewObject {
+    object: Object,
+    type_: ViewType,
+}
+
+enum ViewType {
+    Orthographic(f32, f32, f32, f32, f32, f32),
+    Perspective(f32, f32, f32, f32),
+}
+
+pub struct SceneConfig<'a> {
+    objects: Vec<Object>,
+    views: Vec<ViewObject>,
+    active_view: &'a ViewObject,
 }

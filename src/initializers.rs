@@ -1,7 +1,6 @@
-use std::sync::mpsc::Receiver;
-
 use crate::data_structures::{GlfwConfig, WindowConfig};
-use glfw::{Context, Glfw, SwapInterval, WindowHint, Window, WindowEvent};
+use glfw::{Context, Glfw, SwapInterval, Window, WindowEvent, WindowHint};
+use std::sync::mpsc::Receiver;
 
 pub struct GlfwInit {}
 
@@ -21,7 +20,10 @@ impl GlfwInit {
 pub struct WindowCreator {}
 
 impl WindowCreator {
-    pub fn create_from_config(config: WindowConfig, glfw: &mut Glfw) -> (Window, Receiver<(f64, WindowEvent)>){
+    pub fn create_from_config(
+        config: WindowConfig,
+        glfw: &mut Glfw,
+    ) -> (Window, Receiver<(f64, WindowEvent)>) {
         let (mut window, receiver) = glfw
             .create_window(config.width, config.height, &config.title, config.mode)
             .unwrap();

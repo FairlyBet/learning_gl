@@ -3,16 +3,19 @@
 extern crate nalgebra_glm as glm;
 
 use std::{sync::mpsc::Receiver, f32::consts};
+use data_structures::SceneConfig;
 use glfw::{Context, WindowEvent, Window};
 use crate::initializers::{GlfwInit, WindowCreator};
 
 mod initializers;
 mod data_structures;
 mod gl_wrappers;
+mod updates;
 
 fn main() {
-    let mut glfw = GlfwInit::init_from_config(_);
-    let (mut window, receiver) = WindowCreator::create_from_config(_, &mut glfw);
+    let mut glfw = GlfwInit::init_from_config(Default::default());
+    let (mut window, receiver) = WindowCreator::create_from_config(Default::default(), &mut glfw);
+    let scene_config: SceneConfig;
     // let aspect = calculate_aspect(window.get_framebuffer_size());
 
     // let cube_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 0.0, 0.0));
@@ -35,9 +38,8 @@ fn main() {
         glfw.set_time(0.0);
         glfw.poll_events();
         
-        // window.set_cursor_pos(0.0, 0.0);
-        // update_camera(&mut camera, &window, frame_time);
-
+        // call updates from dynamic dll
+        
         handle_window_events(&receiver, &mut window);
 
         unsafe {
@@ -45,7 +47,6 @@ fn main() {
         }
 
         window.swap_buffers();
-
         frame_time = glfw.get_time() as f32;
     }
 
@@ -57,15 +58,15 @@ fn handle_window_events(
     window: &mut Window,
 ) {
     for (_, event) in glfw::flush_messages(receiver) {
-        // match event {
+        match event {
         //     WindowEvent::Key(Key::Escape, _, Action::Press, _) => window.set_should_close(true),
         //     WindowEvent::FramebufferSize(width, height) => unsafe {
         //         let aspect = calculate_aspect((width, height));
         //         *projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
         //         gl::Viewport(0, 0, width, height);
         //     },
-        //     _ => {}
-        // }
+            _ => {}
+        }
     }
 }
 
