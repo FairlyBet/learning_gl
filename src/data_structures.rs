@@ -1,7 +1,11 @@
 extern crate nalgebra_glm as glm;
-use glfw::{CursorMode, OpenGlProfileHint, WindowMode};
+use std::vec;
+
+use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::Mat4x4;
+
+use crate::updaters::{self, OnFrameBufferSizeChange, OnKeyPressed};
 
 pub struct GlfwConfig {
     pub profile: OpenGlProfileHint,
@@ -47,7 +51,7 @@ pub struct Transform {
 
 pub struct Object {
     transform: Transform,
-    // extensions: 
+    // extensions:
 }
 
 impl Object {
@@ -65,7 +69,7 @@ impl Object {
     }
 }
 
-struct ViewObject {
+pub struct ViewObject {
     object: Object,
     type_: ViewType,
 }
@@ -79,4 +83,82 @@ pub struct SceneConfig<'a> {
     objects: Vec<Object>,
     views: Vec<ViewObject>,
     active_view: &'a ViewObject,
+}
+
+pub struct EngineApi<'a> {
+    window: &'a Window,
+    frametime: f32,
+    should_close: bool,
+}
+
+impl<'a> EngineApi<'a> {
+    pub fn new(window: &'a Window, frametime: f32) -> Self {
+        EngineApi {
+            window,
+            frametime,
+            should_close: false,
+        }
+    }
+
+    pub fn get_key(&self, key: Key) -> Action {
+        self.window.get_key(key)
+    }
+
+    pub fn get_cursor_pos(&self) -> (f64, f64) {
+        self.window.get_cursor_pos()
+    }
+
+    pub fn get_frametime(&self) -> f32 {
+        self.frametime
+    }
+
+    pub fn set_should_close_true(&mut self) {
+        self.should_close = true;
+    }
+
+    pub fn get_should_close(&self) -> bool {
+        self.should_close
+    }
+}
+
+pub trait Objected {
+    fn get_object(&mut self) -> &mut Object;
+}
+
+impl Objected for Object {
+    fn get_object(&mut self) -> &mut Object {
+        self
+    }
+}
+
+impl Objected for ViewObject {
+    fn get_object(&mut self) -> &mut Object {
+        &mut self.object
+    }
+}
+
+pub struct EventContainer {
+    pub on_key_pressed: Vec<OnKeyPressed>,
+    pub on_framebuffer_size_changed: Vec<OnFrameBufferSizeChange>,
+}
+
+impl EventContainer {
+    pub fn new() -> Self {
+        todo!();
+    }
+
+    pub fn temp_new() -> Self {
+        let on_key_pressed = vec![OnKeyPressed {
+            key: Key::Escape,
+            action: Action::Press,
+            callback: updaters::close_on_escape,
+        }];
+        let on_framebuffer_size_changed = vec![OnFrameBufferSizeChange {
+            callback: updaters::on_framebuffer_size_change,
+        }];
+        EventContainer {
+            on_key_pressed,
+            on_framebuffer_size_changed,
+        }
+    }
 }
