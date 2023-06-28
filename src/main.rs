@@ -2,8 +2,9 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{EngineApi, EventContainer, SceneConfig};
+use data_structures::{EngineApi, EventContainer, Transform, ViewObject, ViewType};
 use glfw::{Context, WindowEvent};
+use glm::Vec3;
 use std::{f32::consts, sync::mpsc::Receiver};
 
 mod data_structures;
@@ -14,8 +15,22 @@ mod updaters;
 fn main() {
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
-    let scene_config: SceneConfig;
     let event_container = EventContainer::new_minimal();
+
+    let projection = ViewType::Perspective(
+        get_aspect(window.get_framebuffer_size()),
+        to_rad(75.0),
+        0.1,
+        100.0,
+    );
+    let camera = ViewObject::new(
+        projection,
+        Transform {
+            position: Vec3::zeros(),
+            rotation: Vec3::zeros(),
+            scale: Vec3::from_element(1.0),
+        },
+    );
 
     // let aspect = calculate_aspect(window.get_framebuffer_size());
     // let cube_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 0.0, 0.0));
@@ -67,9 +82,7 @@ fn handle_window_events(
         match event {
             WindowEvent::Key(key, _, action, _) => {
                 for item in event_container.on_key_pressed.iter() {
-                    if item.key == key && item.action == action {
-                        (item.callback)(api);
-                    }
+                    (item.callback)(key, action, api);
                 }
             }
             WindowEvent::FramebufferSize(width, height) => {
@@ -82,7 +95,7 @@ fn handle_window_events(
     }
 }
 
-fn calculate_aspect(framebuffer_size: (i32, i32)) -> f32 {
+fn get_aspect(framebuffer_size: (i32, i32)) -> f32 {
     framebuffer_size.0 as f32 / framebuffer_size.1 as f32
 }
 

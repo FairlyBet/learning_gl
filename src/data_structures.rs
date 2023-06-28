@@ -1,7 +1,8 @@
-use crate::updaters::{self, OnFrameBufferSizeChange, OnKeyPressed};
+use crate::updaters;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::Mat4x4;
+use serde_json::de;
 use std::vec;
 
 pub struct GlfwConfig {
@@ -40,64 +41,91 @@ impl Default for WindowConfig<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
     pub rotation: Vec3, // radians
     pub scale: Vec3,
 }
 
-pub struct Object {
-    pub transform: Transform,
-    // extensions:
-}
-
-impl Object {
+impl Transform {
     pub fn get_model(&self) -> Mat4x4 {
-        let mut res = Mat4x4::from_diagonal_element(1.0);
-        res = glm::translate(&res, &self.transform.position);
+        let mut model = Mat4x4::from_diagonal_element(1.0);
+        model = glm::translate(&model, &self.position);
 
-        res = glm::rotate(&res, self.transform.rotation.x, &Vec3::x_axis());
-        res = glm::rotate(&res, self.transform.rotation.y, &Vec3::y_axis());
-        res = glm::rotate(&res, self.transform.rotation.z, &Vec3::z_axis());
+        model = glm::rotate(&model, self.rotation.x, &Vec3::x_axis());
+        model = glm::rotate(&model, self.rotation.y, &Vec3::y_axis());
+        model = glm::rotate(&model, self.rotation.z, &Vec3::z_axis());
 
-        res = glm::scale(&res, &self.transform.scale);
+        model = glm::scale(&model, &self.scale);
 
-        res
+        model
     }
+
+    pub fn move_(&mut self, delta: Vec3) {
+        self.position += delta;
+    }
+
+    pub fn move_local(&mut self) {}
+
+    pub fn rotate(&mut self) {}
+
+    pub fn rotate_local(&mut self) {}
 }
 
 pub struct ViewObject {
-    pub object: Object,
-    pub type_: ViewType,
+    pub transform: Transform,
+    view: Mat4x4,
+    projection: Mat4x4,
 }
 
-enum ViewType {
+impl ViewObject {
+    pub fn new(type_: ViewType, transform: Transform) -> ViewObject {
+        ViewObject {
+            transform,
+            view: Mat4x4::zeros(),
+            projection: type_.calculate_projecion(),
+        }
+    }
+
+    pub fn get_view(&self) -> Mat4x4 {
+        let mut direction = -(*Vec3::z_axis());
+
+        direction = glm::rotate_vec3(&direction, self.transform.rotation.x, &Vec3::x_axis());
+        direction = glm::rotate_vec3(&direction, self.transform.rotation.y, &Vec3::y_axis());
+        direction = glm::rotate_vec3(&direction, self.transform.rotation.z, &Vec3::z_axis());
+
+        glm::look_at(
+            &(self.transform.position),
+            &(self.transform.position + direction),
+            &(*Vec3::y_axis()),
+        )
+    }
+
+    pub fn get_projection(&self) -> Mat4x4 {
+        self.projection
+    }
+
+    pub fn set_view_type(&mut self, type_: ViewType) {......
+        self.projection = type_.calculate_projecion();
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum ViewType {
     Orthographic(f32, f32, f32, f32, f32, f32),
     Perspective(f32, f32, f32, f32),
 }
 
-pub struct SceneConfig<'a> {
-    objects: Vec<Object>,
-    views: Vec<ViewObject>,
-    active_view: &'a ViewObject,
-}
-
-impl Default for SceneConfig<'_> {
-    fn default() -> Self {
-        let view_obj = ViewObject {
-            object: Object {
-                transform: Transform {
-                    position: glm::vec3(0.0, 0.0, 0.0),
-                    rotation: glm::vec3(0.0, 0.0, 0.0),
-                    scale: glm::vec3(1.0, 1.0, 1.0),
-                },
-            },
-            type_: ViewType::Perspective(0.0, 0.0, 0.0, 0.0),
-        };
-        Self {
-            objects: vec![],
-            views: vec![view_obj],
-            active_view: &view_obj,
+impl ViewType {
+    fn calculate_projecion(&self) -> Mat4x4 {
+        match *self {
+            ViewType::Orthographic(left, right, bottom, top, znear, zfar) => {
+                glm::ortho(left, right, bottom, top, znear, zfar)
+            }
+            ViewType::Perspective(aspect, fovy, near, far) => {
+                glm::perspective(aspect, fovy, near, far)
+            }
         }
     }
 }
@@ -138,22 +166,6 @@ impl<'a> EngineApi<'a> {
     }
 }
 
-pub trait Objected {
-    fn get_object(&mut self) -> &mut Object;
-}
-
-impl Objected for Object {
-    fn get_object(&mut self) -> &mut Object {
-        self
-    }
-}
-
-impl Objected for ViewObject {
-    fn get_object(&mut self) -> &mut Object {
-        &mut self.object
-    }
-}
-
 pub struct EventContainer {
     pub on_key_pressed: Vec<OnKeyPressed>,
     pub on_framebuffer_size_changed: Vec<OnFrameBufferSizeChange>,
@@ -166,8 +178,6 @@ impl EventContainer {
 
     pub fn new_minimal() -> Self {
         let on_key_pressed = vec![OnKeyPressed {
-            key: Key::Escape,
-            action: Action::Press,
             callback: updaters::close_on_escape,
         }];
         let on_framebuffer_size_changed = vec![OnFrameBufferSizeChange {
@@ -178,4 +188,12 @@ impl EventContainer {
             on_framebuffer_size_changed,
         }
     }
+}
+
+pub struct OnKeyPressed {
+    pub callback: fn(key: Key, action: Action, &mut EngineApi) -> (),
+}
+
+pub struct OnFrameBufferSizeChange {
+    pub callback: fn(i32, i32) -> (),
 }

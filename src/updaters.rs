@@ -8,8 +8,10 @@ pub fn on_framebuffer_size_change(w: i32, h: i32) {
     }
 }
 
-pub fn close_on_escape(api: &mut EngineApi) {
-    api.set_should_close_true();
+pub fn close_on_escape(key: Key, action: Action, api: &mut EngineApi) {
+    if key == Key::Escape && action == Action::Press {
+        api.set_should_close_true();
+    }
 }
 
 pub fn default_camera_controller(camera: &mut ViewObject, api: EngineApi) {
@@ -38,23 +40,8 @@ pub fn default_camera_controller(camera: &mut ViewObject, api: EngineApi) {
         delta = glm::normalize(&delta); // returning nan
     }
     delta *= velocity * api.get_frametime();
-    
-    let a: Vec<Box<dyn Test>>;
+
     // camera.rotate(&global_rotation);
     // camera.rotate_local(&local_rotation);
     // camera.move_local(&delta);
-}
-
-pub struct OnKeyPressed {
-    pub key: Key,
-    pub action: Action,
-    pub callback: fn(&mut EngineApi) -> (),
-}
-
-pub struct OnFrameBufferSizeChange {
-    pub callback: fn(i32, i32) -> (),
-}
-
-pub trait Test {
-    fn test(&mut self, w: i32, h: i32);
 }
