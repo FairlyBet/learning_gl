@@ -2,7 +2,6 @@ use crate::updaters;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::Mat4x4;
-use serde_json::de;
 use std::vec;
 
 pub struct GlfwConfig {
@@ -50,7 +49,7 @@ pub struct Transform {
 
 impl Transform {
     pub fn get_model(&self) -> Mat4x4 {
-        let mut model = Mat4x4::from_diagonal_element(1.0);
+        let mut model = glm::identity();
         model = glm::translate(&model, &self.position);
 
         model = glm::rotate(&model, self.rotation.x, &Vec3::x_axis());
@@ -66,11 +65,19 @@ impl Transform {
         self.position += delta;
     }
 
-    pub fn move_local(&mut self) {}
+    pub fn move_local(&mut self, delta: Vec3) {
+        let mut local_forward = -(*Vec3::z_axis());
 
-    pub fn rotate(&mut self) {}
+        local_forward = glm::rotate_vec3(&local_forward, self.rotation.x, &Vec3::x_axis());
+        local_forward = glm::rotate_vec3(&local_forward, self.rotation.y, &Vec3::y_axis());
+        local_forward = glm::rotate_vec3(&local_forward, self.rotation.z, &Vec3::z_axis());
 
-    pub fn rotate_local(&mut self) {}
+        // let quat = glm::quat_ // перечитать статью
+    }
+
+    pub fn rotate(&mut self, euler: Vec3) {}
+
+    pub fn rotate_local(&mut self, euler: Vec3) {}
 }
 
 pub struct ViewObject {
@@ -106,7 +113,7 @@ impl ViewObject {
         self.projection
     }
 
-    pub fn set_view_type(&mut self, type_: ViewType) {......
+    pub fn set_view_type(&mut self, type_: ViewType) {
         self.projection = type_.calculate_projecion();
     }
 }
