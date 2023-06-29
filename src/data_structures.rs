@@ -43,7 +43,7 @@ impl Default for WindowConfig<'_> {
 #[derive(Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
-    pub orientation: Quat, // radians
+    pub orientation: Quat,
     pub scale: Vec3,
 }
 
@@ -63,7 +63,7 @@ impl Transform {
         let rotation = glm::quat_to_mat4(&self.orientation);
         let scale = glm::scale(&identity, &self.scale);
 
-        scale * tranlation * rotation //rotation // why rotation matrix affects translation one??!
+        scale * tranlation * rotation // why rotation matrix affects translation one??!
     }
 
     pub fn move_(&mut self, delta: &Vec3) {
@@ -71,21 +71,32 @@ impl Transform {
     }
 
     pub fn move_local(&mut self, delta: &Vec3) {
-        let local_right = glm::quat_rotate_vec3(&self.orientation, &-Vec3::x_axis());
-        let local_upward = glm::quat_rotate_vec3(&self.orientation, &-Vec3::y_axis());
-        let local_forward = glm::quat_rotate_vec3(&self.orientation, &-Vec3::z_axis());
-
+        let (local_right, local_upward, local_forward) = self.get_local_axises();
         self.position += local_right * delta.x + local_upward * delta.y + local_forward * delta.z;
     }
 
-    pub fn rotate(&mut self, euler: Vec3) {
+    pub fn rotate(&mut self, euler: &Vec3) {
+        self.rotate_around(euler, &(*Vec3::x_axis(), *Vec3::y_axis(), *Vec3::z_axis()));
+    }
+
+    pub fn rotate_local(&mut self, euler: &Vec3) {
+        let local_axises = self.get_local_axises();
+        self.rotate_around(euler, &local_axises);
+    }
+
+    fn get_local_axises(&self) -> (Vec3, Vec3, Vec3) {
+        let local_upward = glm::quat_rotate_vec3(&self.orientation, &Vec3::y_axis());
+        let local_right = glm::quat_rotate_vec3(&self.orientation, &Vec3::x_axis());
+        let local_forward = glm::quat_rotate_vec3(&self.orientation, &Vec3::z_axis());
+
+        (local_right, local_upward, local_forward)
+    }
+
+    fn rotate_around(&mut self, euler: &Vec3, axises: &(Vec3, Vec3, Vec3)) {
         let euler = euler * Transform::to_rad();
-        self.orientation =
-            glm::quat_rotate_normalized_axis(&self.orientation, euler.x, &Vec3::x_axis());
-        self.orientation =
-            glm::quat_rotate_normalized_axis(&self.orientation, euler.y, &Vec3::y_axis());
-        self.orientation =
-            glm::quat_rotate_normalized_axis(&self.orientation, euler.z, &Vec3::z_axis());
+        self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.y, &axises.1);
+        self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.x, &axises.0);
+        self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.z, &axises.2);
     }
 
     fn to_rad() -> f32 {
@@ -95,56 +106,54 @@ impl Transform {
 
 pub struct ViewObject {
     pub transform: Transform,
-    projection: Mat4x4,
+    projection_matrix: Mat4x4,
 }
 
 impl ViewObject {
-    pub fn new(type_: ViewType, transform: Transform) -> ViewObject {
+    pub fn new(projection: Projection) -> ViewObject {
         ViewObject {
-            transform,
-            projection: type_.calculate_projecion(),
+            transform: Transform::new(),
+            projection_matrix: projection.calculate_projecion(),
         }
     }
 
     pub fn get_view(&self) -> Mat4x4 {
-        let identity = glm::identity();
-        let translation = glm::translate(&identity, &-self.transform.position);
-        let rotation = glm::inverse(&glm::quat_to_mat4(&self.transform.orientation));
+        glm::inverse(&self.transform.get_model())
+        // let direction = glm::quat_rotate_vec3(&self.transform.orientation, &-Vec3::z_axis());
+        // let view = glm::quat_look_at(&direction, &Vec3::y_axis());
 
-        rotation * translation
-        // direction = glm::rotate_vec3(&direction, self.transform.orientation.x, &Vec3::x_axis());
-        // direction = glm::rotate_vec3(&direction, self.transform.orientation.y, &Vec3::y_axis());
-        // direction = glm::rotate_vec3(&direction, self.transform.orientation.z, &Vec3::z_axis());
+        // let identity = glm::identity();
+        // let translation = glm::translate(&identity, &(-self.transform.position));
+        // translation * glm::quat_to_mat4(&view)
 
-        // glm::look_at(
-        //     &(self.transform.position),
-        //     &(self.transform.position),
-        //     &(*Vec3::y_axis()),
-        // )
+        // let rotation = glm::inverse(&glm::quat_to_mat4(&self.transform.orientation));
+
+        // rotation * translation // applying quat rotation after translation makes object rotate
+        // around coordinate center and around themselves simultaneoulsy
     }
 
     pub fn get_projection(&self) -> Mat4x4 {
-        self.projection
+        self.projection_matrix
     }
 
-    pub fn set_view_type(&mut self, type_: ViewType) {
-        self.projection = type_.calculate_projecion();
+    pub fn set_projection(&mut self, projection: Projection) {
+        self.projection_matrix = projection.calculate_projecion();
     }
 }
 
 #[derive(Clone, Copy)]
-pub enum ViewType {
+pub enum Projection {
     Orthographic(f32, f32, f32, f32, f32, f32),
     Perspective(f32, f32, f32, f32),
 }
 
-impl ViewType {
+impl Projection {
     fn calculate_projecion(&self) -> Mat4x4 {
         match *self {
-            ViewType::Orthographic(left, right, bottom, top, znear, zfar) => {
+            Projection::Orthographic(left, right, bottom, top, znear, zfar) => {
                 glm::ortho(left, right, bottom, top, znear, zfar)
             }
-            ViewType::Perspective(aspect, fovy, near, far) => {
+            Projection::Perspective(aspect, fovy, near, far) => {
                 glm::perspective(aspect, fovy, near, far)
             }
         }
@@ -170,8 +179,9 @@ impl<'a> EngineApi<'a> {
         self.window.get_key(key)
     }
 
-    pub fn get_cursor_pos(&self) -> (f64, f64) {
-        self.window.get_cursor_pos()
+    pub fn get_cursor_pos(&self) -> (f32, f32) {
+        let pos = self.window.get_cursor_pos();
+        (pos.0 as f32, pos.1 as f32)
     }
 
     pub fn get_frametime(&self) -> f32 {
