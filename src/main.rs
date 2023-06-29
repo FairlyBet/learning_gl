@@ -3,9 +3,9 @@
 extern crate nalgebra_glm as glm;
 
 use data_structures::{EngineApi, EventContainer, Transform, ViewObject, ViewType};
+use gl_wrappers::{ShaderProgram, VertexArrayObject, VertexBufferObject};
 use glfw::{Context, WindowEvent};
-use glm::Vec3;
-use std::{f32::consts, sync::mpsc::Receiver};
+use std::{f32::consts, mem::size_of_val, sync::mpsc::Receiver};
 
 mod data_structures;
 mod gl_wrappers;
@@ -23,14 +23,41 @@ fn main() {
         0.1,
         100.0,
     );
-    let camera = ViewObject::new(
-        projection,
-        Transform {
-            position: Vec3::zeros(),
-            rotation: Vec3::zeros(),
-            scale: Vec3::from_element(1.0),
-        },
+    let camera = ViewObject::new(projection, Transform::new());
+
+    let cube_mesh = [
+        -0.5_f32, -0.5, -0.5, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
+        0.5, -0.5, 1.0, 1.0, -0.5, 0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 0.0, -0.5, -0.5,
+        0.5, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 1.0,
+        -0.5, 0.5, 0.5, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, -0.5, 0.5,
+        -0.5, 1.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, -0.5, 0.5,
+        0.0, 0.0, -0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5,
+        -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5,
+        1.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, 0.5, -0.5, -0.5, 1.0, 1.0, 0.5, -0.5, 0.5, 1.0, 0.0,
+        0.5, -0.5, 0.5, 1.0, 0.0, -0.5, -0.5, 0.5, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, 1.0, -0.5, 0.5,
+        -0.5, 0.0, 1.0, 0.5, 0.5, -0.5, 1.0, 1.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0,
+        -0.5, 0.5, 0.5, 0.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0,
+    ];
+
+    let vao = VertexArrayObject::new().unwrap();
+    vao.bind();
+
+    let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+    vbo.bind();
+    vbo.buffer_data(
+        size_of_val(&cube_mesh),
+        cube_mesh.as_ptr().cast(),
+        gl::STATIC_DRAW,
     );
+
+    let prog = ShaderProgram::from_vert_frag_file(
+        "src\\shaders\\trivial_shader.vert",
+        "src\\shaders\\trivial_shader.frag",
+    ).unwrap();
+    prog.use_();
+    unsafe {
+        
+    }
 
     // let aspect = calculate_aspect(window.get_framebuffer_size());
     // let cube_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 0.0, 0.0));

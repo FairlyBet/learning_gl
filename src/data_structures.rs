@@ -1,7 +1,7 @@
 use crate::updaters;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
-use nalgebra_glm::Mat4x4;
+use nalgebra_glm::{Mat4x4, Quat};
 use std::vec;
 
 pub struct GlfwConfig {
@@ -43,19 +43,24 @@ impl Default for WindowConfig<'_> {
 #[derive(Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
-    pub rotation: Vec3, // radians
+    pub orientation: Quat, // radians
     pub scale: Vec3,
 }
 
 impl Transform {
+    pub fn new() -> Transform {
+        Transform {
+            position: Vec3::zeros(),
+            orientation: glm::quat_identity(),
+            scale: Vec3::from_element(1.0),
+        }
+    }
+
     pub fn get_model(&self) -> Mat4x4 {
         let mut model = glm::identity();
+
         model = glm::translate(&model, &self.position);
-
-        model = glm::rotate(&model, self.rotation.x, &Vec3::x_axis());
-        model = glm::rotate(&model, self.rotation.y, &Vec3::y_axis());
-        model = glm::rotate(&model, self.rotation.z, &Vec3::z_axis());
-
+        model = glm::quat_to_mat4(&self.orientation) * model;
         model = glm::scale(&model, &self.scale);
 
         model
@@ -68,14 +73,18 @@ impl Transform {
     pub fn move_local(&mut self, delta: Vec3) {
         let mut local_forward = -(*Vec3::z_axis());
 
-        local_forward = glm::rotate_vec3(&local_forward, self.rotation.x, &Vec3::x_axis());
-        local_forward = glm::rotate_vec3(&local_forward, self.rotation.y, &Vec3::y_axis());
-        local_forward = glm::rotate_vec3(&local_forward, self.rotation.z, &Vec3::z_axis());
+        // local_forward = glm::rotate_vec3(&local_forward, self.rotation.x, &Vec3::x_axis());
+        // local_forward = glm::rotate_vec3(&local_forward, self.rotation.y, &Vec3::y_axis());
+        // local_forward = glm::rotate_vec3(&local_forward, self.rotation.z, &Vec3::z_axis());
 
         // let quat = glm::quat_ // перечитать статью
     }
 
-    pub fn rotate(&mut self, euler: Vec3) {}
+    pub fn rotate(&mut self, euler: Vec3) {
+        self.orientation = glm::quat_rotate(&self.orientation, euler.x, &Vec3::x_axis());
+        self.orientation = glm::quat_rotate(&self.orientation, euler.y, &Vec3::y_axis());
+        self.orientation = glm::quat_rotate(&self.orientation, euler.z, &Vec3::z_axis());
+    }
 
     pub fn rotate_local(&mut self, euler: Vec3) {}
 }
@@ -98,9 +107,9 @@ impl ViewObject {
     pub fn get_view(&self) -> Mat4x4 {
         let mut direction = -(*Vec3::z_axis());
 
-        direction = glm::rotate_vec3(&direction, self.transform.rotation.x, &Vec3::x_axis());
-        direction = glm::rotate_vec3(&direction, self.transform.rotation.y, &Vec3::y_axis());
-        direction = glm::rotate_vec3(&direction, self.transform.rotation.z, &Vec3::z_axis());
+        // direction = glm::rotate_vec3(&direction, self.transform.orientation.x, &Vec3::x_axis());
+        // direction = glm::rotate_vec3(&direction, self.transform.orientation.y, &Vec3::y_axis());
+        // direction = glm::rotate_vec3(&direction, self.transform.orientation.z, &Vec3::z_axis());
 
         glm::look_at(
             &(self.transform.position),
