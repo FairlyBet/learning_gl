@@ -31,7 +31,7 @@ fn main() {
         0.1,
         100.0,
     );
-    let camera = ViewObject::new(projection, Transform::new());
+    let mut camera = ViewObject::new(projection, Transform::new());
 
     let cube_mesh = [
         -0.5_f32, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
@@ -66,7 +66,8 @@ fn main() {
     let self_color = prog.get_uniform("self_color");
 
     let mut cube = Transform::new();
-    cube.position = glm::vec3(0.0, 2.0, -5.0);
+    cube.position = glm::vec3(0.0, 0.0, -2.0);
+
     // let aspect = calculate_aspect(window.get_framebuffer_size());
     // let cube_transform = glm::translate(&Mat4::identity(), &vec3(0.0, 0.0, 0.0));
     // let lamp_position = vec3(1.0, 0.0, -2.0);
@@ -80,8 +81,9 @@ fn main() {
     // let mut projection = glm::perspective(aspect, to_rad(45.0), 0.1, 100.0);
 
     initializers::init_rendering();
+
     let mut frametime = 0.0_f32;
-    let mut angle = 0.0;
+
     while !window.should_close() {
         glfw.set_time(0.0);
         glfw.poll_events();
@@ -91,8 +93,10 @@ fn main() {
         // call updates from dynamic dll
         // а еще есть dyn trait
 
-        cube.rotate_local(glm::vec3(0.0, angle, 0.0));
-        angle += 3.14 / 60.0 / 2.0;
+        // cube.rotate(glm::vec3(90.0 * frametime, 0.0, 0.0));
+        // camera.transform.rotate(glm::vec3(0.0, 30.0 * frametime, 0.0));
+        updaters::default_camera_controller(&mut camera, &api);
+
         handle_window_events(&receiver, &event_container, &mut api);
         if api.get_should_close() {
             window.set_should_close(true);
@@ -105,7 +109,7 @@ fn main() {
                 location,
                 1,
                 gl::FALSE,
-                glm::value_ptr(&(camera.get_projection() * cube.get_model()))
+                glm::value_ptr(&(camera.get_projection() * camera.get_view() * cube.get_model()))
                     .as_ptr()
                     .cast(),
             );
@@ -150,7 +154,3 @@ fn get_aspect(framebuffer_size: (i32, i32)) -> f32 {
 fn to_rad(deg: f32) -> f32 {
     deg / (180.0 / consts::PI)
 }
-
-// fn to_deg(rad: f32) -> f32 {
-//     rad * DEG_TO_RAD
-// }
