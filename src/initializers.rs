@@ -47,6 +47,6 @@ fn init_gl() {
 pub fn init_rendering() {
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
-        gl::ClearColor(0.4, 0.35, 0.3, 1.0);
+        gl::ClearColor(0.2, 0.15, 0.15, 1.0);
     }
 }

@@ -2,7 +2,7 @@ use crate::updaters;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::{Mat4x4, Quat};
-use std::vec;
+use std::{f32::consts, vec};
 
 pub struct GlfwConfig {
     pub profile: OpenGlProfileHint,
@@ -57,20 +57,20 @@ impl Transform {
     }
 
     pub fn get_model(&self) -> Mat4x4 {
-        let mut model = glm::identity();
+        let model = glm::identity();
 
-        model = glm::translate(&model, &self.position);
-        model = glm::quat_to_mat4(&self.orientation) * model;
-        model = glm::scale(&model, &self.scale);
+        let tranlate = glm::translate(&model, &self.position);
+        let rotation = glm::quat_to_mat4(&self.orientation);
+        let scale = glm::scale(&model, &self.scale);
 
-        model
+        scale * tranlate * rotation * model
     }
 
-    pub fn move_(&mut self, delta: Vec3) {
-        self.position += delta;
+    pub fn move_(&mut self, delta: &Vec3) {
+        self.position += *delta;
     }
 
-    pub fn move_local(&mut self, delta: Vec3) {
+    pub fn move_local(&mut self, delta: &Vec3) {
         let mut local_forward = -(*Vec3::z_axis());
 
         // local_forward = glm::rotate_vec3(&local_forward, self.rotation.x, &Vec3::x_axis());
@@ -80,13 +80,33 @@ impl Transform {
         // let quat = glm::quat_ // перечитать статью
     }
 
-    pub fn rotate(&mut self, euler: Vec3) {
-        self.orientation = glm::quat_rotate(&self.orientation, euler.x, &Vec3::x_axis());
-        self.orientation = glm::quat_rotate(&self.orientation, euler.y, &Vec3::y_axis());
-        self.orientation = glm::quat_rotate(&self.orientation, euler.z, &Vec3::z_axis());
+    // pub fn rotate_around(&mut self, angle: f32, axis: &Vec3) {
+    //     let angle = Transform::to_rad(angle);
+    //     self.orientation = glm::quat_rotate(&self.orientation, angle, axis);
+    // }
+
+    pub fn rotate_local(&mut self, euler: Vec3) {
+        self.orientation = glm::quat_angle_axis(euler.y, &Vec3::y_axis());
+        // self.orientation = glm::quat_rotate_normalized_axis(
+        //     &self.orientation,
+        //     euler.x,
+        //     &Vec3::x_axis(),
+        // );
+        // self.orientation = glm::quat_rotate_normalized_axis(
+        //     &self.orientation,
+        //     euler.y,
+        //     &Vec3::y_axis(),
+        // );
+        // self.orientation = glm::quat_rotate_normalized_axis(
+        //     &self.orientation,
+        //     euler.z,
+        //     &Vec3::z_axis(),
+        // );
     }
 
-    pub fn rotate_local(&mut self, euler: Vec3) {}
+    fn to_rad(deg: f32) -> f32 {
+        deg / (180.0 / consts::PI)
+    }
 }
 
 pub struct ViewObject {
