@@ -4,6 +4,12 @@ use glm::Vec3;
 use nalgebra_glm::{Mat4x4, Quat};
 use std::{f32::consts, vec};
 
+pub const DEG_TO_RAD: f32 = consts::PI / 180.0;
+
+pub fn to_rad(deg: f32) -> f32 {
+    deg * DEG_TO_RAD
+}
+
 pub struct GlfwConfig {
     pub profile: OpenGlProfileHint,
     pub version: (u32, u32),
@@ -66,6 +72,11 @@ impl Transform {
         scale * tranlation * rotation // why rotation matrix affects translation one??!
     }
 
+    pub fn set_rotation(&mut self, euler: &Vec3) {
+        self.orientation = glm::quat_identity();
+        self.rotate(euler);
+    }
+
     pub fn move_(&mut self, delta: &Vec3) {
         self.position += *delta;
     }
@@ -93,14 +104,10 @@ impl Transform {
     }
 
     fn rotate_around(&mut self, euler: &Vec3, axises: &(Vec3, Vec3, Vec3)) {
-        let euler = euler * Transform::to_rad();
+        let euler = euler * DEG_TO_RAD;
         self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.y, &axises.1);
         self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.x, &axises.0);
         self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.z, &axises.2);
-    }
-
-    fn to_rad() -> f32 {
-        consts::PI / 180.0
     }
 }
 
@@ -118,18 +125,18 @@ impl ViewObject {
     }
 
     pub fn get_view(&self) -> Mat4x4 {
-        glm::inverse(&self.transform.get_model())
+        // shiiiit
+        // let translation = glm::inverse(&self.transform.get_model());
         // let direction = glm::quat_rotate_vec3(&self.transform.orientation, &-Vec3::z_axis());
-        // let view = glm::quat_look_at(&direction, &Vec3::y_axis());
+        // let view = translation * glm::quat_to_mat4(&glm::quat_look_at(&direction, &Vec3::y_axis())); // reverse order
+        // return view;
 
-        // let identity = glm::identity();
-        // let translation = glm::translate(&identity, &(-self.transform.position));
-        // translation * glm::quat_to_mat4(&view)
+        let identity = glm::identity();
+        let translation = glm::translate(&identity, &(-self.transform.position));
+        let rotation = glm::inverse(&glm::quat_to_mat4(&self.transform.orientation));
 
-        // let rotation = glm::inverse(&glm::quat_to_mat4(&self.transform.orientation));
-
-        // rotation * translation // applying quat rotation after translation makes object rotate
-        // around coordinate center and around themselves simultaneoulsy
+        rotation * translation // applying quat rotation after translation makes object rotate
+                               // around coordinate center and around themselves simultaneoulsy
     }
 
     pub fn get_projection(&self) -> Mat4x4 {
@@ -154,7 +161,7 @@ impl Projection {
                 glm::ortho(left, right, bottom, top, znear, zfar)
             }
             Projection::Perspective(aspect, fovy, near, far) => {
-                glm::perspective(aspect, fovy, near, far)
+                glm::perspective(aspect, to_rad(fovy), near, far)
             }
         }
     }

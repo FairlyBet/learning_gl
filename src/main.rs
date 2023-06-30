@@ -2,11 +2,10 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{EngineApi, EventContainer, Transform, ViewObject, Projection};
+use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject};
 use gl_wrappers::{ShaderProgram, VertexArrayObject, VertexBufferObject};
 use glfw::{Context, WindowEvent};
-use glm::Mat4x4;
-use std::{f32::consts, mem::size_of_val, sync::mpsc::Receiver};
+use std::{mem::size_of_val, sync::mpsc::Receiver};
 
 mod data_structures;
 mod gl_wrappers;
@@ -20,14 +19,16 @@ fn main() {
 
     window.set_cursor_mode(glfw::CursorMode::Disabled);
 
-    let projection = Projection::Perspective(
-        get_aspect(window.get_framebuffer_size()),
-        to_rad(35.0),
-        0.1,
-        100.0,
-    );
+    let projection =
+        Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
 
     let mut camera = ViewObject::new(projection);
+    camera.transform.set_rotation(&glm::vec3(0.0, 0.0, 0.0));
+    camera.transform.move_(&glm::vec3(0.0, 0.0, 0.0));
+
+    let mut cube = Transform::new();
+    cube.position = glm::vec3(0.0, 0.0, -5.0);
+    // cube.rotate(&(glm::vec3(-60.0, 0.0, 0.0)));
 
     let cube_mesh = [
         -0.5_f32, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
@@ -59,10 +60,6 @@ fn main() {
     ShaderProgram::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
     ShaderProgram::enable_attribute(0);
     let location = prog.get_uniform("mvp");
-    let self_color = prog.get_uniform("self_color");
-
-    let mut cube = Transform::new();
-    cube.position = glm::vec3(0.0, 0.0, -2.0);
 
     initializers::init_rendering();
 
@@ -73,20 +70,12 @@ fn main() {
         window.set_cursor_pos(0.0, 0.0);
         glfw.poll_events();
 
-        // let cursor_pos2 = window.get_cursor_pos();
-        // let cursor_offset = (
-        //     cursor_pos2.0 as f32 - cursor_pos1.0 as f32,
-        //     cursor_pos2.1 as f32 - cursor_pos1.1 as f32,
-        // );
-
         let mut api = EngineApi::new(&window, frametime);
 
-        // api.
         // call updates from dynamic dll
         // а еще есть dyn trait
 
-        // cube.rotate(&(glm::vec3(0.0, 90.0, 90.0) * frametime));
-        // camera.transform.rotate(glm::vec3(0.0, 30.0 * frametime, 0.0));
+        // cube.rotate(&(glm::vec3(0.0, 60.0, 0.0) * frametime));
         updaters::default_camera_controller(&mut camera, &api);
 
         handle_window_events(&receiver, &event_container, &mut api);
@@ -105,7 +94,6 @@ fn main() {
                     .as_ptr()
                     .cast(),
             );
-            gl::Uniform3f(self_color, 0.5, 0.4, 0.3);
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
 
@@ -141,8 +129,4 @@ fn handle_window_events(
 
 fn get_aspect(framebuffer_size: (i32, i32)) -> f32 {
     framebuffer_size.0 as f32 / framebuffer_size.1 as f32
-}
-
-fn to_rad(deg: f32) -> f32 {
-    deg / (180.0 / consts::PI)
 }
