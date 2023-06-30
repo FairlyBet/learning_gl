@@ -22,14 +22,6 @@ fn main() {
     let projection =
         Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
 
-    let mut camera = ViewObject::new(projection);
-    camera.transform.set_rotation(&glm::vec3(0.0, 0.0, 0.0));
-    camera.transform.move_(&glm::vec3(0.0, 0.0, 0.0));
-
-    let mut cube = Transform::new();
-    cube.position = glm::vec3(0.0, 0.0, -5.0);
-    // cube.rotate(&(glm::vec3(-60.0, 0.0, 0.0)));
-
     let cube_mesh = [
         -0.5_f32, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
         -0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5,
@@ -63,6 +55,11 @@ fn main() {
 
     initializers::init_rendering();
 
+    let mut camera = ViewObject::new(projection);
+
+    let mut cube = Transform::new();
+    cube.position = glm::vec3(0.0, 0.0, -5.0);
+
     let mut frametime = 0.0_f32;
     while !window.should_close() {
         glfw.set_time(0.0);
@@ -75,7 +72,6 @@ fn main() {
         // call updates from dynamic dll
         // а еще есть dyn trait
 
-        // cube.rotate(&(glm::vec3(0.0, 60.0, 0.0) * frametime));
         updaters::default_camera_controller(&mut camera, &api);
 
         handle_window_events(&receiver, &event_container, &mut api);

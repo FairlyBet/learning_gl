@@ -4,6 +4,14 @@ use glm::Vec3;
 use nalgebra_glm::{Mat4x4, Quat};
 use std::{f32::consts, vec};
 
+/* Подведем итог:
+1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения, т.е. если применять
+поворот после перемещения то объект будет двигаться по кругу на такой же угол как и поворот вокруг центра координат,
+что полезно для создания матрицы вида
+2. Если последовательно поворачивать один и тот же кватернион то к осям поворота будет применяться поворот уже имеющийся в
+кватернионе, поэтому для корректной работы необходимо поворачивать нулевой кватернион отдельно для каждой оси и уже 
+полученный результат комбинировать перемножением */
+
 pub const DEG_TO_RAD: f32 = consts::PI / 180.0;
 
 pub fn to_rad(deg: f32) -> f32 {
@@ -96,18 +104,21 @@ impl Transform {
     }
 
     fn get_local_axises(&self) -> (Vec3, Vec3, Vec3) {
-        let local_upward = glm::quat_rotate_vec3(&self.orientation, &Vec3::y_axis());
         let local_right = glm::quat_rotate_vec3(&self.orientation, &Vec3::x_axis());
+        let local_upward = glm::quat_rotate_vec3(&self.orientation, &Vec3::y_axis());
         let local_forward = glm::quat_rotate_vec3(&self.orientation, &Vec3::z_axis());
 
         (local_right, local_upward, local_forward)
     }
 
     fn rotate_around(&mut self, euler: &Vec3, axises: &(Vec3, Vec3, Vec3)) {
-        let euler = euler * DEG_TO_RAD;
-        self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.y, &axises.1);
-        self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.x, &axises.0);
-        self.orientation = glm::quat_rotate_normalized_axis(&self.orientation, euler.z, &axises.2);
+        let euler_rad = euler * DEG_TO_RAD;
+        let identity = glm::quat_identity();
+        let x_rotation = glm::quat_rotate_normalized_axis(&identity, euler_rad.x, &axises.0);
+        let y_rotation = glm::quat_rotate_normalized_axis(&identity, euler_rad.y, &axises.1);
+        let z_rotation = glm::quat_rotate_normalized_axis(&identity, euler_rad.z, &axises.2);
+
+        self.orientation = z_rotation * y_rotation * x_rotation * self.orientation;
     }
 }
 
@@ -125,12 +136,6 @@ impl ViewObject {
     }
 
     pub fn get_view(&self) -> Mat4x4 {
-        // shiiiit
-        // let translation = glm::inverse(&self.transform.get_model());
-        // let direction = glm::quat_rotate_vec3(&self.transform.orientation, &-Vec3::z_axis());
-        // let view = translation * glm::quat_to_mat4(&glm::quat_look_at(&direction, &Vec3::y_axis())); // reverse order
-        // return view;
-
         let identity = glm::identity();
         let translation = glm::translate(&identity, &(-self.transform.position));
         let rotation = glm::inverse(&glm::quat_to_mat4(&self.transform.orientation));
