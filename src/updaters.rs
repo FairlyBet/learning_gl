@@ -15,21 +15,6 @@ pub fn close_on_escape(key: Key, action: Action, api: &mut EngineApi) {
 }
 
 pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
-    // let mut x = 0.0;
-    // let mut y = 0.0;
-    // if let Action::Press | Action::Repeat = api.get_key(Key::Up) {
-    //     y += 1.0;
-    // }
-    // if let Action::Press | Action::Repeat = api.get_key(Key::Down) {
-    //     y += -1.0;
-    // }
-    // if let Action::Press | Action::Repeat = api.get_key(Key::Right) {
-    //     x += 1.0;
-    // }
-    // if let Action::Press | Action::Repeat = api.get_key(Key::Left) {
-    //     x += -1.0;
-    // }
-
     let sensitivity = 2.0;
     let pos = api.get_cursor_pos();
     let x = pos.0;

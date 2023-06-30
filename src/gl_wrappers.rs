@@ -232,6 +232,85 @@ impl Shader {
     }
 }
 
+pub struct VertexArrayObject {
+    id: GLuint,
+}
+
+impl VertexArrayObject {
+    pub fn new() -> Option<Self> {
+        let mut id = 0;
+        unsafe { gl::GenVertexArrays(1, &mut id) };
+        if id != 0 {
+            Some(Self { id })
+        } else {
+            None
+        }
+    }
+
+    pub fn bind(&self) {
+        unsafe { gl::BindVertexArray(self.id) }
+    }
+
+    pub fn unbind() {
+        unsafe { gl::BindVertexArray(0) }
+    }
+
+    fn delete(&self) {
+        unsafe {
+            gl::DeleteVertexArrays(1, &self.id);
+        }
+    }
+}
+
+impl Drop for VertexArrayObject {
+    fn drop(&mut self) {
+        self.delete();
+    }
+}
+
+pub struct VertexBufferObject {
+    id: GLuint,
+    target: GLenum,
+}
+
+impl VertexBufferObject {
+    pub fn new(target: GLenum) -> Option<Self> {
+        let mut id = 0;
+        unsafe {
+            gl::GenBuffers(1, &mut id);
+        }
+        if id != 0 {
+            Some(Self { id, target })
+        } else {
+            None
+        }
+    }
+
+    pub fn bind(&self) {
+        unsafe { gl::BindBuffer(self.target, self.id) }
+    }
+
+    pub fn unbind(&self) {
+        unsafe { gl::BindBuffer(self.target, 0) }
+    }
+
+    pub fn buffer_data(&self, size: usize, data: *const c_void, usage: GLenum) {
+        unsafe {
+            gl::BufferData(self.target, size as isize, data, usage);
+        }
+    }
+
+    fn delete(&self) {
+        unsafe { gl::DeleteBuffers(1, &self.id) }
+    }
+}
+
+impl Drop for VertexBufferObject {
+    fn drop(&mut self) {
+        self.delete()
+    }
+}
+
 // pub struct Texture {
 //     id: GLuint,
 //     target: GLenum,
@@ -318,82 +397,3 @@ impl Shader {
 //         self.delete();
 //     }
 // }
-
-pub struct VertexArrayObject {
-    id: GLuint,
-}
-
-impl VertexArrayObject {
-    pub fn new() -> Option<Self> {
-        let mut id = 0;
-        unsafe { gl::GenVertexArrays(1, &mut id) };
-        if id != 0 {
-            Some(Self { id })
-        } else {
-            None
-        }
-    }
-
-    pub fn bind(&self) {
-        unsafe { gl::BindVertexArray(self.id) }
-    }
-
-    pub fn unbind() {
-        unsafe { gl::BindVertexArray(0) }
-    }
-
-    fn delete(&self) {
-        unsafe {
-            gl::DeleteVertexArrays(1, &self.id);
-        }
-    }
-}
-
-impl Drop for VertexArrayObject {
-    fn drop(&mut self) {
-        self.delete();
-    }
-}
-
-pub struct VertexBufferObject {
-    id: GLuint,
-    target: GLenum,
-}
-
-impl VertexBufferObject {
-    pub fn new(target: GLenum) -> Option<Self> {
-        let mut id = 0;
-        unsafe {
-            gl::GenBuffers(1, &mut id);
-        }
-        if id != 0 {
-            Some(Self { id, target })
-        } else {
-            None
-        }
-    }
-
-    pub fn bind(&self) {
-        unsafe { gl::BindBuffer(self.target, self.id) }
-    }
-
-    pub fn unbind(&self) {
-        unsafe { gl::BindBuffer(self.target, 0) }
-    }
-
-    pub fn buffer_data(&self, size: usize, data: *const c_void, usage: GLenum) {
-        unsafe {
-            gl::BufferData(self.target, size as isize, data, usage);
-        }
-    }
-
-    fn delete(&self) {
-        unsafe { gl::DeleteBuffers(1, &self.id) }
-    }
-}
-
-impl Drop for VertexBufferObject {
-    fn drop(&mut self) {
-        self.delete()
-    }
-}

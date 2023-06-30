@@ -5,32 +5,33 @@ extern crate nalgebra_glm as glm;
 use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject};
 use gl_wrappers::{ShaderProgram, VertexArrayObject, VertexBufferObject};
 use glfw::{Context, WindowEvent};
-use std::{mem::size_of_val, sync::mpsc::Receiver};
+use std::{mem::size_of_val, sync::mpsc::Receiver, thread, time};
 
 mod data_structures;
 mod gl_wrappers;
 mod initializers;
 mod updaters;
 
+const CUBE_MESH: [f32; 108] = [
+    -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5,
+    -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5,
+    -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5,
+    0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5,
+    -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5,
+    -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+    0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5,
+];
+
 fn main() {
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     let event_container = EventContainer::new_minimal();
 
+    glfw.set_swap_interval(glfw::SwapInterval::None);
     window.set_cursor_mode(glfw::CursorMode::Disabled);
 
     let projection =
         Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
-
-    let cube_mesh = [
-        -0.5_f32, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
-        -0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5,
-        0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5,
-        -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5,
-        -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5,
-        0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5,
-        0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5,
-    ];
 
     let vao = VertexArrayObject::new().unwrap();
     vao.bind();
@@ -38,8 +39,8 @@ fn main() {
     let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
     vbo.bind();
     vbo.buffer_data(
-        size_of_val(&cube_mesh),
-        cube_mesh.as_ptr().cast(),
+        size_of_val(&CUBE_MESH),
+        CUBE_MESH.as_ptr().cast(),
         gl::STATIC_DRAW,
     );
 
@@ -62,8 +63,8 @@ fn main() {
 
     let mut frametime = 0.0_f32;
     while !window.should_close() {
-        glfw.set_time(0.0);
-
+        
+        let last_time = glfw.get_time() as f32;
         window.set_cursor_pos(0.0, 0.0);
         glfw.poll_events();
 
@@ -92,10 +93,13 @@ fn main() {
             );
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
+        thread::sleep(time::Duration::from_millis(1));
+
 
         window.swap_buffers();
-
-        frametime = glfw.get_time() as f32;
+        
+        frametime = glfw.get_time() as f32 - last_time;
+        // println!("{}", frametime);
     }
 
     gl_loader::end_gl();

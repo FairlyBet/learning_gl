@@ -9,7 +9,7 @@ use std::{f32::consts, vec};
 поворот после перемещения то объект будет двигаться по кругу на такой же угол как и поворот вокруг центра координат,
 что полезно для создания матрицы вида
 2. Если последовательно поворачивать один и тот же кватернион то к осям поворота будет применяться поворот уже имеющийся в
-кватернионе, поэтому для корректной работы необходимо поворачивать нулевой кватернион отдельно для каждой оси и уже 
+кватернионе, поэтому для корректной работы необходимо поворачивать нулевой кватернион отдельно для каждой оси и уже
 полученный результат комбинировать перемножением */
 
 pub const DEG_TO_RAD: f32 = consts::PI / 180.0;
@@ -103,7 +103,7 @@ impl Transform {
         self.rotate_around(euler, &local_axises);
     }
 
-    fn get_local_axises(&self) -> (Vec3, Vec3, Vec3) {
+    pub fn get_local_axises(&self) -> (Vec3, Vec3, Vec3) {
         let local_right = glm::quat_rotate_vec3(&self.orientation, &Vec3::x_axis());
         let local_upward = glm::quat_rotate_vec3(&self.orientation, &Vec3::y_axis());
         let local_forward = glm::quat_rotate_vec3(&self.orientation, &Vec3::z_axis());
