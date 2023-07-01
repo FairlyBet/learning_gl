@@ -5,13 +5,15 @@ extern crate nalgebra_glm as glm;
 use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject};
 use gl_wrappers::{ShaderProgram, VertexArrayObject, VertexBufferObject};
 use glfw::{Context, WindowEvent};
-use std::{mem::size_of_val, sync::mpsc::Receiver, thread, time};
+use spin_sleep::LoopHelper;
+use std::{mem::size_of_val, sync::mpsc::Receiver};
 
 mod data_structures;
 mod gl_wrappers;
 mod initializers;
 mod updaters;
 
+const TARGET_FRAME_RATE: i32 = 60;
 const CUBE_MESH: [f32; 108] = [
     -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5,
     -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5,
@@ -29,7 +31,7 @@ fn main() {
 
     glfw.set_swap_interval(glfw::SwapInterval::None);
     window.set_cursor_mode(glfw::CursorMode::Disabled);
-
+    window.set_raw_mouse_motion(true);
     let projection =
         Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
 
@@ -61,25 +63,27 @@ fn main() {
     let mut cube = Transform::new();
     cube.position = glm::vec3(0.0, 0.0, -5.0);
 
-    let mut frametime = 0.0_f32;
+    let mut loop_helper = LoopHelper::builder().build_with_target_rate(TARGET_FRAME_RATE);
     while !window.should_close() {
-        
-        let last_time = glfw.get_time() as f32;
-        window.set_cursor_pos(0.0, 0.0);
+        let frametime = loop_helper.loop_start_s() as f32;
+
+        let cursor_pos_before = window.get_cursor_pos();
         glfw.poll_events();
-
-        let mut api = EngineApi::new(&window, frametime);
-
+        let cursor_pos_after = window.get_cursor_pos();
+        let cursor_offset = (
+            (cursor_pos_after.0 - cursor_pos_before.0) as f32,
+            (cursor_pos_after.1 - cursor_pos_before.1) as f32,
+        );
+        let mut api = EngineApi::new(&window, frametime, cursor_offset);
         // call updates from dynamic dll
         // а еще есть dyn trait
-
         updaters::default_camera_controller(&mut camera, &api);
 
         handle_window_events(&receiver, &event_container, &mut api);
+
         if api.get_should_close() {
             window.set_should_close(true);
         }
-
         // rendering in separate place
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -93,13 +97,9 @@ fn main() {
             );
             gl::DrawArrays(gl::TRIANGLES, 0, 36);
         }
-        thread::sleep(time::Duration::from_millis(1));
-
 
         window.swap_buffers();
-        
-        frametime = glfw.get_time() as f32 - last_time;
-        // println!("{}", frametime);
+        loop_helper.loop_sleep();
     }
 
     gl_loader::end_gl();

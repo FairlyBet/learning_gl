@@ -2,6 +2,7 @@ use crate::updaters;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::{Mat4x4, Quat};
+use russimp::scene::{PostProcess, Scene};
 use std::{f32::consts, vec};
 
 /* Подведем итог:
@@ -176,14 +177,16 @@ pub struct EngineApi<'a> {
     window: &'a Window,
     frametime: f32,
     should_close: bool,
+    cursor_offset: (f32, f32),
 }
 
 impl<'a> EngineApi<'a> {
-    pub fn new(window: &'a Window, frametime: f32) -> Self {
+    pub fn new(window: &'a Window, frametime: f32, cursor_offset: (f32, f32)) -> Self {
         EngineApi {
             window,
             frametime,
             should_close: false,
+            cursor_offset,
         }
     }
 
@@ -194,6 +197,10 @@ impl<'a> EngineApi<'a> {
     pub fn get_cursor_pos(&self) -> (f32, f32) {
         let pos = self.window.get_cursor_pos();
         (pos.0 as f32, pos.1 as f32)
+    }
+
+    pub fn get_cursor_offset(&self) -> (f32, f32) {
+        self.cursor_offset
     }
 
     pub fn get_frametime(&self) -> f32 {
@@ -239,4 +246,13 @@ pub struct OnKeyPressed {
 
 pub struct OnFrameBufferSizeChange {
     pub callback: fn(i32, i32) -> (),
+}
+
+fn foo() {
+    let scene = Scene::from_file(
+        "file_path",
+        vec![PostProcess::Triangulate, PostProcess::FlipUVs],
+    )
+    .unwrap();
+    
 }
