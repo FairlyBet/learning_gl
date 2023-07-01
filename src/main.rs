@@ -29,7 +29,7 @@ fn main() {
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     let event_container = EventContainer::new_minimal();
 
-    glfw.set_swap_interval(glfw::SwapInterval::None);
+    // glfw.set_swap_interval(glfw::SwapInterval::None);
     window.set_cursor_mode(glfw::CursorMode::Disabled);
     window.set_raw_mouse_motion(true);
     let projection =
@@ -63,10 +63,11 @@ fn main() {
     let mut cube = Transform::new();
     cube.position = glm::vec3(0.0, 0.0, -5.0);
 
-    let mut loop_helper = LoopHelper::builder().build_with_target_rate(TARGET_FRAME_RATE);
+    // let mut loop_helper = LoopHelper::builder().build_with_target_rate(TARGET_FRAME_RATE);
     while !window.should_close() {
-        let frametime = loop_helper.loop_start_s() as f32;
-
+        // let frametime = loop_helper.loop_start_s() as f32;
+        let frametime = glfw.get_time() as f32;
+        glfw.set_time(0.0);
         let cursor_pos_before = window.get_cursor_pos();
         glfw.poll_events();
         let cursor_pos_after = window.get_cursor_pos();
@@ -99,7 +100,7 @@ fn main() {
         }
 
         window.swap_buffers();
-        loop_helper.loop_sleep();
+        // loop_helper.loop_sleep();
     }
 
     gl_loader::end_gl();

@@ -15,7 +15,7 @@ pub fn close_on_escape(key: Key, action: Action, api: &mut EngineApi) {
 }
 
 pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
-    let sensitivity = 0.1; // / api.get_frametime();
+    let sensitivity = 0.07; // / api.get_frametime();
     let pos = api.get_cursor_offset();
     let x = pos.0;
     let y = pos.1;
