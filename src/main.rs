@@ -5,15 +5,15 @@ extern crate nalgebra_glm as glm;
 use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject};
 use gl_wrappers::{ShaderProgram, VertexArrayObject, VertexBufferObject};
 use glfw::{Context, WindowEvent};
-use spin_sleep::LoopHelper;
 use std::{mem::size_of_val, sync::mpsc::Receiver};
+// use spin_sleep::LoopHelper;
 
 mod data_structures;
 mod gl_wrappers;
 mod initializers;
 mod updaters;
 
-const TARGET_FRAME_RATE: i32 = 60;
+// const TARGET_FRAME_RATE: i32 = 60;
 const CUBE_MESH: [f32; 108] = [
     -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5,
     -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5,
@@ -28,8 +28,6 @@ fn main() {
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     let event_container = EventContainer::new_minimal();
-
-    // glfw.set_swap_interval(glfw::SwapInterval::None);
     window.set_cursor_mode(glfw::CursorMode::Disabled);
     window.set_raw_mouse_motion(true);
     let projection =
@@ -68,6 +66,7 @@ fn main() {
         // let frametime = loop_helper.loop_start_s() as f32;
         let frametime = glfw.get_time() as f32;
         glfw.set_time(0.0);
+
         let cursor_pos_before = window.get_cursor_pos();
         glfw.poll_events();
         let cursor_pos_after = window.get_cursor_pos();
