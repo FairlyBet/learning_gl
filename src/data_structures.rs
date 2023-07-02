@@ -1,9 +1,17 @@
-use crate::updaters;
+use crate::{
+    gl_wrappers::{self, VertexArrayObject, VertexBufferObject},
+    updaters,
+};
+use gl::types::GLenum;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::{Mat4x4, Quat};
-use russimp::scene::{PostProcess, Scene};
-use std::{f32::consts, vec};
+use rayon::prelude::*;
+use russimp::{
+    scene::{PostProcess, Scene},
+    Vector3D,
+};
+use std::{f32::consts, mem::size_of, vec};
 
 /* Подведем итог:
 1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения, т.е. если применять
@@ -78,7 +86,7 @@ impl Transform {
         let rotation = glm::quat_to_mat4(&self.orientation);
         let scale = glm::scale(&identity, &self.scale);
 
-        scale * tranlation * rotation // why rotation matrix affects translation one??!
+        tranlation * rotation * scale // why rotation matrix affects translation one??!
     }
 
     pub fn set_rotation(&mut self, euler: &Vec3) {
@@ -248,11 +256,110 @@ pub struct OnFrameBufferSizeChange {
     pub callback: fn(i32, i32) -> (),
 }
 
-fn foo() {
-    let scene = Scene::from_file(
-        "file_path",
-        vec![PostProcess::Triangulate, PostProcess::FlipUVs],
-    )
-    .unwrap();
-    
+pub fn load_model(path: &str) -> GlMesh {
+    let scene =
+        Scene::from_file(path, vec![PostProcess::Triangulate, PostProcess::FlipUVs]).unwrap();
+    let mesh = &scene.meshes[0];
+    let vert = &mesh.vertices;
+    let mut ind = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
+    // mesh.faces.par_iter().for_each(|face| {
+    //     for index in face.0.iter() {
+    //         ind.push(*index);
+    //     }
+    // });
+    for face in mesh.faces.iter() {
+        for index in face.0.iter() {
+            ind.push(*index);
+        }
+    }
+
+    GlMesh::new(vert, Some(&ind), gl::STATIC_DRAW)
+}
+
+pub struct GlMesh {
+    vao: VertexArrayObject,
+    vertices: VertexBufferObject,
+    indecies: Option<VertexBufferObject>,
+    triangles_count: i32,
+    indecies_count: i32,
+}
+
+impl GlMesh {
+    pub fn new(vertices: &Vec<Vector3D>, indecies: Option<&Vec<u32>>, usage: GLenum) -> Self {
+        let vao = VertexArrayObject::new().unwrap();
+        vao.bind();
+
+        let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        vbo.bind();
+        vbo.buffer_data(
+            vertices.len() * size_of::<Vector3D>(),
+            vertices.as_ptr().cast(),
+            usage,
+        );
+
+        // возможно этого здесь не должно быть
+        // как вариант конфигурация должна производиться глобально
+        // для всех вао
+        gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
+        gl_wrappers::enable_attribute(0);
+
+        let ind: Option<VertexBufferObject>;
+        match indecies {
+            Some(index_data) => {
+                let ebo = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
+                ebo.bind();
+                ebo.buffer_data(
+                    index_data.len() * size_of::<u32>(),
+                    index_data.as_ptr().cast(),
+                    usage,
+                ); // size of val on vector!!!
+                ind = Some(ebo);
+            }
+            None => ind = None,
+        }
+        VertexArrayObject::unbind();
+        vbo.unbind();
+        if let Some(ebo) = &ind {
+            ebo.unbind();
+        }
+        let triangles_count = vertices.len() as i32;
+        let indecies_count = match indecies {
+            Some(vec) => vec.len() as i32,
+            None => 0,
+        };
+
+        Self {
+            vao,
+            vertices: vbo,
+            triangles_count,
+            indecies: ind,
+            indecies_count,
+        }
+    }
+
+    pub fn bind(&self) {
+        self.vao.bind();
+    }
+
+    pub fn unbind(&self) {
+        VertexArrayObject::unbind();
+    }
+
+    pub fn draw(&self) {
+        self.bind();
+        if let Some(_) = &self.indecies {
+            unsafe {
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    self.indecies_count,
+                    gl::UNSIGNED_INT,
+                    0 as *const _,
+                );
+            }
+        } else {
+            unsafe {
+                gl::DrawArrays(gl::TRIANGLES, 0, self.triangles_count);
+            }
+        }
+    }
 }

@@ -2,6 +2,25 @@ use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 use std::ffi::{c_void, CString};
 use std::{fs::File, io::Read, path::Path};
 
+pub fn configure_attribute(
+    index: GLuint,
+    size: GLint,
+    type_: GLenum,
+    normalized: GLboolean,
+    stride: usize,
+    pointer: *const c_void,
+) {
+    unsafe {
+        gl::VertexAttribPointer(index, size, type_, normalized, stride as GLsizei, pointer);
+    }
+}
+
+pub fn enable_attribute(index: GLuint) {
+    unsafe {
+        gl::EnableVertexAttribArray(index);
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub struct ShaderProgram {
     id: GLuint,
@@ -24,25 +43,6 @@ impl ShaderProgram {
     pub fn get_uniform(&self, name: &str) -> GLint {
         let c_name = CString::new(name).unwrap();
         unsafe { gl::GetUniformLocation(self.id, c_name.as_ptr().cast()) }
-    }
-
-    pub fn configure_attribute(
-        index: GLuint,
-        size: GLint,
-        type_: GLenum,
-        normalized: GLboolean,
-        stride: usize,
-        pointer: *const c_void,
-    ) {
-        unsafe {
-            gl::VertexAttribPointer(index, size, type_, normalized, stride as GLsizei, pointer);
-        }
-    }
-
-    pub fn enable_attribute(index: GLuint) {
-        unsafe {
-            gl::EnableVertexAttribArray(index);
-        }
     }
 
     pub fn attach_shader(&self, shader: &Shader) {
