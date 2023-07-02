@@ -15,13 +15,13 @@ pub fn close_on_escape(key: Key, action: Action, api: &mut EngineApi) {
 }
 
 pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
-    let sensitivity = 0.07; // / api.get_frametime();
+    let sensitivity = 0.07;
     let pos = api.get_cursor_offset();
     let x = pos.0;
     let y = pos.1;
 
-    let local_rotation = vec3(-y, 0.0, 0.0) * sensitivity; // * api.get_frametime();
-    let global_rotation = vec3(0.0, -x, 0.0) * sensitivity; // * api.get_frametime();
+    let local_rotation = vec3(-y, 0.0, 0.0) * sensitivity;
+    let global_rotation = vec3(0.0, -x, 0.0) * sensitivity;
 
     let mut delta = Vec3::zeros();
     let velocity = 5.0;

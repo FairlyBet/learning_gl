@@ -5,7 +5,7 @@ extern crate nalgebra_glm as glm;
 use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject};
 use gl_wrappers::ShaderProgram;
 use glfw::{Context, WindowEvent};
-use std::{ffi::CStr, sync::mpsc::Receiver, mem::size_of_val};
+use std::{ffi::CStr, sync::mpsc::Receiver};
 // use spin_sleep::LoopHelper;
 
 mod data_structures;
@@ -14,40 +14,17 @@ mod initializers;
 mod updaters;
 
 // const TARGET_FRAME_RATE: i32 = 45;
-// const CUBE_MESH: [f32; 108] = [
-//     -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5,
-//     -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5,
-//     -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5,
-//     0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5,
-//     -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5,
-//     -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-//     0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5,
-// ];
 
 fn main() {
-    let v = vec![1, 2, 3];
-    println!("{}", size_of_val(&v));
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     let event_container = EventContainer::new_minimal();
 
     window.set_cursor_mode(glfw::CursorMode::Disabled);
     window.set_raw_mouse_motion(true);
+
     let projection =
         Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
-
-    // let vao = VertexArrayObject::new().unwrap();
-    // vao.bind();
-
-    // let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-    // vbo.bind();
-    // vbo.buffer_data(
-    //     size_of_val(&CUBE_MESH),
-    //     CUBE_MESH.as_ptr().cast(),
-    //     gl::STATIC_DRAW,
-    // );
-    // gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
-    // gl_wrappers::enable_attribute(0);
 
     let prog = ShaderProgram::from_vert_frag_file(
         "src\\shaders\\trivial_shader.vert",
@@ -57,7 +34,7 @@ fn main() {
     prog.use_();
     let location = prog.get_uniform("mvp");
     let mesh = data_structures::load_model("assets\\meshes\\backpack.obj");
-
+    // let mesh = data_structures::GlMesh::new(, indecies, usage)
     initializers::init_rendering();
 
     let mut camera = ViewObject::new(projection);

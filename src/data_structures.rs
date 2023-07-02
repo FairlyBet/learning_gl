@@ -6,7 +6,6 @@ use gl::types::GLenum;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
 use nalgebra_glm::{Mat4x4, Quat};
-use rayon::prelude::*;
 use russimp::{
     scene::{PostProcess, Scene},
     Vector3D,
@@ -14,11 +13,14 @@ use russimp::{
 use std::{f32::consts, mem::size_of, vec};
 
 /* Подведем итог:
-1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения, т.е. если применять
-поворот после перемещения то объект будет двигаться по кругу на такой же угол как и поворот вокруг центра координат,
+1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения,
+т.е. если применять поворот после перемещения то объект будет двигаться по кругу
+на такой же угол как и поворот вокруг центра координат,
 что полезно для создания матрицы вида
-2. Если последовательно поворачивать один и тот же кватернион то к осям поворота будет применяться поворот уже имеющийся в
-кватернионе, поэтому для корректной работы необходимо поворачивать нулевой кватернион отдельно для каждой оси и уже
+2. Если последовательно поворачивать один и тот же кватернион то к осям
+поворота будет применяться поворот уже имеющийся в
+кватернионе, поэтому для корректной работы необходимо поворачивать
+нулевой кватернион отдельно для каждой оси и уже
 полученный результат комбинировать перемножением */
 
 pub const DEG_TO_RAD: f32 = consts::PI / 180.0;
@@ -257,23 +259,27 @@ pub struct OnFrameBufferSizeChange {
 }
 
 pub fn load_model(path: &str) -> GlMesh {
-    let scene =
-        Scene::from_file(path, vec![PostProcess::Triangulate, PostProcess::FlipUVs]).unwrap();
+    let scene = Scene::from_file(
+        path,
+        vec![
+            PostProcess::Triangulate,
+            PostProcess::FlipUVs,
+            PostProcess::OptimizeGraph,
+            PostProcess::OptimizeMeshes,
+        ],
+    )
+    .unwrap();
     let mesh = &scene.meshes[0];
     let vert = &mesh.vertices;
     let mut ind = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
-    // mesh.faces.par_iter().for_each(|face| {
-    //     for index in face.0.iter() {
-    //         ind.push(*index);
-    //     }
-    // });
+
     for face in mesh.faces.iter() {
         for index in face.0.iter() {
             ind.push(*index);
         }
     }
-
-    GlMesh::new(vert, Some(&ind), gl::STATIC_DRAW)
+    // texture loading
+    GlMesh::from_assimp(vert, Some(&ind), gl::STATIC_DRAW)
 }
 
 pub struct GlMesh {
@@ -285,7 +291,48 @@ pub struct GlMesh {
 }
 
 impl GlMesh {
-    pub fn new(vertices: &Vec<Vector3D>, indecies: Option<&Vec<u32>>, usage: GLenum) -> Self {
+    pub const CUBE_MESH: [f32; 108] = [
+        -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5,
+        -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+        -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5,
+        -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5,
+        0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5,
+        -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+        0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5,
+    ];
+
+    pub fn from_vertices(vertices: &Vec<f32>, usage: GLenum) -> Self {
+        let vao = VertexArrayObject::new().unwrap();
+        vao.bind();
+
+        let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        vbo.bind();
+        vbo.buffer_data(
+            vertices.len() * size_of::<f32>(),
+            vertices.as_ptr().cast(),
+            usage,
+        );
+        gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
+        gl_wrappers::enable_attribute(0);
+        VertexArrayObject::unbind();
+        vbo.unbind();
+
+        let triangles_count = vertices.len() as i32 / 3;
+
+        Self {
+            vao,
+            vertices: vbo,
+            triangles_count,
+            indecies: None,
+            indecies_count: 0,
+        }
+    }
+
+    pub fn from_assimp(
+        vertices: &Vec<Vector3D>,
+        indecies: Option<&Vec<u32>>,
+        usage: GLenum,
+    ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
@@ -312,7 +359,7 @@ impl GlMesh {
                     index_data.len() * size_of::<u32>(),
                     index_data.as_ptr().cast(),
                     usage,
-                ); // size of val on vector!!!
+                );
                 ind = Some(ebo);
             }
             None => ind = None,
@@ -322,6 +369,7 @@ impl GlMesh {
         if let Some(ebo) = &ind {
             ebo.unbind();
         }
+
         let triangles_count = vertices.len() as i32;
         let indecies_count = match indecies {
             Some(vec) => vec.len() as i32,
