@@ -84,40 +84,34 @@ impl ShaderProgram {
         unsafe { gl::DeleteProgram(self.id) };
     }
 
-    pub fn from_vert_frag(vert: &str, frag: &str) -> Result<Self, String> {
-        let p = Self::new().ok_or_else(|| "Couldn't allocate a program".to_string())?;
-        let v = Shader::from_source(gl::VERTEX_SHADER, vert)
+    pub fn from_vert_frag_src(vert: &str, frag: &str) -> Result<Self, String> {
+        let vert = Shader::from_source(gl::VERTEX_SHADER, vert)
             .map_err(|e| format!("Vertex Compile Error: {}", e))?;
-        let f = Shader::from_source(gl::FRAGMENT_SHADER, frag)
+        let frag = Shader::from_source(gl::FRAGMENT_SHADER, frag)
             .map_err(|e| format!("Fragment Compile Error: {}", e))?;
-        p.attach_shader(&v);
-        p.attach_shader(&f);
-        p.link();
-        v.delete();
-        f.delete();
-        if p.link_success() {
-            Ok(p)
-        } else {
-            let out = format!("Program Link Error: {}", p.info_log());
-            p.delete();
-            Err(out)
-        }
+
+        ShaderProgram::from_vert_frag(vert, frag)
     }
 
     pub fn from_vert_frag_file(vert_file_name: &str, frag_file_name: &str) -> Result<Self, String> {
-        let vert = Shader::from_file(gl::VERTEX_SHADER, vert_file_name).unwrap();
-        let frag = Shader::from_file(gl::FRAGMENT_SHADER, frag_file_name).unwrap();
-        let p = Self::new().ok_or_else(|| "Couldn't allocate a program".to_string())?;
-        p.attach_shader(&vert);
-        p.attach_shader(&frag);
-        p.link();
-        vert.delete();
-        frag.delete();
-        if p.link_success() {
-            Ok(p)
+        let vert = Shader::from_file(gl::VERTEX_SHADER, vert_file_name)
+            .map_err(|e| format!("Vertex Compile Error: {}", e))?;
+        let frag = Shader::from_file(gl::FRAGMENT_SHADER, frag_file_name)
+            .map_err(|e| format!("Fragment Compile Error: {}", e))?;
+
+        ShaderProgram::from_vert_frag(vert, frag)
+    }
+
+    pub fn from_vert_frag(vert: Shader, frag: Shader) -> Result<Self, String> {
+        let program = Self::new().ok_or_else(|| "Couldn't allocate a program".to_string())?;
+        program.attach_shader(&vert);
+        program.attach_shader(&frag);
+        program.link();
+        if program.link_success() {
+            Ok(program)
         } else {
-            let out = format!("Program Link Error: {}", p.info_log());
-            p.delete();
+            let out = format!("Program Link Error: {}", program.info_log());
+            program.delete();
             Err(out)
         }
     }
@@ -192,7 +186,7 @@ impl Shader {
         String::from_utf8_lossy(&v).into_owned()
     }
 
-    pub fn delete(self) {
+    pub fn delete(&self) {
         unsafe { gl::DeleteShader(self.id) };
     }
 
@@ -219,16 +213,23 @@ impl Shader {
         let display = path.display();
 
         let mut file = match File::open(&path) {
-            Err(why) => panic!("couldn't open {}: {}", display, why),
+            Err(why) => panic!("Couldn't open {}: {}", display, why),
             Ok(file) => file,
         };
 
         let mut source = String::new();
         match file.read_to_string(&mut source) {
-            Err(why) => panic!("couldn't read {}: {}", display, why),
+            Err(why) => panic!("Couldn't read {}: {}", display, why),
             Ok(_) => {}
         }
+
         source
+    }
+}
+
+impl Drop for Shader {
+    fn drop(&mut self) {
+        self.delete();
     }
 }
 

@@ -10,7 +10,7 @@ use russimp::{
     scene::{PostProcess, Scene},
     Vector3D,
 };
-use std::{f32::consts, mem::size_of, vec};
+use std::{f32::consts, ffi::c_void, mem::size_of, vec};
 
 /* Подведем итог:
 1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения,
@@ -88,7 +88,7 @@ impl Transform {
         let rotation = glm::quat_to_mat4(&self.orientation);
         let scale = glm::scale(&identity, &self.scale);
 
-        tranlation * rotation * scale // why rotation matrix affects translation one??!
+        tranlation * rotation * scale
     }
 
     pub fn set_rotation(&mut self, euler: &Vec3) {
@@ -258,7 +258,7 @@ pub struct OnFrameBufferSizeChange {
     pub callback: fn(i32, i32) -> (),
 }
 
-pub fn load_model(path: &str) -> GlMesh {
+pub fn load_single_model(path: &str) -> Model {
     let scene = Scene::from_file(
         path,
         vec![
@@ -269,17 +269,20 @@ pub fn load_model(path: &str) -> GlMesh {
         ],
     )
     .unwrap();
-    let mesh = &scene.meshes[0];
-    let vert = &mesh.vertices;
-    let mut ind = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
+    let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
+    for mesh in scene.meshes {
+        let vert = &mesh.vertices;
+        let mut ind = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
 
-    for face in mesh.faces.iter() {
-        for index in face.0.iter() {
-            ind.push(*index);
+        for face in mesh.faces.iter() {
+            for index in face.0.iter() {
+                ind.push(*index);
+            }
         }
+        // texture loading
+        meshes.push(GlMesh::from_assimp(vert, Some(&ind), gl::STATIC_DRAW));
     }
-    // texture loading
-    GlMesh::from_assimp(vert, Some(&ind), gl::STATIC_DRAW)
+    Model { meshes }
 }
 
 pub struct GlMesh {
@@ -291,7 +294,7 @@ pub struct GlMesh {
 }
 
 impl GlMesh {
-    pub const CUBE_MESH: [f32; 108] = [
+    pub const CUBE_VERTICES: [f32; 108] = [
         -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5,
         -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
         -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5,
@@ -302,34 +305,99 @@ impl GlMesh {
     ];
 
     pub fn from_vertices(vertices: &Vec<f32>, usage: GLenum) -> Self {
-        let vao = VertexArrayObject::new().unwrap();
-        vao.bind();
-
-        let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-        vbo.bind();
-        vbo.buffer_data(
-            vertices.len() * size_of::<f32>(),
+        GlMesh::from_ptr(
             vertices.as_ptr().cast(),
+            vertices.len() * size_of::<f32>(),
+            vertices.len() as i32 / 3,
+            None,
             usage,
-        );
-        gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
-        gl_wrappers::enable_attribute(0);
-        VertexArrayObject::unbind();
-        vbo.unbind();
-
-        let triangles_count = vertices.len() as i32 / 3;
-
-        Self {
-            vao,
-            vertices: vbo,
-            triangles_count,
-            indecies: None,
-            indecies_count: 0,
-        }
+        )
+        // let vao = VertexArrayObject::new().unwrap();
+        // vao.bind();
+        // let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        // vbo.bind();
+        // vbo.buffer_data(
+        //     vertices.len() * size_of::<f32>(),
+        //     vertices.as_ptr().cast(),
+        //     usage,
+        // );
+        // gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
+        // gl_wrappers::enable_attribute(0);
+        // VertexArrayObject::unbind();
+        // vbo.unbind();
+        // let triangles_count = vertices.len() as i32 / 3;
+        // Self {
+        //     vao,
+        //     vertices: vbo,
+        //     triangles_count,
+        //     indecies: None,
+        //     indecies_count: 0,
+        // }
     }
 
     pub fn from_assimp(
         vertices: &Vec<Vector3D>,
+        indecies: Option<&Vec<u32>>,
+        usage: GLenum,
+    ) -> Self {
+        GlMesh::from_ptr(
+            vertices.as_ptr().cast(),
+            vertices.len() * size_of::<Vector3D>(),
+            vertices.len() as i32,
+            indecies,
+            usage,
+        )
+        // let vao = VertexArrayObject::new().unwrap();
+        // vao.bind();
+        // let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        // vbo.bind();
+        // vbo.buffer_data(
+        //     vertices.len() * size_of::<Vector3D>(),
+        //     vertices.as_ptr().cast(),
+        //     usage,
+        // );
+        // // возможно этого здесь не должно быть
+        // // как вариант конфигурация должна производиться глобально
+        // // для всех вао
+        // gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
+        // gl_wrappers::enable_attribute(0);
+        // let ind: Option<VertexBufferObject>;
+        // match indecies {
+        //     Some(index_data) => {
+        //         let ebo = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
+        //         ebo.bind();
+        //         ebo.buffer_data(
+        //             index_data.len() * size_of::<u32>(),
+        //             index_data.as_ptr().cast(),
+        //             usage,
+        //         );
+        //         ind = Some(ebo);
+        //     }
+        //     None => ind = None,
+        // }
+        // VertexArrayObject::unbind();
+        // vbo.unbind();
+        // if let Some(ebo) = &ind {
+        //     ebo.unbind();
+        // }
+        // let triangles_count = vertices.len() as i32;
+        // let indecies_count = match indecies {
+        //     Some(vec) => vec.len() as i32,
+        //     None => 0,
+        // };
+        // Self {
+        //     vao,
+        //     vertices: vbo,
+        //     triangles_count,
+        //     indecies: ind,
+        //     indecies_count,
+        // }
+    }
+
+    pub fn from_ptr(
+        vertices: *const c_void,
+        size: usize,
+        triangles_count: i32,
         indecies: Option<&Vec<u32>>,
         usage: GLenum,
     ) -> Self {
@@ -338,15 +406,8 @@ impl GlMesh {
 
         let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
         vbo.bind();
-        vbo.buffer_data(
-            vertices.len() * size_of::<Vector3D>(),
-            vertices.as_ptr().cast(),
-            usage,
-        );
+        vbo.buffer_data(size, vertices, usage);
 
-        // возможно этого здесь не должно быть
-        // как вариант конфигурация должна производиться глобально
-        // для всех вао
         gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
         gl_wrappers::enable_attribute(0);
 
@@ -364,13 +425,13 @@ impl GlMesh {
             }
             None => ind = None,
         }
+
         VertexArrayObject::unbind();
         vbo.unbind();
         if let Some(ebo) = &ind {
             ebo.unbind();
         }
 
-        let triangles_count = vertices.len() as i32;
         let indecies_count = match indecies {
             Some(vec) => vec.len() as i32,
             None => 0,
@@ -408,6 +469,22 @@ impl GlMesh {
             unsafe {
                 gl::DrawArrays(gl::TRIANGLES, 0, self.triangles_count);
             }
+        }
+    }
+}
+
+pub struct Model {
+    meshes: Vec<GlMesh>,
+}
+
+impl Model {
+    pub fn new(meshes: Vec<GlMesh>) -> Self {
+        Self { meshes }
+    }
+
+    pub fn draw(&self) {
+        for mesh in self.meshes.iter() {
+            mesh.draw();
         }
     }
 }
