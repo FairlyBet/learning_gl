@@ -312,27 +312,6 @@ impl GlMesh {
             None,
             usage,
         )
-        // let vao = VertexArrayObject::new().unwrap();
-        // vao.bind();
-        // let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-        // vbo.bind();
-        // vbo.buffer_data(
-        //     vertices.len() * size_of::<f32>(),
-        //     vertices.as_ptr().cast(),
-        //     usage,
-        // );
-        // gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
-        // gl_wrappers::enable_attribute(0);
-        // VertexArrayObject::unbind();
-        // vbo.unbind();
-        // let triangles_count = vertices.len() as i32 / 3;
-        // Self {
-        //     vao,
-        //     vertices: vbo,
-        //     triangles_count,
-        //     indecies: None,
-        //     indecies_count: 0,
-        // }
     }
 
     pub fn from_assimp(
@@ -347,58 +326,13 @@ impl GlMesh {
             indecies,
             usage,
         )
-        // let vao = VertexArrayObject::new().unwrap();
-        // vao.bind();
-        // let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-        // vbo.bind();
-        // vbo.buffer_data(
-        //     vertices.len() * size_of::<Vector3D>(),
-        //     vertices.as_ptr().cast(),
-        //     usage,
-        // );
-        // // возможно этого здесь не должно быть
-        // // как вариант конфигурация должна производиться глобально
-        // // для всех вао
-        // gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
-        // gl_wrappers::enable_attribute(0);
-        // let ind: Option<VertexBufferObject>;
-        // match indecies {
-        //     Some(index_data) => {
-        //         let ebo = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
-        //         ebo.bind();
-        //         ebo.buffer_data(
-        //             index_data.len() * size_of::<u32>(),
-        //             index_data.as_ptr().cast(),
-        //             usage,
-        //         );
-        //         ind = Some(ebo);
-        //     }
-        //     None => ind = None,
-        // }
-        // VertexArrayObject::unbind();
-        // vbo.unbind();
-        // if let Some(ebo) = &ind {
-        //     ebo.unbind();
-        // }
-        // let triangles_count = vertices.len() as i32;
-        // let indecies_count = match indecies {
-        //     Some(vec) => vec.len() as i32,
-        //     None => 0,
-        // };
-        // Self {
-        //     vao,
-        //     vertices: vbo,
-        //     triangles_count,
-        //     indecies: ind,
-        //     indecies_count,
-        // }
     }
 
     pub fn from_ptr(
-        vertices: *const c_void,
+        vertex_data: *const c_void,
         size: usize,
         triangles_count: i32,
-        indecies: Option<&Vec<u32>>,
+        index_data: Option<&Vec<u32>>,
         usage: GLenum,
     ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
@@ -406,13 +340,14 @@ impl GlMesh {
 
         let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
         vbo.bind();
-        vbo.buffer_data(size, vertices, usage);
+        vbo.buffer_data(size, vertex_data, usage);
 
         gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
         gl_wrappers::enable_attribute(0);
 
-        let ind: Option<VertexBufferObject>;
-        match indecies {
+        let indecies: Option<VertexBufferObject>;
+        let indecies_count: i32;
+        match index_data {
             Some(index_data) => {
                 let ebo = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
                 ebo.bind();
@@ -421,27 +356,20 @@ impl GlMesh {
                     index_data.as_ptr().cast(),
                     usage,
                 );
-                ind = Some(ebo);
+                indecies = Some(ebo);
+                indecies_count = index_data.len() as i32;
             }
-            None => ind = None,
+            None => {
+                indecies = None;
+                indecies_count = 0
+            }
         }
-
-        VertexArrayObject::unbind();
-        vbo.unbind();
-        if let Some(ebo) = &ind {
-            ebo.unbind();
-        }
-
-        let indecies_count = match indecies {
-            Some(vec) => vec.len() as i32,
-            None => 0,
-        };
-
+        // В интернетах написано что анбайндинг это антипаттерн
         Self {
             vao,
             vertices: vbo,
             triangles_count,
-            indecies: ind,
+            indecies,
             indecies_count,
         }
     }

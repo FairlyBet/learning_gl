@@ -291,8 +291,8 @@ impl VertexBufferObject {
         unsafe { gl::BindBuffer(self.target, self.id) }
     }
 
-    pub fn unbind(&self) {
-        unsafe { gl::BindBuffer(self.target, 0) }
+    pub fn unbind(target: GLenum) {
+        unsafe { gl::BindBuffer(target, 0) }
     }
 
     pub fn buffer_data(&self, size: usize, data: *const c_void, usage: GLenum) {

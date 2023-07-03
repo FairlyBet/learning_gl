@@ -21,7 +21,6 @@ fn main() {
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     let event_container = EventContainer::new_minimal();
 
-    glfw.set_swap_interval(glfw::SwapInterval::Sync(2));
     window.set_cursor_mode(glfw::CursorMode::Disabled);
     window.set_raw_mouse_motion(true);
 
@@ -35,29 +34,15 @@ fn main() {
     .unwrap();
     prog.use_();
     let location = prog.get_uniform("mvp");
-    let armor = data_structures::load_single_model("assets\\meshes\\Main.obj");
-    let floor = data_structures::GlMesh::from_vertices(
-        &data_structures::GlMesh::CUBE_VERTICES.to_vec(),
-        gl::STATIC_DRAW,
-    );
+
+    let model = data_structures::load_single_model("assets\\meshes\\backpack.obj");
+
     initializers::init_rendering();
 
     let mut camera = ViewObject::new(projection);
 
-    let mut floor_tr = Transform::new();
-    floor_tr.scale = vec3(1000.0, 0.5, 1000.0);
-    floor_tr.position = vec3(0.0, -0.5, 0.0);
-
-    let mut armour1 = Transform::new();
-    armour1.position = vec3(0.0, 0.0, -5.0);
-
-    let mut armour2 = Transform::new();
-    armour2.position = vec3(-1.0, 0.0, -5.0);
-    armour2.scale = vec3(0.5, 0.5, 0.5);
-    
-    let mut armour3 = Transform::new();
-    armour3.position = vec3(1.5, 0.0, -5.0);
-    armour3.scale = vec3(2.0, 2.0, 2.0);
+    let mut model_transform = Transform::new();
+    model_transform.position = vec3(0.0, 0.0, -5.0);
 
     // let mut loop_helper = LoopHelper::builder().build_with_target_rate(TARGET_FRAME_RATE);
     while !window.should_close() {
@@ -79,9 +64,8 @@ fn main() {
         // call updates from dynamic dll
         // а еще есть dyn trait
         updaters::default_camera_controller(&mut camera, &api);
-        armour1.rotate(&glm::vec3(0.0, 60.0 * frametime, 0.0));
-        armour2.rotate(&glm::vec3(0.0, 60.0 * frametime, 0.0));
-        armour3.rotate(&glm::vec3(0.0, 60.0 * frametime, 0.0));
+        model_transform.rotate(&glm::vec3(0.0, 60.0 * frametime, 0.0));
+
         handle_window_events(&receiver, &event_container, &mut api);
 
         if api.get_should_close() {
@@ -94,38 +78,13 @@ fn main() {
                 location,
                 1,
                 gl::FALSE,
-                glm::value_ptr(&(camera.get_projection() * camera.get_view() * armour1.get_model()))
-                    .as_ptr()
-                    .cast(),
+                glm::value_ptr(
+                    &(camera.get_projection() * camera.get_view() * model_transform.get_model()),
+                )
+                .as_ptr()
+                .cast(),
             );
-            armor.draw();
-            gl::UniformMatrix4fv(
-                location,
-                1,
-                gl::FALSE,
-                glm::value_ptr(&(camera.get_projection() * camera.get_view() * armour2.get_model()))
-                    .as_ptr()
-                    .cast(),
-            );
-            armor.draw();
-            gl::UniformMatrix4fv(
-                location,
-                1,
-                gl::FALSE,
-                glm::value_ptr(&(camera.get_projection() * camera.get_view() * armour3.get_model()))
-                    .as_ptr()
-                    .cast(),
-            );
-            armor.draw();
-            gl::UniformMatrix4fv(
-                location,
-                1,
-                gl::FALSE,
-                glm::value_ptr(&(camera.get_projection() * camera.get_view() * floor_tr.get_model()))
-                    .as_ptr()
-                    .cast(),
-            );
-            floor.draw();
+            model.draw();
         }
 
         window.swap_buffers();
