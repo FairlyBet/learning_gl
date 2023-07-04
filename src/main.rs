@@ -35,7 +35,7 @@ fn main() {
     prog.use_();
     let location = prog.get_uniform("mvp");
 
-    let model = data_structures::load_single_model("assets\\meshes\\backpack.obj");
+    let model = data_structures::load_as_single_model("assets\\meshes\\backpack.obj");
 
     initializers::init_rendering();
 

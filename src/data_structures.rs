@@ -1,5 +1,5 @@
 use crate::{
-    gl_wrappers::{self, VertexArrayObject, VertexBufferObject},
+    gl_wrappers::{self, Shader, VertexArrayObject, VertexBufferObject},
     updaters,
 };
 use gl::types::GLenum;
@@ -258,7 +258,7 @@ pub struct OnFrameBufferSizeChange {
     pub callback: fn(i32, i32) -> (),
 }
 
-pub fn load_single_model(path: &str) -> Model {
+pub fn load_as_single_model(path: &str) -> Model {
     let scene = Scene::from_file(
         path,
         vec![
@@ -272,23 +272,31 @@ pub fn load_single_model(path: &str) -> Model {
     let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
     for mesh in scene.meshes {
         let vert = &mesh.vertices;
-        let mut ind = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
+        let normals = &mesh.normals;
+        let mut indecies = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
 
         for face in mesh.faces.iter() {
             for index in face.0.iter() {
-                ind.push(*index);
+                indecies.push(*index);
             }
         }
         // texture loading
-        meshes.push(GlMesh::from_assimp(vert, Some(&ind), gl::STATIC_DRAW));
+        meshes.push(GlMesh::from_assimp(
+            vert,
+            &indecies,
+            normals,
+            gl::STATIC_DRAW,
+        ));
     }
-    Model { meshes }
+    Model::new(meshes)
 }
 
 pub struct GlMesh {
-    vao: VertexArrayObject,
+    vao: VertexArrayObject, // define vertex data as separate entity
     vertices: VertexBufferObject,
     indecies: Option<VertexBufferObject>,
+    normals: Option<VertexBufferObject>,
+    // tex_coords
     triangles_count: i32,
     indecies_count: i32,
 }
@@ -305,49 +313,55 @@ impl GlMesh {
     ];
 
     pub fn from_vertices(vertices: &Vec<f32>, usage: GLenum) -> Self {
-        GlMesh::from_ptr(
+        GlMesh::new(
             vertices.as_ptr().cast(),
             vertices.len() * size_of::<f32>(),
             vertices.len() as i32 / 3,
             None,
+            None,
+            0,
             usage,
         )
     }
 
     pub fn from_assimp(
         vertices: &Vec<Vector3D>,
-        indecies: Option<&Vec<u32>>,
+        indecies: &Vec<u32>,
+        normals: &Vec<Vector3D>,
         usage: GLenum,
     ) -> Self {
-        GlMesh::from_ptr(
+        GlMesh::new(
             vertices.as_ptr().cast(),
             vertices.len() * size_of::<Vector3D>(),
             vertices.len() as i32,
-            indecies,
+            Some(indecies),
+            Some(normals.as_ptr().cast()),
+            normals.len() * size_of::<Vector3D>(),
             usage,
         )
     }
 
-    pub fn from_ptr(
+    pub fn new(
         vertex_data: *const c_void,
-        size: usize,
+        vertex_data_size: usize,
         triangles_count: i32,
         index_data: Option<&Vec<u32>>,
+        normal_data: Option<*const c_void>,
+        normal_data_size: usize,
         usage: GLenum,
     ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
-        let vbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-        vbo.bind();
-        vbo.buffer_data(size, vertex_data, usage);
+        let vertex_buffer = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        vertex_buffer.bind();
+        vertex_buffer.buffer_data(vertex_data_size, vertex_data, usage);
 
         gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
         gl_wrappers::enable_attribute(0);
 
-        let indecies: Option<VertexBufferObject>;
         let indecies_count: i32;
-        match index_data {
+        let index_buffer = match index_data {
             Some(index_data) => {
                 let ebo = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
                 ebo.bind();
@@ -356,21 +370,34 @@ impl GlMesh {
                     index_data.as_ptr().cast(),
                     usage,
                 );
-                indecies = Some(ebo);
                 indecies_count = index_data.len() as i32;
+                Some(ebo)
             }
             None => {
-                indecies = None;
-                indecies_count = 0
+                indecies_count = 0;
+                None
             }
-        }
+        };
+
+        let normals_buffer = match normal_data {
+            Some(normal_data) => {
+                let nbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+                nbo.bind();
+                nbo.buffer_data(normal_data_size, normal_data, usage);
+                gl_wrappers::configure_attribute(1, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
+                gl_wrappers::enable_attribute(1);
+                Some(nbo)
+            }
+            None => None,
+        };
         // В интернетах написано что анбайндинг это антипаттерн
         Self {
             vao,
-            vertices: vbo,
+            vertices: vertex_buffer,
             triangles_count,
-            indecies,
+            indecies: index_buffer,
             indecies_count,
+            normals: normals_buffer,
         }
     }
 
@@ -379,6 +406,7 @@ impl GlMesh {
     }
 
     pub fn unbind(&self) {
+        // antipattern
         VertexArrayObject::unbind();
     }
 
@@ -415,4 +443,81 @@ impl Model {
             mesh.draw();
         }
     }
+}
+
+pub fn build_vertex_shader(gl_version: (u32, u32), shader_input: Vec<ShaderInput>) -> Shader {
+    // Builds glsl vertex shader
+    let mut src = "#version ".to_string();
+    src.push_str(&(gl_version.0 * 100 + gl_version.1 * 10).to_string());
+    src.push_str(" core\n");
+
+    src.push_str("layout(location = 0) in vec3 in_position;");
+    src.push_str("out vec3 position;");
+    if shader_input.contains(&ShaderInput::Normal) {
+        src.push_str("layout(location = 1) in vec3 in_normal;");
+        src.push_str("out vec3 normal;");
+    }
+    if shader_input.contains(&ShaderInput::TexCoord) {
+        src.push_str("layout(location = 2) in vec2 in_tex_coord;");
+        src.push_str("out vec2 tex_coord;");
+    }
+
+    if shader_input.contains(&ShaderInput::Mvp) {
+        src.push_str("uniform mat4 mvp;");
+    }
+    if shader_input.contains(&ShaderInput::Model) {
+        src.push_str("uniform mat4 model;");
+    }
+
+    src.push_str("void main() {");
+
+    if shader_input.contains(&ShaderInput::Mvp) {
+        src.push_str("gl_Position = mvp * vec4(in_position, 1.0f);");
+    } else {
+        src.push_str("gl_Position = vec4(in_position, 1.0f);");
+    }
+
+    if shader_input.contains(&ShaderInput::Model) {
+        src.push_str("position = vec3(model * vec4(in_position, 1.0f));");
+    } else {
+        src.push_str("position = in_position;");
+    }
+
+    src.push_str("}");
+    Shader::from_source(gl::VERTEX_SHADER, &src).unwrap()
+}
+
+pub fn build_fragment_shader(
+    gl_version: (u32, u32),
+    shader_input: Vec<ShaderInput>,
+    light_source: LightType,
+) {
+    let mut src = "#version ".to_string();
+    src.push_str(&(gl_version.0 * 100 + gl_version.1 * 10).to_string());
+    src.push_str(" core\n");
+}
+
+#[derive(PartialEq, Eq)]
+pub enum ShaderInput {
+    Normal,
+    TexCoord,
+    Mvp,
+    Model,
+}
+
+impl ShaderInput {
+    pub fn get_uniform_string(&self) -> String {
+        match self {
+            ShaderInput::Mvp => "mvp".to_string(),
+            ShaderInput::Model => "model".to_string(),
+            _ => panic!("This input does not have uniform"),
+        }
+    }
+}
+
+pub enum LightType {
+    Directional(Vec3, Vec3),
+    // TODO
+    // Point(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
+    // Spot(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
 }

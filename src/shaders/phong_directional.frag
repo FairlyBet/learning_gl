@@ -13,8 +13,8 @@ struct Light {
     vec3 direction; // has to be normalized
 };
 
-in vec3 normal;
 in vec3 position;
+in vec3 normal;
 in vec2 tex_coord;
 
 uniform vec3 view_position;
