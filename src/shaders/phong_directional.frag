@@ -18,14 +18,20 @@ in vec3 normal;
 in vec2 tex_coord;
 
 uniform vec3 view_position;
+
 uniform Light light;
 uniform Material material;
 
 void main() {
     vec3 ambient = light.ambient * texture2D(material.diffuse, tex_coord).rgb;
 
+    vec3 ambient1 = vec3(0.1);
+
     float diffuse_intensity = max(dot(normal, -light.direction), 0.0f);
     vec3 diffuse = light.diffuse * diffuse_intensity * texture(material.diffuse, tex_coord).rgb;
+
+    vec3 diffuse1 = diffuse_intensity * vec3(0.75);
+    gl_FragColor = vec4( diffuse + ambient, 1.0);
 
     vec3 inv_view_direction = normalize(view_position - position);
     vec3 reflect_direction = (reflect(light.direction, normal));

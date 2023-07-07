@@ -8,7 +8,7 @@ use glm::Vec3;
 use nalgebra_glm::{Mat4x4, Quat};
 use russimp::{
     scene::{PostProcess, Scene},
-    Vector3D,
+    Vector2D, Vector3D,
 };
 use std::{f32::consts, ffi::c_void, mem::size_of, vec};
 
@@ -55,8 +55,8 @@ pub struct WindowConfig<'a> {
 impl Default for WindowConfig<'_> {
     fn default() -> Self {
         Self {
-            width: 1280,
-            height: 720,
+            width: 800,
+            height: 600,
             title: Default::default(),
             mode: WindowMode::Windowed,
             cursor_mode: CursorMode::Normal,
@@ -264,140 +264,206 @@ pub fn load_as_single_model(path: &str) -> Model {
         vec![
             PostProcess::Triangulate,
             PostProcess::FlipUVs,
-            PostProcess::OptimizeGraph,
-            PostProcess::OptimizeMeshes,
+            // PostProcess::OptimizeGraph,
+            // PostProcess::OptimizeMeshes,
+            // PostProcess::MakeLeftHanded
         ],
     )
     .unwrap();
-    let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
-    for mesh in scene.meshes {
-        let vert = &mesh.vertices;
-        let normals = &mesh.normals;
-        let mut indecies = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
 
-        for face in mesh.faces.iter() {
-            for index in face.0.iter() {
-                indecies.push(*index);
-            }
-        }
-        // texture loading
-        meshes.push(GlMesh::from_assimp(
-            vert,
-            &indecies,
-            normals,
-            gl::STATIC_DRAW,
-        ));
-    }
-    Model::new(meshes)
+    // let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
+    // for mesh in scene.meshes {
+    //     let vertex_count = mesh.vertices.len();
+    //     let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
+
+    //     for i in 0..vertex_count {
+    //         let position = mesh.vertices[i];
+    //         let normal = mesh.normals[i];
+    //         let tex_coord: Vector2D;
+    //         if let Some(tex_coords) = &(mesh.texture_coords[0]) {
+    //             tex_coord = Vector2D {
+    //                 x: tex_coords[i].x,
+    //                 y: tex_coords[i].y,
+    //             };
+    //         } else {
+    //             tex_coord = Default::default();
+    //         }
+    //         let vertex = VertexData {
+    //             position,
+    //             normal,
+    //             tex_coord,
+    //         };
+    //         vertex_data.push(vertex);
+    //     }
+
+    //     let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
+    //     for face in mesh.faces.iter() {
+    //         for index in face.0.iter() {
+    //             index_data.push(*index);
+    //         }
+    //     }
+
+    //     let mesh = GlMesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
+    //     meshes.push(mesh);
+    // }
+    let mesh = GlMesh::from_pointer(
+        GlMesh::CUBE_VERTICES.as_ptr().cast(),
+        GlMesh::CUBE_VERTICES.len() * size_of::<f32>(),
+        gl::STATIC_DRAW,
+        36,
+    );
+    Model::new(vec![mesh])
+}
+
+#[repr(C)]
+pub struct VertexData {
+    pub position: Vector3D,
+    pub normal: Vector3D,
+    pub tex_coord: Vector2D,
 }
 
 pub struct GlMesh {
-    vao: VertexArrayObject, // define vertex data as separate entity
-    vertices: VertexBufferObject,
-    indecies: Option<VertexBufferObject>,
-    normals: Option<VertexBufferObject>,
-    // tex_coords
-    triangles_count: i32,
-    indecies_count: i32,
+    vao: VertexArrayObject,
+    vbo: VertexBufferObject,
+    ebo: VertexBufferObject,
+    triangle_count: i32,
+    index_count: i32,
+    // metadata about content to configure attributes
+    // like Vec<ShaderInput>
 }
 
 impl GlMesh {
-    pub const CUBE_VERTICES: [f32; 108] = [
-        -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5,
-        -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
-        -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5, -0.5,
-        -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5,
-        0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5,
-        -0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
-        0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5,
+    pub const CUBE_VERTICES: [f32; 216] = [
+        -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0,
+        0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5,
+        -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5,
+        0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5,
+        -0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5, -0.5, -1.0, 0.0, 0.0,
+        -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, -1.0,
+        0.0, 0.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5, -0.5,
+        1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5,
+        0.5, 1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5,
+        -0.5, -0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0,
+        -0.5, -0.5, 0.5, 0.0, -1.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, -0.5, 0.5, -0.5, 0.0,
+        1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0,
+        1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
     ];
 
-    pub fn from_vertices(vertices: &Vec<f32>, usage: GLenum) -> Self {
-        GlMesh::new(
-            vertices.as_ptr().cast(),
-            vertices.len() * size_of::<f32>(),
-            vertices.len() as i32 / 3,
-            None,
-            None,
-            0,
-            usage,
-        )
-    }
-
-    pub fn from_assimp(
-        vertices: &Vec<Vector3D>,
-        indecies: &Vec<u32>,
-        normals: &Vec<Vector3D>,
+    pub fn from_pointer(
+        data: *const c_void,
+        size: usize,
         usage: GLenum,
-    ) -> Self {
-        GlMesh::new(
-            vertices.as_ptr().cast(),
-            vertices.len() * size_of::<Vector3D>(),
-            vertices.len() as i32,
-            Some(indecies),
-            Some(normals.as_ptr().cast()),
-            normals.len() * size_of::<Vector3D>(),
-            usage,
-        )
-    }
-
-    pub fn new(
-        vertex_data: *const c_void,
-        vertex_data_size: usize,
-        triangles_count: i32,
-        index_data: Option<&Vec<u32>>,
-        normal_data: Option<*const c_void>,
-        normal_data_size: usize,
-        usage: GLenum,
+        triangle_count: i32,
     ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
         let vertex_buffer = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
         vertex_buffer.bind();
-        vertex_buffer.buffer_data(vertex_data_size, vertex_data, usage);
+        vertex_buffer.buffer_data(size, data, usage);
 
-        gl_wrappers::configure_attribute(0, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
+        let element_buffer = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
+
+        gl_wrappers::configure_attribute(
+            0,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            6 * size_of::<f32>(),
+            0 as *const _,
+        );
+        gl_wrappers::configure_attribute(
+            1,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            6 * size_of::<f32>(),
+            (3 * size_of::<f32>()) as *const _,
+        );
+        // gl_wrappers::configure_attribute(
+        //     2,
+        //     2,
+        //     gl::FLOAT,
+        //     gl::FALSE,
+        //     8 * size_of::<f32>(),
+        //     (6 * size_of::<f32>()) as *const _,
+        // );
         gl_wrappers::enable_attribute(0);
+        gl_wrappers::enable_attribute(1);
+        // gl_wrappers::enable_attribute(2);
 
-        let indecies_count: i32;
-        let index_buffer = match index_data {
-            Some(index_data) => {
-                let ebo = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
-                ebo.bind();
-                ebo.buffer_data(
-                    index_data.len() * size_of::<u32>(),
-                    index_data.as_ptr().cast(),
-                    usage,
-                );
-                indecies_count = index_data.len() as i32;
-                Some(ebo)
-            }
-            None => {
-                indecies_count = 0;
-                None
-            }
-        };
-
-        let normals_buffer = match normal_data {
-            Some(normal_data) => {
-                let nbo = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
-                nbo.bind();
-                nbo.buffer_data(normal_data_size, normal_data, usage);
-                gl_wrappers::configure_attribute(1, 3, gl::FLOAT, gl::FALSE, 0, 0 as *const _);
-                gl_wrappers::enable_attribute(1);
-                Some(nbo)
-            }
-            None => None,
-        };
-        // В интернетах написано что анбайндинг это антипаттерн
-        Self {
+        GlMesh {
             vao,
-            vertices: vertex_buffer,
-            triangles_count,
-            indecies: index_buffer,
-            indecies_count,
-            normals: normals_buffer,
+            vbo: vertex_buffer,
+            ebo: element_buffer,
+            triangle_count,
+            index_count: 0,
+        }
+    }
+
+    pub fn from_vertex_data(
+        vertex_data: &Vec<VertexData>,
+        index_data: &Vec<u32>,
+        usage: GLenum,
+    ) -> GlMesh {
+        let vao = VertexArrayObject::new().unwrap();
+        vao.bind();
+
+        let vertex_buffer = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        vertex_buffer.bind();
+        vertex_buffer.buffer_data(
+            vertex_data.len() * size_of::<VertexData>(),
+            vertex_data.as_ptr().cast(),
+            usage,
+        );
+
+        let element_buffer = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
+        element_buffer.bind();
+        element_buffer.buffer_data(
+            index_data.len() * size_of::<u32>(),
+            index_data.as_ptr().cast(),
+            usage,
+        );
+
+        // configure in other place
+        // use ShaderInput to configure
+        gl_wrappers::configure_attribute(
+            0,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            8 * size_of::<f32>(),
+            0 as *const _,
+        );
+        gl_wrappers::configure_attribute(
+            1,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            8 * size_of::<f32>(),
+            (3 * size_of::<f32>()) as *const _,
+        );
+        gl_wrappers::configure_attribute(
+            2,
+            2,
+            gl::FLOAT,
+            gl::FALSE,
+            8 * size_of::<f32>(),
+            (6 * size_of::<f32>()) as *const _,
+        );
+        gl_wrappers::enable_attribute(0);
+        gl_wrappers::enable_attribute(1);
+        gl_wrappers::enable_attribute(2);
+
+        let triangle_count = vertex_data.len() as i32 / 3;
+        let index_count = index_data.len() as i32;
+
+        GlMesh {
+            vao,
+            vbo: vertex_buffer,
+            ebo: element_buffer,
+            triangle_count,
+            index_count,
         }
     }
 
@@ -406,24 +472,21 @@ impl GlMesh {
     }
 
     pub fn unbind(&self) {
-        // antipattern
-        VertexArrayObject::unbind();
+        VertexArrayObject::unbind(); // antipattern
     }
 
     pub fn draw(&self) {
         self.bind();
-        if let Some(_) = &self.indecies {
-            unsafe {
+        unsafe {
+            if self.index_count > 0 {
                 gl::DrawElements(
                     gl::TRIANGLES,
-                    self.indecies_count,
+                    self.index_count,
                     gl::UNSIGNED_INT,
                     0 as *const _,
                 );
-            }
-        } else {
-            unsafe {
-                gl::DrawArrays(gl::TRIANGLES, 0, self.triangles_count);
+            } else {
+                gl::DrawArrays(gl::TRIANGLES, 0, self.triangle_count);
             }
         }
     }
@@ -445,14 +508,13 @@ impl Model {
     }
 }
 
-pub fn build_vertex_shader(gl_version: (u32, u32), shader_input: Vec<ShaderInput>) -> Shader {
+pub fn build_vertex_shader(gl_version: (u32, u32), shader_input: &Vec<ShaderInput>) -> Shader {
     // Builds glsl vertex shader
     let mut src = "#version ".to_string();
     src.push_str(&(gl_version.0 * 100 + gl_version.1 * 10).to_string());
     src.push_str(" core\n");
 
     src.push_str("layout(location = 0) in vec3 in_position;");
-    src.push_str("out vec3 position;");
     if shader_input.contains(&ShaderInput::Normal) {
         src.push_str("layout(location = 1) in vec3 in_normal;");
         src.push_str("out vec3 normal;");
@@ -467,6 +529,7 @@ pub fn build_vertex_shader(gl_version: (u32, u32), shader_input: Vec<ShaderInput
     }
     if shader_input.contains(&ShaderInput::Model) {
         src.push_str("uniform mat4 model;");
+        src.push_str("out vec3 position;");
     }
 
     src.push_str("void main() {");
@@ -476,11 +539,15 @@ pub fn build_vertex_shader(gl_version: (u32, u32), shader_input: Vec<ShaderInput
     } else {
         src.push_str("gl_Position = vec4(in_position, 1.0f);");
     }
-
+    if shader_input.contains(&ShaderInput::Normal) {
+        // src.push_str("normal = vec3(model * vec4(in_normal, 1.0f));");
+        src.push_str("normal = in_normal;");
+    }
+    if shader_input.contains(&ShaderInput::TexCoord) {
+        src.push_str("tex_coord = in_tex_coord;");
+    }
     if shader_input.contains(&ShaderInput::Model) {
         src.push_str("position = vec3(model * vec4(in_position, 1.0f));");
-    } else {
-        src.push_str("position = in_position;");
     }
 
     src.push_str("}");
@@ -489,35 +556,187 @@ pub fn build_vertex_shader(gl_version: (u32, u32), shader_input: Vec<ShaderInput
 
 pub fn build_fragment_shader(
     gl_version: (u32, u32),
-    shader_input: Vec<ShaderInput>,
+    shader_input: &Vec<ShaderInput>,
     light_source: LightType,
-) {
+) -> Shader {
     let mut src = "#version ".to_string();
     src.push_str(&(gl_version.0 * 100 + gl_version.1 * 10).to_string());
     src.push_str(" core\n");
+
+    if shader_input.contains(&ShaderInput::Model) {
+        src.push_str("in vec3 position;");
+    }
+    if shader_input.contains(&ShaderInput::Normal) {
+        src.push_str("in vec3 normal;");
+    }
+    if shader_input.contains(&ShaderInput::TexCoord) {
+        src.push_str("in vec2 tex_coord;");
+    }
+    if shader_input.contains(&ShaderInput::ViewerPosition) {
+        src.push_str("uniform vec3 view_position;");
+    }
+    match light_source {
+        LightType::Directional => {
+            src.push_str("uniform vec3 direction;");
+        }
+    }
+
+    src.push_str("void main() {");
+
+    src.push_str("vec3 ambient = vec3(0.2f);");
+    src.push_str("vec3 dir = normalize(direction - position);");
+    src.push_str("float diffuse_intensity = max(dot(normal, dir), 0.0f);");
+    src.push_str("vec3 diffuse = vec3(diffuse_intensity);");
+    src.push_str("gl_FragColor = vec4(ambient + diffuse, 1.0f);");
+
+    src.push_str("}");
+    Shader::from_source(gl::FRAGMENT_SHADER, &src).unwrap()
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ShaderInput {
-    Normal,
-    TexCoord,
-    Mvp,
-    Model,
+    Position = 0,
+    Normal = 1,     // attribute input, fragment input
+    TexCoord = 2,   // attribute input, fragment input
+    Mvp,            // uniform input, fragment input
+    Model,          // uniform input
+    Orientation,    // uniform input, fragment input as 'position'
+    ViewerPosition, // uniform input
 }
 
 impl ShaderInput {
+    pub const UNIFROM_COUNT: usize = 4;
+
     pub fn get_uniform_string(&self) -> String {
         match self {
             ShaderInput::Mvp => "mvp".to_string(),
             ShaderInput::Model => "model".to_string(),
+            ShaderInput::Orientation => "orientation".to_string(),
+            ShaderInput::ViewerPosition => "viewer_position".to_string(),
             _ => panic!("This input does not have uniform"),
         }
     }
 }
 
+pub struct StaticVec<const S: usize, T: Default + Copy> {
+    array: [T; S],
+    count: usize,
+}
+
+impl<const S: usize, T: Default + Copy> StaticVec<S, T> {
+    pub fn new_empty() -> Self {
+        StaticVec {
+            array: [Default::default(); S],
+            count: 0,
+        }
+    }
+
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.array.len()
+    }
+
+    pub fn push(&mut self, value: T) -> &Self {
+        self.array[self.count] = value;
+        self.count += 1;
+        self
+    }
+
+    pub fn get_slice(&self) -> &[T; S] {
+        &self.array
+    }
+}
+
+pub struct ShaderProgram {
+    shader_program: gl_wrappers::ShaderProgram,
+    mvp_location: i32,
+    model_location: i32,
+    orientation_location: i32,
+    viewer_position_location: i32,
+}
+
+impl ShaderProgram {
+    pub fn new() -> Self {
+        let shader_program = gl_wrappers::ShaderProgram::from_vert_frag_file(
+            "src\\shaders\\3dmodel.vert",
+            "src\\shaders\\3dmodel.frag",
+        )
+        .unwrap();
+
+        shader_program.use_();
+        let mvp_location = shader_program.get_uniform(&ShaderInput::Mvp.get_uniform_string());
+        let model_location = shader_program.get_uniform(&ShaderInput::Model.get_uniform_string());
+        let orientation_location =
+            shader_program.get_uniform(&ShaderInput::Orientation.get_uniform_string());
+        let viewer_position_location =
+            shader_program.get_uniform(&ShaderInput::ViewerPosition.get_uniform_string());
+
+        ShaderProgram {
+            shader_program,
+            mvp_location,
+            model_location,
+            orientation_location,
+            viewer_position_location,
+        }
+    }
+
+    pub fn use_(&self) {
+        self.shader_program.use_();
+    }
+
+    pub fn draw(&self, transform: &Transform, model: &Model, viewer: &ViewObject) {
+        unsafe {
+            gl::UniformMatrix4fv(
+                self.mvp_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(
+                    &(viewer.get_projection() * viewer.get_view() * transform.get_model()),
+                )
+                .as_ptr()
+                .cast(),
+            );
+            gl::UniformMatrix4fv(
+                self.model_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&transform.get_model()).as_ptr().cast(),
+            );
+            gl::UniformMatrix4fv(
+                self.orientation_location,
+                1,
+                gl::FALSE,
+                glm::value_ptr(&glm::quat_to_mat4(&transform.orientation))
+                    .as_ptr()
+                    .cast(),
+            );
+            gl::Uniform3fv(
+                self.viewer_position_location,
+                1,
+                glm::value_ptr(&viewer.transform.position).as_ptr().cast(),
+            );
+        }
+
+        let light_direction = glm::vec3(1.0, 0.0, 0.0);
+        let light_direction_location = self.shader_program.get_uniform("light_direction");
+        unsafe {
+            gl::Uniform3fv(
+                light_direction_location,
+                1,
+                glm::value_ptr(&light_direction).as_ptr().cast(),
+            );
+        }
+
+        model.draw();
+    }
+}
+
 pub enum LightType {
-    Directional(Vec3, Vec3),
-    // TODO
-    // Point(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
-    // Spot(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
+    Directional, // direction, color
+                 // TODO
+                 // Point(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
+                 // Spot(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
 }

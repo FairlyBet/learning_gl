@@ -84,10 +84,10 @@ impl ShaderProgram {
         unsafe { gl::DeleteProgram(self.id) };
     }
 
-    pub fn from_vert_frag_src(vert: &str, frag: &str) -> Result<Self, String> {
-        let vert = Shader::from_source(gl::VERTEX_SHADER, vert)
+    pub fn from_vert_frag_src(vert_src: &str, frag_src: &str) -> Result<Self, String> {
+        let vert = Shader::from_source(gl::VERTEX_SHADER, vert_src)
             .map_err(|e| format!("Vertex Compile Error: {}", e))?;
-        let frag = Shader::from_source(gl::FRAGMENT_SHADER, frag)
+        let frag = Shader::from_source(gl::FRAGMENT_SHADER, frag_src)
             .map_err(|e| format!("Fragment Compile Error: {}", e))?;
 
         ShaderProgram::from_vert_frag(vert, frag)

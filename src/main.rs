@@ -3,7 +3,6 @@
 extern crate nalgebra_glm as glm;
 
 use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject};
-use gl_wrappers::ShaderProgram;
 use glfw::{Context, WindowEvent};
 use glm::vec3;
 use std::{ffi::CStr, sync::mpsc::Receiver};
@@ -26,30 +25,21 @@ fn main() {
 
     let projection =
         Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
-
-    let prog = ShaderProgram::from_vert_frag_file(
-        "src\\shaders\\trivial_shader.vert",
-        "src\\shaders\\trivial_shader.frag",
-    )
-    .unwrap();
-    prog.use_();
-    let location = prog.get_uniform("mvp");
-
-    let model = data_structures::load_as_single_model("assets\\meshes\\backpack.obj");
-
-    initializers::init_rendering();
-
     let mut camera = ViewObject::new(projection);
 
-    let mut model_transform = Transform::new();
-    model_transform.position = vec3(0.0, 0.0, -5.0);
+    initializers::init_rendering();
+    let program = data_structures::ShaderProgram::new();
+    program.use_();
 
+    let model3d = data_structures::load_as_single_model("assets\\meshes\\backpack.obj");
+    let mut model_transform = Transform::new();
     // let mut loop_helper = LoopHelper::builder().build_with_target_rate(TARGET_FRAME_RATE);
     while !window.should_close() {
         // let frametime = loop_helper.loop_start_s() as f32;
         // while glfw.get_time() < (1.0 / TARGET_FRAME_RATE as f64) {
         //     std::thread::yield_now();
         // }
+
         let frametime = glfw.get_time() as f32;
         glfw.set_time(0.0);
 
@@ -61,33 +51,26 @@ fn main() {
             (cursor_pos_after.1 - cursor_pos_before.1) as f32,
         );
         let mut api = EngineApi::new(&window, frametime, cursor_offset);
+
         // call updates from dynamic dll
         // а еще есть dyn trait
         updaters::default_camera_controller(&mut camera, &api);
-        model_transform.rotate(&glm::vec3(0.0, 60.0 * frametime, 0.0));
+        model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
+        // model_transform.rotate(&glm::vec3(0.0, 60.0 * frametime, 0.0));
 
         handle_window_events(&receiver, &event_container, &mut api);
 
         if api.get_should_close() {
             window.set_should_close(true);
         }
-        // rendering in separate place
+
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-            gl::UniformMatrix4fv(
-                location,
-                1,
-                gl::FALSE,
-                glm::value_ptr(
-                    &(camera.get_projection() * camera.get_view() * model_transform.get_model()),
-                )
-                .as_ptr()
-                .cast(),
-            );
-            model.draw();
         }
-
+        program.draw(&model_transform, &model3d, &camera);
         window.swap_buffers();
+        // rendering in separate place
+
         // loop_helper.loop_sleep();
     }
 
