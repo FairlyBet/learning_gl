@@ -2,7 +2,7 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject};
+use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject, ShaderProgram};
 use glfw::{Context, WindowEvent};
 use glm::vec3;
 use std::{ffi::CStr, sync::mpsc::Receiver};
@@ -28,7 +28,7 @@ fn main() {
     let mut camera = ViewObject::new(projection);
 
     initializers::init_rendering();
-    let program = data_structures::ShaderProgram::new();
+    let program = ShaderProgram::new();
     program.use_();
 
     let model3d = data_structures::load_as_single_model("assets\\meshes\\Main.obj");
