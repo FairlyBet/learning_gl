@@ -55,8 +55,7 @@ fn main() {
         // call updates from dynamic dll
         // а еще есть dyn trait
         updaters::default_camera_controller(&mut camera, &api);
-        model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
-        // model_transform.rotate(&glm::vec3(0.0, 60.0 * frametime, 0.0));
+        // model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
 
         handle_window_events(&receiver, &event_container, &mut api);
 
