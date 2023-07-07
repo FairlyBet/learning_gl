@@ -271,48 +271,48 @@ pub fn load_as_single_model(path: &str) -> Model {
     )
     .unwrap();
 
-    // let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
-    // for mesh in scene.meshes {
-    //     let vertex_count = mesh.vertices.len();
-    //     let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
+    let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
+    for mesh in scene.meshes {
+        let vertex_count = mesh.vertices.len();
+        let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
 
-    //     for i in 0..vertex_count {
-    //         let position = mesh.vertices[i];
-    //         let normal = mesh.normals[i];
-    //         let tex_coord: Vector2D;
-    //         if let Some(tex_coords) = &(mesh.texture_coords[0]) {
-    //             tex_coord = Vector2D {
-    //                 x: tex_coords[i].x,
-    //                 y: tex_coords[i].y,
-    //             };
-    //         } else {
-    //             tex_coord = Default::default();
-    //         }
-    //         let vertex = VertexData {
-    //             position,
-    //             normal,
-    //             tex_coord,
-    //         };
-    //         vertex_data.push(vertex);
-    //     }
+        for i in 0..vertex_count {
+            let position = mesh.vertices[i];
+            let normal = mesh.normals[i];
+            let tex_coord: Vector2D;
+            if let Some(tex_coords) = &(mesh.texture_coords[0]) {
+                tex_coord = Vector2D {
+                    x: tex_coords[i].x,
+                    y: tex_coords[i].y,
+                };
+            } else {
+                tex_coord = Default::default();
+            }
+            let vertex = VertexData {
+                position,
+                normal,
+                tex_coord,
+            };
+            vertex_data.push(vertex);
+        }
 
-    //     let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
-    //     for face in mesh.faces.iter() {
-    //         for index in face.0.iter() {
-    //             index_data.push(*index);
-    //         }
-    //     }
+        let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
+        for face in mesh.faces.iter() {
+            for index in face.0.iter() {
+                index_data.push(*index);
+            }
+        }
 
-    //     let mesh = GlMesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
-    //     meshes.push(mesh);
-    // }
-    let mesh = GlMesh::from_pointer(
-        GlMesh::CUBE_VERTICES.as_ptr().cast(),
-        GlMesh::CUBE_VERTICES.len() * size_of::<f32>(),
-        gl::STATIC_DRAW,
-        36,
-    );
-    Model::new(vec![mesh])
+        let mesh = GlMesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
+        meshes.push(mesh);
+    }
+    // let mesh = GlMesh::from_pointer(
+    //     GlMesh::CUBE_VERTICES.as_ptr().cast(),
+    //     GlMesh::CUBE_VERTICES.len() * size_of::<f32>(),
+    //     gl::STATIC_DRAW,
+    //     36,
+    // );
+    Model::new(meshes)
 }
 
 #[repr(C)]
@@ -720,7 +720,8 @@ impl ShaderProgram {
             );
         }
 
-        let light_direction = glm::vec3(1.0, 0.0, 0.0);
+        let light_direction = glm::vec3(-1.0_f32, -1.0, -1.0);
+        let light_direction = glm::normalize(&light_direction);
         let light_direction_location = self.shader_program.get_uniform("light_direction");
         unsafe {
             gl::Uniform3fv(

@@ -31,7 +31,7 @@ fn main() {
     let program = data_structures::ShaderProgram::new();
     program.use_();
 
-    let model3d = data_structures::load_as_single_model("assets\\meshes\\backpack.obj");
+    let model3d = data_structures::load_as_single_model("assets\\meshes\\Main.obj");
     let mut model_transform = Transform::new();
     // let mut loop_helper = LoopHelper::builder().build_with_target_rate(TARGET_FRAME_RATE);
     while !window.should_close() {
@@ -55,7 +55,7 @@ fn main() {
         // call updates from dynamic dll
         // а еще есть dyn trait
         updaters::default_camera_controller(&mut camera, &api);
-        // model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
+        model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
 
         handle_window_events(&receiver, &event_container, &mut api);
 

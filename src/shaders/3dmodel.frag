@@ -10,14 +10,14 @@ uniform vec3 light_direction;
 void main() {
     float ambient = 0.2;
 
-    float diffuse = max(dot(rotated_normal, -light_direction), 0);
+    float diffuse = max(dot(rotated_normal, -light_direction), 0.0);
 
     vec3 viewer_direction = normalize(viewer_position - global_position);
     vec3 reflect_direction = reflect(light_direction, rotated_normal);
-    float specular = max(dot(viewer_direction, reflect_direction), 0);
-    specular = pow(specular, 32);
+    float specular = max(dot(viewer_direction, reflect_direction), 0.0);
+    specular = pow(specular, 8);
 
     vec3 color = vec3(0.8) * (ambient + diffuse + specular);
 
-    gl_FragColor = vec4(color, 1);
+    gl_FragColor = vec4(color, 1.0);
 }
