@@ -2,23 +2,21 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{EngineApi, EventContainer, Projection, Transform, ViewObject, ShaderProgram};
+use data_structures::{
+    DirectionalLight, EngineApi, Projection, ShaderProgram, Transform, ViewObject,
+};
 use glfw::{Context, WindowEvent};
-use glm::vec3;
-use std::{ffi::CStr, sync::mpsc::Receiver};
-// use spin_sleep::LoopHelper;
+use glm::{vec3, Vec3};
+use std::ffi::CStr;
 
 mod data_structures;
 mod gl_wrappers;
 mod initializers;
 mod updaters;
 
-// const TARGET_FRAME_RATE: i32 = 45;
-
 fn main() {
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
-    let event_container = EventContainer::new_minimal();
 
     window.set_cursor_mode(glfw::CursorMode::Disabled);
     window.set_raw_mouse_motion(true);
@@ -31,15 +29,14 @@ fn main() {
     let program = ShaderProgram::new();
     program.use_();
 
-    let model3d = data_structures::load_as_single_model("assets\\meshes\\Main.obj");
-    let mut model_transform = Transform::new();
-    // let mut loop_helper = LoopHelper::builder().build_with_target_rate(TARGET_FRAME_RATE);
-    while !window.should_close() {
-        // let frametime = loop_helper.loop_start_s() as f32;
-        // while glfw.get_time() < (1.0 / TARGET_FRAME_RATE as f64) {
-        //     std::thread::yield_now();
-        // }
+    let model3d = data_structures::load_as_single_model("assets\\meshes\\backpack.obj");
+    let model_transform = Transform::new();
+    let light = DirectionalLight {
+        direction: glm::normalize(&vec3(1.0, -1.0, -1.0)),
+        color: Vec3::from_element(0.75),
+    };
 
+    while !window.should_close() {
         let frametime = glfw.get_time() as f32;
         glfw.set_time(0.0);
 
@@ -50,14 +47,20 @@ fn main() {
             (cursor_pos_after.0 - cursor_pos_before.0) as f32,
             (cursor_pos_after.1 - cursor_pos_before.1) as f32,
         );
-        let mut api = EngineApi::new(&window, frametime, cursor_offset);
+        let api = EngineApi::new(&window, frametime, cursor_offset);
 
-        // call updates from dynamic dll
-        // а еще есть dyn trait
         updaters::default_camera_controller(&mut camera, &api);
-        model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
+        // model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
 
-        handle_window_events(&receiver, &event_container, &mut api);
+        for (_, event) in glfw::flush_messages(&receiver) {
+            match event {
+                WindowEvent::FramebufferSize(w, h) => {
+                    updaters::update_viewport(w, h);
+                    camera.projection_matrix = updaters::update_perspective(w, h);
+                }
+                _ => {}
+            }
+        }
 
         if api.get_should_close() {
             window.set_should_close(true);
@@ -66,36 +69,11 @@ fn main() {
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
-        program.draw(&model_transform, &model3d, &camera);
+        program.draw(&model_transform, &model3d, &camera, &light);
         window.swap_buffers();
-        // rendering in separate place
-
-        // loop_helper.loop_sleep();
     }
 
     gl_loader::end_gl();
-}
-
-fn handle_window_events(
-    receiver: &Receiver<(f64, WindowEvent)>,
-    event_container: &EventContainer,
-    api: &mut EngineApi,
-) {
-    for (_, event) in glfw::flush_messages(receiver) {
-        match event {
-            WindowEvent::Key(key, _, action, _) => {
-                for item in event_container.on_key_pressed.iter() {
-                    (item.callback)(key, action, api);
-                }
-            }
-            WindowEvent::FramebufferSize(width, height) => {
-                for item in event_container.on_framebuffer_size_changed.iter() {
-                    (item.callback)(width, height);
-                }
-            }
-            _ => {}
-        }
-    }
 }
 
 fn get_aspect(framebuffer_size: (i32, i32)) -> f32 {

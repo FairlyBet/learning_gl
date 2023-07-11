@@ -1,44 +1,27 @@
 #version 330 core
 
-struct Material {
-    sampler2D diffuse;
-    sampler2D specular;
-    float shininess;
-};
-
-struct Light {
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-    vec3 direction; // has to be normalized
-};
-
-in vec3 position;
-in vec3 normal;
+in vec3 global_position;
+in vec3 rotated_normal;
 in vec2 tex_coord;
 
-uniform vec3 view_position;
+uniform vec3 viewer_position;
+uniform vec3 light_direction;
+uniform vec3 light_color;
 
-uniform Light light;
-uniform Material material;
+uniform sampler2D diffuse;
+uniform sampler2D specular;
 
 void main() {
-    vec3 ambient = light.ambient * texture2D(material.diffuse, tex_coord).rgb;
+    float ambient_intensity = 0.25;
 
-    vec3 ambient1 = vec3(0.1);
+    float diffuse_intensity = max(dot(rotated_normal, -light_direction), 0.0);
 
-    float diffuse_intensity = max(dot(normal, -light.direction), 0.0f);
-    vec3 diffuse = light.diffuse * diffuse_intensity * texture(material.diffuse, tex_coord).rgb;
+    vec3 viewer_direction = normalize(viewer_position - global_position);
+    vec3 reflect_direction = reflect(light_direction, rotated_normal);
+    float specular_intensity = max(dot(viewer_direction, reflect_direction), 0.0);
+    specular_intensity = pow(specular_intensity, 32);
 
-    vec3 diffuse1 = diffuse_intensity * vec3(0.75);
-    gl_FragColor = vec4( diffuse + ambient, 1.0);
+    vec3 color = ((ambient_intensity + diffuse_intensity) * texture2D(diffuse, tex_coord).rgb + specular_intensity * texture2D(specular, tex_coord).rgb) * light_color;
 
-    vec3 inv_view_direction = normalize(view_position - position);
-    vec3 reflect_direction = (reflect(light.direction, normal));
-    float specular_intensity = pow(max(dot(inv_view_direction, reflect_direction), 0.0f), material.shininess);
-    vec3 specular = light.specular * specular_intensity * texture2D(material.specular, tex_coord).rgb;
-
-    vec3 frag_color = ambient + diffuse + specular;
-
-    gl_FragColor = vec4(frag_color, 1.0f);
+    gl_FragColor = vec4(color, 1.0);
 }

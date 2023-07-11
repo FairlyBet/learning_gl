@@ -1,7 +1,4 @@
-use crate::{
-    gl_wrappers::{self, Shader, VertexArrayObject, VertexBufferObject},
-    updaters,
-};
+use crate::gl_wrappers::{self, Texture, VertexArrayObject, VertexBufferObject};
 use gl::types::GLenum;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::Vec3;
@@ -135,14 +132,14 @@ impl Transform {
 
 pub struct ViewObject {
     pub transform: Transform,
-    projection_matrix: Mat4x4,
+    pub projection_matrix: Mat4x4,
 }
 
 impl ViewObject {
     pub fn new(projection: Projection) -> ViewObject {
         ViewObject {
             transform: Transform::new(),
-            projection_matrix: projection.calculate_projecion(),
+            projection_matrix: projection.calculate_matrix(),
         }
     }
 
@@ -154,14 +151,6 @@ impl ViewObject {
         rotation * translation // applying quat rotation after translation makes object rotate
                                // around coordinate center and around themselves simultaneoulsy
     }
-
-    pub fn get_projection(&self) -> Mat4x4 {
-        self.projection_matrix
-    }
-
-    pub fn set_projection(&mut self, projection: Projection) {
-        self.projection_matrix = projection.calculate_projecion();
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -171,7 +160,7 @@ pub enum Projection {
 }
 
 impl Projection {
-    fn calculate_projecion(&self) -> Mat4x4 {
+    pub fn calculate_matrix(&self) -> Mat4x4 {
         match *self {
             Projection::Orthographic(left, right, bottom, top, znear, zfar) => {
                 glm::ortho(left, right, bottom, top, znear, zfar)
@@ -226,53 +215,19 @@ impl<'a> EngineApi<'a> {
     }
 }
 
-pub struct EventContainer {
-    pub on_key_pressed: Vec<OnKeyPressed>,
-    pub on_framebuffer_size_changed: Vec<OnFrameBufferSizeChange>,
-}
-
-impl EventContainer {
-    pub fn new() -> Self {
-        todo!();
-    }
-
-    pub fn new_minimal() -> Self {
-        let on_key_pressed = vec![OnKeyPressed {
-            callback: updaters::close_on_escape,
-        }];
-        let on_framebuffer_size_changed = vec![OnFrameBufferSizeChange {
-            callback: updaters::on_framebuffer_size_change,
-        }];
-        EventContainer {
-            on_key_pressed,
-            on_framebuffer_size_changed,
-        }
-    }
-}
-
-pub struct OnKeyPressed {
-    pub callback: fn(key: Key, action: Action, &mut EngineApi) -> (),
-}
-
-pub struct OnFrameBufferSizeChange {
-    pub callback: fn(i32, i32) -> (),
-}
-
 pub fn load_as_single_model(path: &str) -> Model {
     let scene = Scene::from_file(
         path,
         vec![
             PostProcess::Triangulate,
-            PostProcess::FlipUVs,
-            // PostProcess::OptimizeGraph,
-            // PostProcess::OptimizeMeshes,
-            // PostProcess::MakeLeftHanded
+            PostProcess::OptimizeGraph,
+            PostProcess::OptimizeMeshes,
         ],
     )
     .unwrap();
 
     let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
-    for mesh in scene.meshes {
+    for mesh in &scene.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
 
@@ -297,8 +252,8 @@ pub fn load_as_single_model(path: &str) -> Model {
         }
 
         let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
-        for face in mesh.faces.iter() {
-            for index in face.0.iter() {
+        for face in &mesh.faces {
+            for index in &face.0 {
                 index_data.push(*index);
             }
         }
@@ -306,13 +261,17 @@ pub fn load_as_single_model(path: &str) -> Model {
         let mesh = GlMesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
         meshes.push(mesh);
     }
+    let diffuse = "assets\\meshes\\diffuse.jpg";
+    let specular = "assets\\meshes\\specular.jpg";
+
+    let material = PhongMaterial::from_file(diffuse, specular);
     // let mesh = GlMesh::from_pointer(
     //     GlMesh::CUBE_VERTICES.as_ptr().cast(),
     //     GlMesh::CUBE_VERTICES.len() * size_of::<f32>(),
     //     gl::STATIC_DRAW,
     //     36,
     // );
-    Model::new(meshes)
+    Model::new(meshes, material)
 }
 
 #[repr(C)]
@@ -333,7 +292,7 @@ pub struct GlMesh {
 }
 
 impl GlMesh {
-    pub const CUBE_VERTICES: [f32; 216] = [
+    pub const CUBE_VERTICES_AND_NORMALS: [f32; 216] = [
         -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0,
         0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5,
         -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5,
@@ -428,7 +387,7 @@ impl GlMesh {
         // configure in other place
         // use ShaderInput to configure
         gl_wrappers::configure_attribute(
-            0,
+            AttributeInput::Position as u32,
             3,
             gl::FLOAT,
             gl::FALSE,
@@ -436,7 +395,7 @@ impl GlMesh {
             0 as *const _,
         );
         gl_wrappers::configure_attribute(
-            1,
+            AttributeInput::Normal as u32,
             3,
             gl::FLOAT,
             gl::FALSE,
@@ -444,16 +403,16 @@ impl GlMesh {
             (3 * size_of::<f32>()) as *const _,
         );
         gl_wrappers::configure_attribute(
-            2,
+            AttributeInput::TexCoord as u32,
             2,
             gl::FLOAT,
             gl::FALSE,
             8 * size_of::<f32>(),
             (6 * size_of::<f32>()) as *const _,
         );
-        gl_wrappers::enable_attribute(0);
-        gl_wrappers::enable_attribute(1);
-        gl_wrappers::enable_attribute(2);
+        gl_wrappers::enable_attribute(AttributeInput::Position as u32);
+        gl_wrappers::enable_attribute(AttributeInput::Normal as u32);
+        gl_wrappers::enable_attribute(AttributeInput::TexCoord as u32);
 
         let triangle_count = vertex_data.len() as i32 / 3;
         let index_count = index_data.len() as i32;
@@ -494,159 +453,19 @@ impl GlMesh {
 
 pub struct Model {
     meshes: Vec<GlMesh>,
+    material: PhongMaterial,
 }
 
 impl Model {
-    pub fn new(meshes: Vec<GlMesh>) -> Self {
-        Self { meshes }
+    pub fn new(meshes: Vec<GlMesh>, material: PhongMaterial) -> Self {
+        Self { meshes, material }
     }
 
     pub fn draw(&self) {
+        self.material.bind();
         for mesh in self.meshes.iter() {
             mesh.draw();
         }
-    }
-}
-
-pub fn build_vertex_shader(gl_version: (u32, u32), shader_input: &Vec<ShaderInput>) -> Shader {
-    // Builds glsl vertex shader
-    let mut src = "#version ".to_string();
-    src.push_str(&(gl_version.0 * 100 + gl_version.1 * 10).to_string());
-    src.push_str(" core\n");
-
-    src.push_str("layout(location = 0) in vec3 in_position;");
-    if shader_input.contains(&ShaderInput::Normal) {
-        src.push_str("layout(location = 1) in vec3 in_normal;");
-        src.push_str("out vec3 normal;");
-    }
-    if shader_input.contains(&ShaderInput::TexCoord) {
-        src.push_str("layout(location = 2) in vec2 in_tex_coord;");
-        src.push_str("out vec2 tex_coord;");
-    }
-
-    if shader_input.contains(&ShaderInput::Mvp) {
-        src.push_str("uniform mat4 mvp;");
-    }
-    if shader_input.contains(&ShaderInput::Model) {
-        src.push_str("uniform mat4 model;");
-        src.push_str("out vec3 position;");
-    }
-
-    src.push_str("void main() {");
-
-    if shader_input.contains(&ShaderInput::Mvp) {
-        src.push_str("gl_Position = mvp * vec4(in_position, 1.0f);");
-    } else {
-        src.push_str("gl_Position = vec4(in_position, 1.0f);");
-    }
-    if shader_input.contains(&ShaderInput::Normal) {
-        // src.push_str("normal = vec3(model * vec4(in_normal, 1.0f));");
-        src.push_str("normal = in_normal;");
-    }
-    if shader_input.contains(&ShaderInput::TexCoord) {
-        src.push_str("tex_coord = in_tex_coord;");
-    }
-    if shader_input.contains(&ShaderInput::Model) {
-        src.push_str("position = vec3(model * vec4(in_position, 1.0f));");
-    }
-
-    src.push_str("}");
-    Shader::from_source(gl::VERTEX_SHADER, &src).unwrap()
-}
-
-pub fn build_fragment_shader(
-    gl_version: (u32, u32),
-    shader_input: &Vec<ShaderInput>,
-    light_source: LightType,
-) -> Shader {
-    let mut src = "#version ".to_string();
-    src.push_str(&(gl_version.0 * 100 + gl_version.1 * 10).to_string());
-    src.push_str(" core\n");
-
-    if shader_input.contains(&ShaderInput::Model) {
-        src.push_str("in vec3 position;");
-    }
-    if shader_input.contains(&ShaderInput::Normal) {
-        src.push_str("in vec3 normal;");
-    }
-    if shader_input.contains(&ShaderInput::TexCoord) {
-        src.push_str("in vec2 tex_coord;");
-    }
-    if shader_input.contains(&ShaderInput::ViewerPosition) {
-        src.push_str("uniform vec3 view_position;");
-    }
-    match light_source {
-        LightType::Directional => {
-            src.push_str("uniform vec3 direction;");
-        }
-    }
-
-    src.push_str("void main() {");
-
-    src.push_str("vec3 ambient = vec3(0.2f);");
-    src.push_str("vec3 dir = normalize(direction - position);");
-    src.push_str("float diffuse_intensity = max(dot(normal, dir), 0.0f);");
-    src.push_str("vec3 diffuse = vec3(diffuse_intensity);");
-    src.push_str("gl_FragColor = vec4(ambient + diffuse, 1.0f);");
-
-    src.push_str("}");
-    Shader::from_source(gl::FRAGMENT_SHADER, &src).unwrap()
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum ShaderInput {
-    Position = 0,
-    Normal = 1,     // attribute input, fragment input
-    TexCoord = 2,   // attribute input, fragment input
-    Mvp,            // uniform input, fragment input
-    Model,          // uniform input
-    Orientation,    // uniform input, fragment input as 'position'
-    ViewerPosition, // uniform input
-}
-
-impl ShaderInput {
-    pub const UNIFROM_COUNT: usize = 4;
-
-    pub fn get_uniform_string(&self) -> String {
-        match self {
-            ShaderInput::Mvp => "mvp".to_string(),
-            ShaderInput::Model => "model".to_string(),
-            ShaderInput::Orientation => "orientation".to_string(),
-            ShaderInput::ViewerPosition => "viewer_position".to_string(),
-            _ => panic!("This input does not have uniform"),
-        }
-    }
-}
-
-pub struct StaticVec<const S: usize, T: Default + Copy> {
-    array: [T; S],
-    count: usize,
-}
-
-impl<const S: usize, T: Default + Copy> StaticVec<S, T> {
-    pub fn new_empty() -> Self {
-        StaticVec {
-            array: [Default::default(); S],
-            count: 0,
-        }
-    }
-
-    pub fn count(&self) -> usize {
-        self.count
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.array.len()
-    }
-
-    pub fn push(&mut self, value: T) -> &Self {
-        self.array[self.count] = value;
-        self.count += 1;
-        self
-    }
-
-    pub fn get_slice(&self) -> &[T; S] {
-        &self.array
     }
 }
 
@@ -656,23 +475,35 @@ pub struct ShaderProgram {
     model_location: i32,
     orientation_location: i32,
     viewer_position_location: i32,
+    light_direction_location: i32,
+    light_color_location: i32,
+    diffuse_location: i32,
+    specular_location: i32,
 }
 
 impl ShaderProgram {
     pub fn new() -> Self {
         let shader_program = gl_wrappers::ShaderProgram::from_vert_frag_file(
             "src\\shaders\\3dmodel.vert",
-            "src\\shaders\\3dmodel.frag",
+            "src\\shaders\\phong_directional.frag",
         )
         .unwrap();
-
         shader_program.use_();
-        let mvp_location = shader_program.get_uniform(&ShaderInput::Mvp.get_uniform_string());
-        let model_location = shader_program.get_uniform(&ShaderInput::Model.get_uniform_string());
+
+        let mvp_location = shader_program.get_uniform(&UniformInput::Mvp.get_uniform_string());
+        let model_location = shader_program.get_uniform(&UniformInput::Model.get_uniform_string());
         let orientation_location =
-            shader_program.get_uniform(&ShaderInput::Orientation.get_uniform_string());
+            shader_program.get_uniform(&UniformInput::Orientation.get_uniform_string());
         let viewer_position_location =
-            shader_program.get_uniform(&ShaderInput::ViewerPosition.get_uniform_string());
+            shader_program.get_uniform(&UniformInput::ViewerPosition.get_uniform_string());
+        let light_direction_location =
+            shader_program.get_uniform(&UniformInput::LightDirection.get_uniform_string());
+        let light_color_location =
+            shader_program.get_uniform(&UniformInput::LightColor.get_uniform_string());
+        let diffuse_location =
+            shader_program.get_uniform(&UniformInput::Diffuse.get_uniform_string());
+        let specular_location =
+            shader_program.get_uniform(&UniformInput::Specular.get_uniform_string());
 
         ShaderProgram {
             shader_program,
@@ -680,6 +511,10 @@ impl ShaderProgram {
             model_location,
             orientation_location,
             viewer_position_location,
+            light_direction_location,
+            light_color_location,
+            diffuse_location,
+            specular_location,
         }
     }
 
@@ -687,14 +522,20 @@ impl ShaderProgram {
         self.shader_program.use_();
     }
 
-    pub fn draw(&self, transform: &Transform, model: &Model, viewer: &ViewObject) {
+    pub fn draw(
+        &self,
+        transform: &Transform,
+        model: &Model,
+        viewer: &ViewObject,
+        light: &DirectionalLight,
+    ) {
         unsafe {
             gl::UniformMatrix4fv(
                 self.mvp_location,
                 1,
                 gl::FALSE,
                 glm::value_ptr(
-                    &(viewer.get_projection() * viewer.get_view() * transform.get_model()),
+                    &(viewer.projection_matrix * viewer.get_view() * transform.get_model()),
                 )
                 .as_ptr()
                 .cast(),
@@ -718,26 +559,80 @@ impl ShaderProgram {
                 1,
                 glm::value_ptr(&viewer.transform.position).as_ptr().cast(),
             );
-        }
-
-        let light_direction = glm::vec3(-1.0_f32, -1.0, -1.0);
-        let light_direction = glm::normalize(&light_direction);
-        let light_direction_location = self.shader_program.get_uniform("light_direction");
-        unsafe {
             gl::Uniform3fv(
-                light_direction_location,
+                self.light_direction_location,
                 1,
-                glm::value_ptr(&light_direction).as_ptr().cast(),
+                glm::value_ptr(&light.direction).as_ptr().cast(),
             );
+            gl::Uniform3fv(
+                self.light_color_location,
+                1,
+                glm::value_ptr(&light.color).as_ptr().cast(),
+            );
+            gl::Uniform1i(self.diffuse_location, 0);
+            gl::Uniform1i(self.specular_location, 1);
         }
 
         model.draw();
     }
 }
 
-pub enum LightType {
-    Directional, // direction, color
-                 // TODO
-                 // Point(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
-                 // Spot(Vec3, Vec3, Vec3, Vec3, f32, f32, f32),
+pub struct DirectionalLight {
+    pub direction: Vec3,
+    pub color: Vec3,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum AttributeInput {
+    Position = 0,
+    Normal = 1,
+    TexCoord = 2,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum UniformInput {
+    Mvp,
+    Model,
+    Orientation,
+    ViewerPosition,
+    LightDirection,
+    LightColor,
+    LightPosition,
+    Diffuse,
+    Specular,
+}
+
+impl UniformInput {
+    pub fn get_uniform_string(&self) -> String {
+        match self {
+            UniformInput::Mvp => "mvp".to_string(),
+            UniformInput::Model => "model".to_string(),
+            UniformInput::Orientation => "orientation".to_string(),
+            UniformInput::ViewerPosition => "viewer_position".to_string(),
+            UniformInput::LightDirection => "light_direction".to_string(),
+            UniformInput::LightColor => "light_color".to_string(),
+            UniformInput::LightPosition => "light_position".to_string(),
+            UniformInput::Diffuse => "diffuse".to_string(),
+            UniformInput::Specular => "specular".to_string(),
+        }
+    }
+}
+
+pub struct PhongMaterial {
+    diffuse: Texture,
+    specular: Texture,
+}
+
+impl PhongMaterial {
+    pub fn from_file(diffuse_path: &str, specular_path: &str) -> Self {
+        let diffuse = Texture::from_file(diffuse_path).unwrap();
+        let specular = Texture::from_file(specular_path).unwrap();
+
+        Self { diffuse, specular }
+    }
+
+    pub fn bind(&self) {
+        self.diffuse.bind_to_unit(gl::TEXTURE0);
+        self.specular.bind_to_unit(gl::TEXTURE1);
+    }
 }

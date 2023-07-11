@@ -1,17 +1,20 @@
-use crate::data_structures::{EngineApi, ViewObject};
+use crate::{
+    data_structures::{EngineApi, Projection, ViewObject},
+    get_aspect,
+};
 use glfw::{Action, Key};
+use glm::Mat4;
 use nalgebra_glm::{vec3, Vec3};
 
-pub fn on_framebuffer_size_change(w: i32, h: i32) {
+pub fn update_viewport(w: i32, h: i32) {
     unsafe {
         gl::Viewport(0, 0, w, h);
     }
 }
 
-pub fn close_on_escape(key: Key, action: Action, api: &mut EngineApi) {
-    if key == Key::Escape && action == Action::Press {
-        api.set_should_close_true();
-    }
+pub fn update_perspective(w: i32, h: i32) -> Mat4 {
+    let aspect = get_aspect((w, h));
+    Projection::Perspective(aspect, 45.0, 0.1, 100.0).calculate_matrix()
 }
 
 pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
