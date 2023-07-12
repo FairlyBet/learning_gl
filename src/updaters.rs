@@ -27,7 +27,7 @@ pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
     let global_rotation = vec3(0.0, -x, 0.0) * sensitivity;
 
     let mut delta = Vec3::zeros();
-    let velocity = 5.0;
+    let velocity = 4.0;
     if let Action::Press | Action::Repeat = api.get_key(Key::W) {
         delta.z -= 1.0;
     }

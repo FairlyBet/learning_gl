@@ -484,8 +484,8 @@ pub struct ShaderProgram {
 impl ShaderProgram {
     pub fn new() -> Self {
         let shader_program = gl_wrappers::ShaderProgram::from_vert_frag_file(
-            "src\\shaders\\3dmodel.vert",
-            "src\\shaders\\phong_directional.frag",
+            "src\\shaders\\3d-model.vert",
+            "src\\shaders\\phong-directional.frag",
         )
         .unwrap();
         shader_program.use_();

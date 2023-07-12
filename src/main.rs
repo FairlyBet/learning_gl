@@ -33,7 +33,7 @@ fn main() {
     let model_transform = Transform::new();
     let light = DirectionalLight {
         direction: glm::normalize(&vec3(1.0, -1.0, -1.0)),
-        color: Vec3::from_element(0.75),
+        color: Vec3::from_element(1.0),
     };
 
     while !window.should_close() {
@@ -67,7 +67,7 @@ fn main() {
         }
 
         unsafe {
-            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
         }
         program.draw(&model_transform, &model3d, &camera, &light);
         window.swap_buffers();
