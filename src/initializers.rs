@@ -54,6 +54,6 @@ pub fn init_rendering() {
 
         // gl::DepthMask(gl::FALSE);
         // gl::DepthFunc(gl::ALWAYS);
-        gl::ClearColor(0.2, 0.15, 0.15, 1.0);
+        gl::ClearColor(0.7, 0.7, 0.67, 1.0);
     }
 }

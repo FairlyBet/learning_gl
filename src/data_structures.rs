@@ -226,7 +226,7 @@ pub fn load_as_single_model(path: &str) -> Model {
     )
     .unwrap();
 
-    let mut meshes = Vec::<GlMesh>::with_capacity(scene.meshes.len());
+    let mut meshes = Vec::<Mesh>::with_capacity(scene.meshes.len());
     for mesh in &scene.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
@@ -258,13 +258,13 @@ pub fn load_as_single_model(path: &str) -> Model {
             }
         }
 
-        let mesh = GlMesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
+        let mesh = Mesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
         meshes.push(mesh);
     }
     let diffuse = "assets\\meshes\\diffuse.jpg";
     let specular = "assets\\meshes\\specular.jpg";
 
-    let material = PhongMaterial::from_file(diffuse, specular);
+    let material = Material::from_file(diffuse, specular);
     // let mesh = GlMesh::from_pointer(
     //     GlMesh::CUBE_VERTICES.as_ptr().cast(),
     //     GlMesh::CUBE_VERTICES.len() * size_of::<f32>(),
@@ -281,17 +281,16 @@ pub struct VertexData {
     pub tex_coord: Vector2D,
 }
 
-pub struct GlMesh {
+pub struct Mesh<'a> {
     vao: VertexArrayObject,
     vbo: VertexBufferObject,
     ebo: VertexBufferObject,
     triangle_count: i32,
     index_count: i32,
-    // metadata about content to configure attributes
-    // like Vec<ShaderInput>
+    material: &'a Material,
 }
 
-impl GlMesh {
+impl<'a> Mesh<'a> {
     pub const CUBE_VERTICES_AND_NORMALS: [f32; 216] = [
         -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0,
         0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5,
@@ -351,7 +350,7 @@ impl GlMesh {
         gl_wrappers::enable_attribute(1);
         // gl_wrappers::enable_attribute(2);
 
-        GlMesh {
+        Mesh {
             vao,
             vbo: vertex_buffer,
             ebo: element_buffer,
@@ -364,7 +363,7 @@ impl GlMesh {
         vertex_data: &Vec<VertexData>,
         index_data: &Vec<u32>,
         usage: GLenum,
-    ) -> GlMesh {
+    ) -> Mesh {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
@@ -417,7 +416,7 @@ impl GlMesh {
         let triangle_count = vertex_data.len() as i32 / 3;
         let index_count = index_data.len() as i32;
 
-        GlMesh {
+        Mesh {
             vao,
             vbo: vertex_buffer,
             ebo: element_buffer,
@@ -451,18 +450,24 @@ impl GlMesh {
     }
 }
 
-pub struct Model {
-    meshes: Vec<GlMesh>,
-    material: PhongMaterial,
+pub struct Model<'a> {
+    properties: Vec<VertexInput>,
+    material_property: Vec<MaterialProperty>,
+
+    meshes: Vec<Mesh<'a>>,
+    shader: &'a ShaderProgram,
 }
 
-impl Model {
-    pub fn new(meshes: Vec<GlMesh>, material: PhongMaterial) -> Self {
-        Self { meshes, material }
+impl<'a> Model<'a> {
+    pub fn new(meshes: Vec<Mesh>) -> Self {
+        todo!()
+    }
+
+    pub fn set_shader(&mut self, shader: &ShaderProgram) {
+        self.shader = shader;
     }
 
     pub fn draw(&self) {
-        self.material.bind();
         for mesh in self.meshes.iter() {
             mesh.draw();
         }
@@ -577,11 +582,6 @@ impl ShaderProgram {
     }
 }
 
-pub struct DirectionalLight {
-    pub direction: Vec3,
-    pub color: Vec3,
-}
-
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum AttributeInput {
     Position = 0,
@@ -618,12 +618,12 @@ impl UniformInput {
     }
 }
 
-pub struct PhongMaterial {
+pub struct Material {
     diffuse: Texture,
     specular: Texture,
 }
 
-impl PhongMaterial {
+impl Material {
     pub fn from_file(diffuse_path: &str, specular_path: &str) -> Self {
         let diffuse = Texture::from_file(diffuse_path).unwrap();
         let specular = Texture::from_file(specular_path).unwrap();
@@ -635,4 +635,49 @@ impl PhongMaterial {
         self.diffuse.bind_to_unit(gl::TEXTURE0);
         self.specular.bind_to_unit(gl::TEXTURE1);
     }
+}
+
+pub struct Renderer {
+    programs: Vec<ShaderProgram>,
+}
+
+impl Renderer {
+    pub fn render(camera: &ViewObject, lights: &Vec<LightSource>, models: &Vec<Model>) {}
+
+    pub fn generate_shaders(camera: &ViewObject, lights: &Vec<LightSource>, models: &Vec<Model>) {}
+}
+
+enum VertexInput {
+    Position,
+    Normal,
+    TexCoord,
+}
+
+enum LightType {
+    Directional,
+    Point,
+    Spot,
+}
+
+struct LightSource {
+    type_: LightType,
+    color: Vec3,
+    position: Vec3,
+    direction: Vec3,
+    constant: f32,
+    linear: f32,
+    quadratic: f32,
+    inner_cutoff: f32,
+    outer_cutoff: f32,
+}
+
+struct ShaderInput {
+    uniform_input: Vec<UniformInput>,
+    vertex_input: Vec<VertexInput>,
+    light_input: Vec<LightSource>,
+}
+
+struct Object<'a> {
+    transform: Transform,
+    model: Option<&'a Model<'a>>,
 }
