@@ -215,18 +215,11 @@ impl<'a> EngineApi<'a> {
     }
 }
 
-pub fn load_as_single_model(path: &str) -> Model {
-    let scene = Scene::from_file(
-        path,
-        vec![
-            PostProcess::Triangulate,
-            PostProcess::OptimizeGraph,
-            PostProcess::OptimizeMeshes,
-        ],
-    )
-    .unwrap();
+pub fn load_model(path: &str, post_pocess: Vec<PostProcess>) -> Model {
+    let scene = Scene::from_file(path, post_pocess).unwrap();
 
     let mut meshes = Vec::<Mesh>::with_capacity(scene.meshes.len());
+
     for mesh in &scene.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
@@ -243,11 +236,13 @@ pub fn load_as_single_model(path: &str) -> Model {
             } else {
                 tex_coord = Default::default();
             }
+
             let vertex = VertexData {
                 position,
                 normal,
                 tex_coord,
             };
+
             vertex_data.push(vertex);
         }
 
@@ -261,17 +256,17 @@ pub fn load_as_single_model(path: &str) -> Model {
         let mesh = Mesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
         meshes.push(mesh);
     }
-    let diffuse = "assets\\meshes\\diffuse.jpg";
-    let specular = "assets\\meshes\\specular.jpg";
+    // let diffuse = "assets\\meshes\\diffuse.jpg";
+    // let specular = "assets\\meshes\\specular.jpg";
 
-    let material = Material::from_file(diffuse, specular);
+    // let material = Material::from_file(diffuse, specular);
     // let mesh = GlMesh::from_pointer(
     //     GlMesh::CUBE_VERTICES.as_ptr().cast(),
     //     GlMesh::CUBE_VERTICES.len() * size_of::<f32>(),
     //     gl::STATIC_DRAW,
     //     36,
     // );
-    Model::new(meshes, material)
+    Model::new(meshes)
 }
 
 #[repr(C)]
@@ -281,16 +276,15 @@ pub struct VertexData {
     pub tex_coord: Vector2D,
 }
 
-pub struct Mesh<'a> {
+pub struct Mesh {
     vao: VertexArrayObject,
     vbo: VertexBufferObject,
     ebo: VertexBufferObject,
     triangle_count: i32,
     index_count: i32,
-    material: &'a Material,
 }
 
-impl<'a> Mesh<'a> {
+impl Mesh {
     pub const CUBE_VERTICES_AND_NORMALS: [f32; 216] = [
         -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0,
         0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5,
@@ -385,33 +379,7 @@ impl<'a> Mesh<'a> {
 
         // configure in other place
         // use ShaderInput to configure
-        gl_wrappers::configure_attribute(
-            AttributeInput::Position as u32,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            8 * size_of::<f32>(),
-            0 as *const _,
-        );
-        gl_wrappers::configure_attribute(
-            AttributeInput::Normal as u32,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            8 * size_of::<f32>(),
-            (3 * size_of::<f32>()) as *const _,
-        );
-        gl_wrappers::configure_attribute(
-            AttributeInput::TexCoord as u32,
-            2,
-            gl::FLOAT,
-            gl::FALSE,
-            8 * size_of::<f32>(),
-            (6 * size_of::<f32>()) as *const _,
-        );
-        gl_wrappers::enable_attribute(AttributeInput::Position as u32);
-        gl_wrappers::enable_attribute(AttributeInput::Normal as u32);
-        gl_wrappers::enable_attribute(AttributeInput::TexCoord as u32);
+        Mesh::configure_vertex_attributes();
 
         let triangle_count = vertex_data.len() as i32 / 3;
         let index_count = index_data.len() as i32;
@@ -423,6 +391,36 @@ impl<'a> Mesh<'a> {
             triangle_count,
             index_count,
         }
+    }
+
+    fn configure_vertex_attributes() {
+        gl_wrappers::configure_attribute(
+            AttributeLocation::Position as u32,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            8 * size_of::<f32>(),
+            0 as *const _,
+        );
+        gl_wrappers::configure_attribute(
+            AttributeLocation::Normal as u32,
+            3,
+            gl::FLOAT,
+            gl::FALSE,
+            8 * size_of::<f32>(),
+            (3 * size_of::<f32>()) as *const _,
+        );
+        gl_wrappers::configure_attribute(
+            AttributeLocation::TexCoord as u32,
+            2,
+            gl::FLOAT,
+            gl::FALSE,
+            8 * size_of::<f32>(),
+            (6 * size_of::<f32>()) as *const _,
+        );
+        gl_wrappers::enable_attribute(AttributeLocation::Position as u32);
+        gl_wrappers::enable_attribute(AttributeLocation::Normal as u32);
+        gl_wrappers::enable_attribute(AttributeLocation::TexCoord as u32);
     }
 
     pub fn bind(&self) {
@@ -448,24 +446,35 @@ impl<'a> Mesh<'a> {
             }
         }
     }
+
+    pub fn draw_elements(&self) {
+        self.bind();
+        unsafe {
+            gl::DrawElements(
+                gl::TRIANGLES,
+                self.index_count,
+                gl::UNSIGNED_INT,
+                0 as *const _,
+            );
+        }
+    }
 }
 
-pub struct Model<'a> {
-    properties: Vec<VertexInput>,
-    material_property: Vec<MaterialProperty>,
-
-    meshes: Vec<Mesh<'a>>,
-    shader: &'a ShaderProgram,
+pub struct Model {
+    meshes: Vec<Mesh>,
+    // properties: Vec<VertexInput>,
+    // material_property: Vec<MaterialProperty>,
+    // shader: &'a ShaderProgram,
 }
 
-impl<'a> Model<'a> {
+impl Model {
     pub fn new(meshes: Vec<Mesh>) -> Self {
-        todo!()
+        Self { meshes }
     }
 
-    pub fn set_shader(&mut self, shader: &ShaderProgram) {
-        self.shader = shader;
-    }
+    // pub fn set_shader(&mut self, shader: &ShaderProgram) {
+    //     self.shader = shader;
+    // }
 
     pub fn draw(&self) {
         for mesh in self.meshes.iter() {
@@ -474,7 +483,7 @@ impl<'a> Model<'a> {
     }
 }
 
-pub struct ShaderProgram {
+pub struct ShaderInput {
     shader_program: gl_wrappers::ShaderProgram,
     mvp_location: i32,
     model_location: i32,
@@ -486,7 +495,7 @@ pub struct ShaderProgram {
     specular_location: i32,
 }
 
-impl ShaderProgram {
+impl ShaderInput {
     pub fn new() -> Self {
         let shader_program = gl_wrappers::ShaderProgram::from_vert_frag_file(
             "src\\shaders\\3d-model.vert",
@@ -510,7 +519,7 @@ impl ShaderProgram {
         let specular_location =
             shader_program.get_uniform(&UniformInput::Specular.get_uniform_string());
 
-        ShaderProgram {
+        ShaderInput {
             shader_program,
             mvp_location,
             model_location,
@@ -532,7 +541,7 @@ impl ShaderProgram {
         transform: &Transform,
         model: &Model,
         viewer: &ViewObject,
-        light: &DirectionalLight,
+        light: &LightSource,
     ) {
         unsafe {
             gl::UniformMatrix4fv(
@@ -583,7 +592,7 @@ impl ShaderProgram {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub enum AttributeInput {
+pub enum AttributeLocation {
     Position = 0,
     Normal = 1,
     TexCoord = 2,
@@ -637,29 +646,21 @@ impl Material {
     }
 }
 
-pub struct Renderer {
-    programs: Vec<ShaderProgram>,
-}
-
-impl Renderer {
-    pub fn render(camera: &ViewObject, lights: &Vec<LightSource>, models: &Vec<Model>) {}
-
-    pub fn generate_shaders(camera: &ViewObject, lights: &Vec<LightSource>, models: &Vec<Model>) {}
-}
-
 enum VertexInput {
     Position,
     Normal,
     TexCoord,
 }
 
-enum LightType {
+#[derive(Clone, Copy)]
+pub enum LightType {
     Directional,
     Point,
     Spot,
 }
 
-struct LightSource {
+#[derive(Clone, Copy)]
+pub struct LightSource {
     type_: LightType,
     color: Vec3,
     position: Vec3,
@@ -671,13 +672,7 @@ struct LightSource {
     outer_cutoff: f32,
 }
 
-struct ShaderInput {
-    uniform_input: Vec<UniformInput>,
-    vertex_input: Vec<VertexInput>,
-    light_input: Vec<LightSource>,
-}
-
 struct Object<'a> {
     transform: Transform,
-    model: Option<&'a Model<'a>>,
+    model: Option<&'a Model>,
 }

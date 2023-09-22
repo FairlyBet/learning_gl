@@ -2,16 +2,16 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{
-    DirectionalLight, EngineApi, Projection, ShaderProgram, Transform, ViewObject,
-};
+use data_structures::{EngineApi, Projection, ShaderInput, Transform, ViewObject};
 use glfw::{Context, WindowEvent};
 use glm::{vec3, Vec3};
+use russimp::scene::PostProcess;
 use std::ffi::CStr;
 
 mod data_structures;
 mod gl_wrappers;
 mod initializers;
+mod renderers;
 mod updaters;
 
 fn main() {
@@ -26,15 +26,22 @@ fn main() {
     let mut camera = ViewObject::new(projection);
 
     initializers::init_rendering();
-    let program = ShaderProgram::new();
+    let program = ShaderInput::new();
     program.use_();
 
-    let model3d = data_structures::load_as_single_model("assets\\meshes\\backpack.obj");
+    let model_meshes = data_structures::load_model(
+        "assets\\meshes\\backpack.obj",
+        vec![
+            PostProcess::Triangulate,
+            PostProcess::OptimizeGraph,
+            PostProcess::OptimizeMeshes,
+        ],
+    );
     let model_transform = Transform::new();
-    let light = DirectionalLight {
-        direction: glm::normalize(&vec3(1.0, -1.0, -1.0)),
-        color: Vec3::from_element(1.0),
-    };
+    // let light = DirectionalLight {
+    //     direction: glm::normalize(&vec3(1.0, -1.0, -1.0)),
+    //     color: Vec3::from_element(1.0),
+    // };
 
     while !window.should_close() {
         let frametime = glfw.get_time() as f32;
@@ -67,9 +74,9 @@ fn main() {
         }
 
         unsafe {
-            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
-        program.draw(&model_transform, &model3d, &camera, &light);
+        // program.draw(&model_transform, &model_meshes, &camera, &light);
         window.swap_buffers();
     }
 
