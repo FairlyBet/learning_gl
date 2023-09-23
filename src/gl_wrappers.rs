@@ -1,6 +1,7 @@
 use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 use image::DynamicImage;
 use std::ffi::{c_void, CString};
+use std::ptr;
 use std::{fs::File, io::Read, path::Path};
 
 pub fn configure_attribute(
@@ -192,14 +193,14 @@ impl Shader {
     }
 
     pub fn from_source(type_: GLenum, source: &str) -> Result<Self, String> {
-        let id = Self::new(type_).ok_or_else(|| "Couldn't allocate new shader".to_string())?;
-        id.set_source(source);
-        id.compile();
-        if id.compile_success() {
-            Ok(id)
+        let shader = Self::new(type_).ok_or_else(|| "Couldn't allocate new shader".to_string())?;
+        shader.set_source(source);
+        shader.compile();
+        if shader.compile_success() {
+            Ok(shader)
         } else {
-            let out = id.info_log();
-            id.delete();
+            let out = shader.info_log();
+            shader.delete();
             Err(out)
         }
     }
@@ -270,12 +271,12 @@ impl Drop for VertexArrayObject {
     }
 }
 
-pub struct VertexBufferObject {
+pub struct BufferObject {
     id: GLuint,
     target: GLenum,
 }
 
-impl VertexBufferObject {
+impl BufferObject {
     pub fn new(target: GLenum) -> Option<Self> {
         let mut id = 0;
         unsafe {
@@ -302,12 +303,18 @@ impl VertexBufferObject {
         }
     }
 
+    pub fn bind_buffer_base(&self, index: GLuint) {
+        unsafe {
+            gl::BindBufferBase(self.target, index, self.id);
+        }
+    }
+
     fn delete(&self) {
         unsafe { gl::DeleteBuffers(1, &self.id) }
     }
 }
 
-impl Drop for VertexBufferObject {
+impl Drop for BufferObject {
     fn drop(&mut self) {
         self.delete()
     }
@@ -319,7 +326,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new_2d(texture_data: &[u8], size: (u32, u32), channel: GLenum) -> Option<Self> {
+    pub fn new_2d(texture_data: *const u8, size: (u32, u32), channel: GLenum) -> Option<Self> {
         let mut id = 0;
         let target = gl::TEXTURE_2D;
         unsafe {
@@ -334,14 +341,24 @@ impl Texture {
                 0,
                 channel,
                 gl::UNSIGNED_BYTE,
-                texture_data.as_ptr().cast(),
+                texture_data.cast(),
             );
-            gl::GenerateMipmap(target);
         }
         if id != 0 {
             Some(Self { id, target })
         } else {
             None
+        }
+    }
+
+    pub fn new() {
+        
+    }
+
+    pub fn generate_mipmaps(&self) {
+        unsafe {
+            self.bind();
+            gl::GenerateMipmap(self.target);
         }
     }
 
@@ -387,12 +404,52 @@ impl Texture {
         } else {
             channel = gl::RGB;
         }
-        Self::new_2d(bytes, size, channel)
+        Self::new_2d(bytes.as_ptr(), size, channel)
     }
 }
 
 impl Drop for Texture {
     fn drop(&mut self) {
         self.delete();
+    }
+}
+
+pub struct Framebuffer {
+    id: GLuint,
+    size: (u32, u32),
+}
+
+impl Framebuffer {
+    pub fn new(size: (u32, u32)) -> Self {
+        let mut id: GLuint = 0;
+        let color_buffer = Texture::new_2d(ptr::null(), size, gl::RGB).unwrap();
+        color_buffer.bind();
+        color_buffer.parameter(gl::TEXTURE_MIN_FILTER, gl::NEAREST);
+        color_buffer.parameter(gl::TEXTURE_MAG_FILTER, gl::NEAREST);
+        let depth_buffer = Texture::new_2d(ptr::null(), size, gl::DEPTH_ATTACHMENT); 
+        unsafe {
+            gl::GenFramebuffers(1, &mut id);
+        }
+        Self { id, size }
+    }
+
+    pub fn bind(&self) {
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, self.id);
+        }
+    }
+
+    pub fn bind_default() {
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+        }
+    }
+}
+
+impl Drop for Framebuffer {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteFramebuffers(1, &self.id);
+        }
     }
 }

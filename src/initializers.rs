@@ -47,13 +47,12 @@ fn init_gl() {
 pub fn init_rendering() {
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
+        gl::ClearColor(0.7, 0.7, 0.67, 1.0);
         // gl::Enable(gl::STENCIL_TEST);
         // gl::StencilOp(gl::KEEP, gl::KEEP, gl::REPLACE);
         // gl::StencilFunc(gl::ALWAYS, 1, 0xFF);
         // gl::StencilMask(0xFF);
-
         // gl::DepthMask(gl::FALSE);
         // gl::DepthFunc(gl::ALWAYS);
-        gl::ClearColor(0.7, 0.7, 0.67, 1.0);
     }
 }

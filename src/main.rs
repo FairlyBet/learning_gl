@@ -2,9 +2,8 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{EngineApi, Projection, ShaderInput, Transform, ViewObject};
+use data_structures::{EngineApi, LightSource, Projection, Transform, ViewObject};
 use glfw::{Context, WindowEvent};
-use glm::{vec3, Vec3};
 use russimp::scene::PostProcess;
 use std::ffi::CStr;
 
@@ -26,10 +25,8 @@ fn main() {
     let mut camera = ViewObject::new(projection);
 
     initializers::init_rendering();
-    let program = ShaderInput::new();
-    program.use_();
-
-    let model_meshes = data_structures::load_model(
+    let renderer = renderers::Renderer::new();
+    let model = data_structures::load_model(
         "assets\\meshes\\backpack.obj",
         vec![
             PostProcess::Triangulate,
@@ -38,10 +35,10 @@ fn main() {
         ],
     );
     let model_transform = Transform::new();
-    // let light = DirectionalLight {
-    //     direction: glm::normalize(&vec3(1.0, -1.0, -1.0)),
-    //     color: Vec3::from_element(1.0),
-    // };
+    let light_source = LightSource::new_directional(
+        glm::vec3(1.0, 0.4, 0.4),
+        glm::normalize(&glm::vec3(1.0, -1.0, -1.0)),
+    );
 
     while !window.should_close() {
         let frametime = glfw.get_time() as f32;
@@ -63,7 +60,7 @@ fn main() {
             match event {
                 WindowEvent::FramebufferSize(w, h) => {
                     updaters::update_viewport(w, h);
-                    camera.projection_matrix = updaters::update_perspective(w, h);
+                    camera.projection = updaters::update_perspective(w, h);
                 }
                 _ => {}
             }
@@ -76,7 +73,7 @@ fn main() {
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
-        // program.draw(&model_transform, &model_meshes, &camera, &light);
+        renderer.draw(&camera, &model_transform, &model, &light_source);
         window.swap_buffers();
     }
 

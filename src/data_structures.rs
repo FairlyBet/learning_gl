@@ -1,13 +1,13 @@
-use crate::gl_wrappers::{self, Texture, VertexArrayObject, VertexBufferObject};
+use crate::gl_wrappers::{self, Texture, VertexArrayObject, BufferObject};
 use gl::types::GLenum;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
-use glm::Vec3;
+use glm::{Vec3, Vec4};
 use nalgebra_glm::{Mat4x4, Quat};
 use russimp::{
     scene::{PostProcess, Scene},
     Vector2D, Vector3D,
 };
-use std::{f32::consts, ffi::c_void, mem::size_of, vec};
+use std::{f32::consts, ffi::c_void, mem::size_of};
 
 /* Подведем итог:
 1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения,
@@ -35,7 +35,7 @@ impl Default for GlfwConfig {
     fn default() -> Self {
         Self {
             profile: OpenGlProfileHint::Core,
-            version: (3, 3),
+            version: (4, 2),
         }
     }
 }
@@ -132,14 +132,14 @@ impl Transform {
 
 pub struct ViewObject {
     pub transform: Transform,
-    pub projection_matrix: Mat4x4,
+    pub projection: Mat4x4,
 }
 
 impl ViewObject {
     pub fn new(projection: Projection) -> ViewObject {
         ViewObject {
             transform: Transform::new(),
-            projection_matrix: projection.calculate_matrix(),
+            projection: projection.calculate_matrix(),
         }
     }
 
@@ -219,7 +219,6 @@ pub fn load_model(path: &str, post_pocess: Vec<PostProcess>) -> Model {
     let scene = Scene::from_file(path, post_pocess).unwrap();
 
     let mut meshes = Vec::<Mesh>::with_capacity(scene.meshes.len());
-
     for mesh in &scene.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
@@ -278,10 +277,10 @@ pub struct VertexData {
 
 pub struct Mesh {
     vao: VertexArrayObject,
-    vbo: VertexBufferObject,
-    ebo: VertexBufferObject,
-    triangle_count: i32,
-    index_count: i32,
+    vbo: BufferObject,
+    ebo: BufferObject,
+    pub triangle_count: i32,
+    pub index_count: i32,
 }
 
 impl Mesh {
@@ -310,11 +309,11 @@ impl Mesh {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
-        let vertex_buffer = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        let vertex_buffer = BufferObject::new(gl::ARRAY_BUFFER).unwrap();
         vertex_buffer.bind();
         vertex_buffer.buffer_data(size, data, usage);
 
-        let element_buffer = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
+        let element_buffer = BufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
 
         gl_wrappers::configure_attribute(
             0,
@@ -361,7 +360,7 @@ impl Mesh {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
-        let vertex_buffer = VertexBufferObject::new(gl::ARRAY_BUFFER).unwrap();
+        let vertex_buffer = BufferObject::new(gl::ARRAY_BUFFER).unwrap();
         vertex_buffer.bind();
         vertex_buffer.buffer_data(
             vertex_data.len() * size_of::<VertexData>(),
@@ -369,7 +368,7 @@ impl Mesh {
             usage,
         );
 
-        let element_buffer = VertexBufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
+        let element_buffer = BufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
         element_buffer.bind();
         element_buffer.buffer_data(
             index_data.len() * size_of::<u32>(),
@@ -430,41 +429,10 @@ impl Mesh {
     pub fn unbind(&self) {
         VertexArrayObject::unbind(); // antipattern
     }
-
-    pub fn draw(&self) {
-        self.bind();
-        unsafe {
-            if self.index_count > 0 {
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    self.index_count,
-                    gl::UNSIGNED_INT,
-                    0 as *const _,
-                );
-            } else {
-                gl::DrawArrays(gl::TRIANGLES, 0, self.triangle_count);
-            }
-        }
-    }
-
-    pub fn draw_elements(&self) {
-        self.bind();
-        unsafe {
-            gl::DrawElements(
-                gl::TRIANGLES,
-                self.index_count,
-                gl::UNSIGNED_INT,
-                0 as *const _,
-            );
-        }
-    }
 }
 
 pub struct Model {
     meshes: Vec<Mesh>,
-    // properties: Vec<VertexInput>,
-    // material_property: Vec<MaterialProperty>,
-    // shader: &'a ShaderProgram,
 }
 
 impl Model {
@@ -472,159 +440,123 @@ impl Model {
         Self { meshes }
     }
 
-    // pub fn set_shader(&mut self, shader: &ShaderProgram) {
-    //     self.shader = shader;
-    // }
-
-    pub fn draw(&self) {
-        for mesh in self.meshes.iter() {
-            mesh.draw();
-        }
+    pub fn get_meshes(&self) -> &Vec<Mesh> {
+        &self.meshes
     }
 }
 
-pub struct ShaderInput {
-    shader_program: gl_wrappers::ShaderProgram,
-    mvp_location: i32,
-    model_location: i32,
-    orientation_location: i32,
-    viewer_position_location: i32,
-    light_direction_location: i32,
-    light_color_location: i32,
-    diffuse_location: i32,
-    specular_location: i32,
-}
+// pub struct ShaderInput {
+//     shader_program: gl_wrappers::ShaderProgram,
+//     mvp_location: i32,
+//     model_location: i32,
+//     orientation_location: i32,
+//     viewer_position_location: i32,
+//     light_direction_location: i32,
+//     light_color_location: i32,
+//     diffuse_location: i32,
+//     specular_location: i32,
+// }
 
-impl ShaderInput {
-    pub fn new() -> Self {
-        let shader_program = gl_wrappers::ShaderProgram::from_vert_frag_file(
-            "src\\shaders\\3d-model.vert",
-            "src\\shaders\\phong-directional.frag",
-        )
-        .unwrap();
-        shader_program.use_();
+// impl ShaderInput {
+//     pub fn new() -> Self {
+//         let shader_program = gl_wrappers::ShaderProgram::from_vert_frag_file(
+//             "src\\shaders\\3d-model.vert",
+//             "src\\shaders\\phong-directional.frag",
+//         )
+//         .unwrap();
+//         shader_program.use_();
 
-        let mvp_location = shader_program.get_uniform(&UniformInput::Mvp.get_uniform_string());
-        let model_location = shader_program.get_uniform(&UniformInput::Model.get_uniform_string());
-        let orientation_location =
-            shader_program.get_uniform(&UniformInput::Orientation.get_uniform_string());
-        let viewer_position_location =
-            shader_program.get_uniform(&UniformInput::ViewerPosition.get_uniform_string());
-        let light_direction_location =
-            shader_program.get_uniform(&UniformInput::LightDirection.get_uniform_string());
-        let light_color_location =
-            shader_program.get_uniform(&UniformInput::LightColor.get_uniform_string());
-        let diffuse_location =
-            shader_program.get_uniform(&UniformInput::Diffuse.get_uniform_string());
-        let specular_location =
-            shader_program.get_uniform(&UniformInput::Specular.get_uniform_string());
+//         let mvp_location = shader_program.get_uniform(&UniformInput::Mvp.get_uniform_string());
+//         let model_location = shader_program.get_uniform(&UniformInput::Model.get_uniform_string());
+//         let orientation_location =
+//             shader_program.get_uniform(&UniformInput::Orientation.get_uniform_string());
+//         let viewer_position_location =
+//             shader_program.get_uniform(&UniformInput::ViewerPosition.get_uniform_string());
+//         let light_direction_location =
+//             shader_program.get_uniform(&UniformInput::LightDirection.get_uniform_string());
+//         let light_color_location =
+//             shader_program.get_uniform(&UniformInput::LightColor.get_uniform_string());
+//         let diffuse_location =
+//             shader_program.get_uniform(&UniformInput::Diffuse.get_uniform_string());
+//         let specular_location =
+//             shader_program.get_uniform(&UniformInput::Specular.get_uniform_string());
 
-        ShaderInput {
-            shader_program,
-            mvp_location,
-            model_location,
-            orientation_location,
-            viewer_position_location,
-            light_direction_location,
-            light_color_location,
-            diffuse_location,
-            specular_location,
-        }
-    }
+//         ShaderInput {
+//             shader_program,
+//             mvp_location,
+//             model_location,
+//             orientation_location,
+//             viewer_position_location,
+//             light_direction_location,
+//             light_color_location,
+//             diffuse_location,
+//             specular_location,
+//         }
+//     }
 
-    pub fn use_(&self) {
-        self.shader_program.use_();
-    }
+//     pub fn use_(&self) {
+//         self.shader_program.use_();
+//     }
 
-    pub fn draw(
-        &self,
-        transform: &Transform,
-        model: &Model,
-        viewer: &ViewObject,
-        light: &LightSource,
-    ) {
-        unsafe {
-            gl::UniformMatrix4fv(
-                self.mvp_location,
-                1,
-                gl::FALSE,
-                glm::value_ptr(
-                    &(viewer.projection_matrix * viewer.get_view() * transform.get_model()),
-                )
-                .as_ptr()
-                .cast(),
-            );
-            gl::UniformMatrix4fv(
-                self.model_location,
-                1,
-                gl::FALSE,
-                glm::value_ptr(&transform.get_model()).as_ptr().cast(),
-            );
-            gl::UniformMatrix4fv(
-                self.orientation_location,
-                1,
-                gl::FALSE,
-                glm::value_ptr(&glm::quat_to_mat4(&transform.orientation))
-                    .as_ptr()
-                    .cast(),
-            );
-            gl::Uniform3fv(
-                self.viewer_position_location,
-                1,
-                glm::value_ptr(&viewer.transform.position).as_ptr().cast(),
-            );
-            gl::Uniform3fv(
-                self.light_direction_location,
-                1,
-                glm::value_ptr(&light.direction).as_ptr().cast(),
-            );
-            gl::Uniform3fv(
-                self.light_color_location,
-                1,
-                glm::value_ptr(&light.color).as_ptr().cast(),
-            );
-            gl::Uniform1i(self.diffuse_location, 0);
-            gl::Uniform1i(self.specular_location, 1);
-        }
+//     pub fn draw(
+//         &self,
+//         transform: &Transform,
+//         model: &Model,
+//         viewer: &ViewObject,
+//         light: &LightSource,
+//     ) {
+//         unsafe {
+//             gl::UniformMatrix4fv(
+//                 self.mvp_location,
+//                 1,
+//                 gl::FALSE,
+//                 glm::value_ptr(
+//                     &(viewer.projection_matrix * viewer.get_view() * transform.get_model()),
+//                 )
+//                 .as_ptr()
+//                 .cast(),
+//             );
+//             gl::UniformMatrix4fv(
+//                 self.model_location,
+//                 1,
+//                 gl::FALSE,
+//                 glm::value_ptr(&transform.get_model()).as_ptr().cast(),
+//             );
+//             gl::UniformMatrix4fv(
+//                 self.orientation_location,
+//                 1,
+//                 gl::FALSE,
+//                 glm::value_ptr(&glm::quat_to_mat4(&transform.orientation))
+//                     .as_ptr()
+//                     .cast(),
+//             );
+//             gl::Uniform3fv(
+//                 self.viewer_position_location,
+//                 1,
+//                 glm::value_ptr(&viewer.transform.position).as_ptr().cast(),
+//             );
+//             gl::Uniform3fv(
+//                 self.light_direction_location,
+//                 1,
+//                 glm::value_ptr(&light.direction).as_ptr().cast(),
+//             );
+//             gl::Uniform3fv(
+//                 self.light_color_location,
+//                 1,
+//                 glm::value_ptr(&light.color).as_ptr().cast(),
+//             );
+//             gl::Uniform1i(self.diffuse_location, 0);
+//             gl::Uniform1i(self.specular_location, 1);
+//         }
 
-        model.draw();
-    }
-}
+//         model.draw();
+//     }
+// }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum AttributeLocation {
     Position = 0,
     Normal = 1,
     TexCoord = 2,
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum UniformInput {
-    Mvp,
-    Model,
-    Orientation,
-    ViewerPosition,
-    LightDirection,
-    LightColor,
-    LightPosition,
-    Diffuse,
-    Specular,
-}
-
-impl UniformInput {
-    pub fn get_uniform_string(&self) -> String {
-        match self {
-            UniformInput::Mvp => "mvp".to_string(),
-            UniformInput::Model => "model".to_string(),
-            UniformInput::Orientation => "orientation".to_string(),
-            UniformInput::ViewerPosition => "viewer_position".to_string(),
-            UniformInput::LightDirection => "light_direction".to_string(),
-            UniformInput::LightColor => "light_color".to_string(),
-            UniformInput::LightPosition => "light_position".to_string(),
-            UniformInput::Diffuse => "diffuse".to_string(),
-            UniformInput::Specular => "specular".to_string(),
-        }
-    }
 }
 
 pub struct Material {
@@ -646,33 +578,40 @@ impl Material {
     }
 }
 
-enum VertexInput {
-    Position,
-    Normal,
-    TexCoord,
-}
-
 #[derive(Clone, Copy)]
 pub enum LightType {
-    Directional,
-    Point,
-    Spot,
+    Directional = 0,
+    Point = 1,
+    Spot = 2,
 }
 
-#[derive(Clone, Copy)]
+impl Default for LightType {
+    fn default() -> Self {
+        LightType::Directional
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+#[repr(C)]
 pub struct LightSource {
-    type_: LightType,
-    color: Vec3,
-    position: Vec3,
-    direction: Vec3,
+    color: Vec4,
+    position: Vec4,
+    direction: Vec4,
     constant: f32,
     linear: f32,
     quadratic: f32,
     inner_cutoff: f32,
     outer_cutoff: f32,
+    type_: LightType,
 }
 
-struct Object<'a> {
-    transform: Transform,
-    model: Option<&'a Model>,
+impl LightSource {
+    pub fn new_directional(color: Vec3, direction: Vec3) -> Self {
+        let mut source: LightSource = Default::default();
+        
+        source.color = glm::vec3_to_vec4(&color);
+        source.direction = glm::vec3_to_vec4(&direction);
+        source.type_ = LightType::Directional;
+        source
+    }
 }
