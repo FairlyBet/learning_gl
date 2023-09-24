@@ -25,7 +25,7 @@ fn main() {
     let mut camera = ViewObject::new(projection);
 
     initializers::init_rendering();
-    let renderer = renderers::Renderer::new();
+    let renderer = renderers::ModelRenderer::new();
     let model = data_structures::load_model(
         "assets\\meshes\\backpack.obj",
         vec![

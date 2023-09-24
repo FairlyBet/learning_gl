@@ -17,9 +17,9 @@ out VertexData {
 } vertex_data;
 
 void main() {
-    vertex_data.global_position = (model * vec4(position, 1.0)).xyz;
-    vertex_data.normal = (orientation * vec4(normal, 1.0)).xyz;
+    vertex_data.global_position = (model * vec4(position, 1)).xyz;
+    vertex_data.normal = (orientation * vec4(normal, 1)).xyz;
     vertex_data.tex_coord = tex_coord;
 
-    gl_Position = mvp * vec4(position, 1.0);
+    gl_Position = mvp * vec4(position, 1);
 }

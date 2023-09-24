@@ -1,19 +1,17 @@
+use crate::{
+    data_structures::{LightSource, Model, Canvas, Transform, ViewObject},
+    gl_wrappers::{BufferObject, Shader, ShaderProgram, Texture},
+};
+use glm::{Mat4x4, Vec3, Vec4};
 use std::mem::size_of;
 
-use glm::{Mat4x4, Vec3, Vec4};
-
-use crate::{
-    data_structures::{LightSource, Model, Transform, ViewObject},
-    gl_wrappers::{BufferObject, Shader, ShaderProgram},
-};
-
-pub struct Renderer {
+pub struct ModelRenderer {
     shader_program: ShaderProgram,
     matrix_data_buffer: BufferObject,
     lighting_data_buffer: BufferObject,
 }
 
-impl Renderer {
+impl ModelRenderer {
     pub fn new() -> Self {
         let vertex_shader =
             Shader::from_file(gl::VERTEX_SHADER, "src\\shaders\\basic.vert").unwrap();
@@ -124,6 +122,37 @@ impl LightingData {
         Self {
             light_source,
             viewer_position: glm::vec3_to_vec4(&viewer_position),
+        }
+    }
+}
+
+pub struct ScreenRenderer {
+    shader_program: ShaderProgram,
+    screen_texture: i32,
+}
+
+impl ScreenRenderer {
+    pub fn new() -> Self {
+        let shader_program = ShaderProgram::from_vert_frag_file(
+            "src\\shaders\\texture-rendering.vert",
+            "src\\shaders\\texture-rendering.frag",
+        )
+        .unwrap();
+        shader_program.use_();
+        let screen_texture = shader_program.get_uniform("screen_texture");
+
+        Self {
+            shader_program,
+            screen_texture,
+        }
+    }
+
+    pub fn draw_texture(&self, canvas: &Canvas, texture: &Texture) {
+        unsafe {
+            gl::Uniform1ui(self.screen_texture, gl::TEXTURE0);
+            texture.bind();
+            self.shader_program.use_();
+            gl::DrawArrays(gl::TRIANGLES, 0, 6);
         }
     }
 }

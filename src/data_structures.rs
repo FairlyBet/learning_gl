@@ -1,4 +1,6 @@
-use crate::gl_wrappers::{self, Texture, VertexArrayObject, BufferObject};
+use crate::gl_wrappers::{
+    self, BufferObject, Framebuffer, Renderbuffer, Texture, VertexArrayObject,
+};
 use gl::types::GLenum;
 use glfw::{Action, CursorMode, Key, OpenGlProfileHint, Window, WindowMode};
 use glm::{Vec3, Vec4};
@@ -7,7 +9,7 @@ use russimp::{
     scene::{PostProcess, Scene},
     Vector2D, Vector3D,
 };
-use std::{f32::consts, ffi::c_void, mem::size_of};
+use std::{f32::consts, ffi::c_void, mem::size_of, ptr};
 
 /* Подведем итог:
 1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения,
@@ -252,7 +254,7 @@ pub fn load_model(path: &str, post_pocess: Vec<PostProcess>) -> Model {
             }
         }
 
-        let mesh = Mesh::from_vertex_data(&vertex_data, &index_data, gl::STATIC_DRAW);
+        let mesh = Mesh::from_vertex_index_data(&vertex_data, &index_data, gl::STATIC_DRAW);
         meshes.push(mesh);
     }
     // let diffuse = "assets\\meshes\\diffuse.jpg";
@@ -284,7 +286,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub const CUBE_VERTICES_AND_NORMALS: [f32; 216] = [
+    pub const CUBE_VERTICES_NORMALS: [f32; 216] = [
         -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0,
         0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5,
         -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5,
@@ -299,10 +301,11 @@ impl Mesh {
         1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0,
         1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
     ];
+    pub const QUAD_VERTICES_TEX_COORDS: [f32; 1] = [0.0];
 
     pub fn from_pointer(
-        data: *const c_void,
         size: usize,
+        data: *const c_void,
         usage: GLenum,
         triangle_count: i32,
     ) -> Self {
@@ -314,7 +317,7 @@ impl Mesh {
         vertex_buffer.buffer_data(size, data, usage);
 
         let element_buffer = BufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
-
+        // сделать шота с атрибутами
         gl_wrappers::configure_attribute(
             0,
             3,
@@ -352,7 +355,7 @@ impl Mesh {
         }
     }
 
-    pub fn from_vertex_data(
+    pub fn from_vertex_index_data(
         vertex_data: &Vec<VertexData>,
         index_data: &Vec<u32>,
         usage: GLenum,
@@ -559,18 +562,24 @@ pub enum AttributeLocation {
     TexCoord = 2,
 }
 
+pub enum AttributeInput {
+    Position = 1,
+    Normal = 2,
+    TexCoord = 4,
+}
+
 pub struct Material {
     diffuse: Texture,
     specular: Texture,
 }
 
 impl Material {
-    pub fn from_file(diffuse_path: &str, specular_path: &str) -> Self {
-        let diffuse = Texture::from_file(diffuse_path).unwrap();
-        let specular = Texture::from_file(specular_path).unwrap();
+    // pub fn from_file(diffuse_path: &str, specular_path: &str) -> Self {
+    //     let diffuse = Texture::from_file(diffuse_path).unwrap();
+    //     let specular = Texture::from_file(specular_path).unwrap();
 
-        Self { diffuse, specular }
-    }
+    //     Self { diffuse, specular }
+    // }
 
     pub fn bind(&self) {
         self.diffuse.bind_to_unit(gl::TEXTURE0);
@@ -608,10 +617,66 @@ pub struct LightSource {
 impl LightSource {
     pub fn new_directional(color: Vec3, direction: Vec3) -> Self {
         let mut source: LightSource = Default::default();
-        
+
         source.color = glm::vec3_to_vec4(&color);
         source.direction = glm::vec3_to_vec4(&direction);
         source.type_ = LightType::Directional;
         source
+    }
+}
+
+pub struct PridumatNazvanie {
+    framebuffer: Framebuffer,
+    pub color_buffer: Texture,
+    depth_stencil_buffer: Renderbuffer,
+    size: (u32, u32),
+}
+
+impl PridumatNazvanie {
+    pub fn new(size: (u32, u32)) -> Self {
+        let framebuffer = Framebuffer::new(gl::FRAMEBUFFER).unwrap();
+
+        let color_buffer = Texture::new(gl::TEXTURE_2D).unwrap();
+        color_buffer.bind();
+        color_buffer.texture_data(size, ptr::null(), gl::UNSIGNED_BYTE, gl::RGB, gl::RGB);
+
+        // color_buffer.parameter(gl::TEXTURE_MIN_FILTER, gl::NEAREST);
+        // color_buffer.parameter(gl::TEXTURE_MAG_FILTER, gl::NEAREST);
+
+        let depth_stencil_buffer = Renderbuffer::new(gl::RENDERBUFFER).unwrap();
+        depth_stencil_buffer.bind();
+        depth_stencil_buffer.buffer_storage(size, gl::DEPTH24_STENCIL8);
+
+        framebuffer.bind();
+        framebuffer.attach_texture2d(&color_buffer, gl::COLOR_ATTACHMENT0);
+        framebuffer.attach_renderbuffer(&depth_stencil_buffer, gl::DEPTH_STENCIL_ATTACHMENT);
+
+        unsafe {
+            if gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE {
+                println!("Framebuffer is completed");
+            }
+        }
+        Framebuffer::bind_default();
+
+        Self {
+            framebuffer,
+            color_buffer,
+            depth_stencil_buffer,
+            size,
+        }
+    }
+
+    pub fn bind(&self) {
+        self.framebuffer.bind();
+    }
+}
+
+pub struct Canvas {
+    render_quad: Mesh,
+}
+
+impl Canvas {
+    pub fn bind(&self) {
+        self.render_quad.bind();
     }
 }

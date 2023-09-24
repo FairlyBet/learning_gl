@@ -1,7 +1,6 @@
 use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 use image::DynamicImage;
 use std::ffi::{c_void, CString};
-use std::ptr;
 use std::{fs::File, io::Read, path::Path};
 
 pub fn configure_attribute(
@@ -38,17 +37,13 @@ impl ShaderProgram {
         }
     }
 
-    pub fn get_id(&self) -> GLuint {
-        self.id
-    }
-
     pub fn get_uniform(&self, name: &str) -> GLint {
         let c_name = CString::new(name).unwrap();
         unsafe { gl::GetUniformLocation(self.id, c_name.as_ptr().cast()) }
     }
 
     pub fn attach_shader(&self, shader: &Shader) {
-        unsafe { gl::AttachShader(self.id, shader.get_id()) };
+        unsafe { gl::AttachShader(self.id, shader.id) };
     }
 
     pub fn link(&self) {
@@ -82,10 +77,6 @@ impl ShaderProgram {
         unsafe { gl::UseProgram(self.id) };
     }
 
-    fn delete(&self) {
-        unsafe { gl::DeleteProgram(self.id) };
-    }
-
     pub fn from_vert_frag_src(vert_src: &str, frag_src: &str) -> Result<Self, String> {
         let vert = Shader::from_source(gl::VERTEX_SHADER, vert_src)
             .map_err(|e| format!("Vertex Compile Error: {}", e))?;
@@ -113,27 +104,19 @@ impl ShaderProgram {
             Ok(program)
         } else {
             let out = format!("Program Link Error: {}", program.info_log());
-            program.delete();
             Err(out)
-        }
-    }
-
-    pub fn unuse() {
-        unsafe {
-            gl::UseProgram(0);
         }
     }
 }
 
 impl Drop for ShaderProgram {
     fn drop(&mut self) {
-        ShaderProgram::unuse();
-        self.delete();
+        unsafe { gl::DeleteProgram(self.id) };
     }
 }
 
 pub struct Shader {
-    id: GLuint,
+    pub id: GLuint,
 }
 
 impl Shader {
@@ -144,10 +127,6 @@ impl Shader {
         } else {
             None
         }
-    }
-
-    pub fn get_id(&self) -> GLenum {
-        self.id
     }
 
     pub fn set_source(&self, src: &str) {
@@ -188,10 +167,6 @@ impl Shader {
         String::from_utf8_lossy(&v).into_owned()
     }
 
-    pub fn delete(&self) {
-        unsafe { gl::DeleteShader(self.id) };
-    }
-
     pub fn from_source(type_: GLenum, source: &str) -> Result<Self, String> {
         let shader = Self::new(type_).ok_or_else(|| "Couldn't allocate new shader".to_string())?;
         shader.set_source(source);
@@ -200,17 +175,16 @@ impl Shader {
             Ok(shader)
         } else {
             let out = shader.info_log();
-            shader.delete();
             Err(out)
         }
     }
 
     pub fn from_file(type_: GLenum, file_name: &str) -> Result<Self, String> {
-        let source = Shader::get_src(file_name);
+        let source = Shader::read_source(file_name);
         Shader::from_source(type_, &source)
     }
 
-    fn get_src(file_name: &str) -> String {
+    fn read_source(file_name: &str) -> String {
         let path = Path::new(file_name);
         let display = path.display();
 
@@ -229,11 +203,11 @@ impl Shader {
     }
 }
 
-impl Drop for Shader {
-    fn drop(&mut self) {
-        self.delete();
-    }
-}
+// impl Drop for Shader {
+//     fn drop(&mut self) {
+//         unsafe { gl::DeleteShader(self.id) };
+//     }
+// }
 
 pub struct VertexArrayObject {
     id: GLuint,
@@ -257,17 +231,13 @@ impl VertexArrayObject {
     pub fn unbind() {
         unsafe { gl::BindVertexArray(0) }
     }
-
-    fn delete(&self) {
-        unsafe {
-            gl::DeleteVertexArrays(1, &self.id);
-        }
-    }
 }
 
 impl Drop for VertexArrayObject {
     fn drop(&mut self) {
-        self.delete();
+        unsafe {
+            gl::DeleteVertexArrays(1, &self.id);
+        }
     }
 }
 
@@ -308,41 +278,35 @@ impl BufferObject {
             gl::BindBufferBase(self.target, index, self.id);
         }
     }
-
-    fn delete(&self) {
-        unsafe { gl::DeleteBuffers(1, &self.id) }
-    }
 }
 
 impl Drop for BufferObject {
     fn drop(&mut self) {
-        self.delete()
+        unsafe { gl::DeleteBuffers(1, &self.id) }
     }
 }
 
 pub struct Texture {
-    id: GLuint,
+    pub id: GLuint,
     target: GLenum,
 }
 
 impl Texture {
-    pub fn new_2d(texture_data: *const u8, size: (u32, u32), channel: GLenum) -> Option<Self> {
+    // pub fn from_bytes2d(size: (u32, u32), data: *const u8, format: GLenum) -> Option<Self> {
+    //     Self::new(
+    //         gl::TEXTURE_2D,
+    //         size,
+    //         data.cast(),
+    //         gl::UNSIGNED_BYTE,
+    //         format,
+    //         format as i32,
+    //     )
+    // }
+
+    pub fn new(target: GLenum) -> Option<Self> {
         let mut id = 0;
-        let target = gl::TEXTURE_2D;
         unsafe {
             gl::GenTextures(1, &mut id);
-            gl::BindTexture(target, id);
-            gl::TexImage2D(
-                target,
-                0,
-                channel as GLint,
-                size.0 as i32,
-                size.1 as i32,
-                0,
-                channel,
-                gl::UNSIGNED_BYTE,
-                texture_data.cast(),
-            );
         }
         if id != 0 {
             Some(Self { id, target })
@@ -351,13 +315,31 @@ impl Texture {
         }
     }
 
-    pub fn new() {
-        
+    pub fn texture_data(
+        &self,
+        size: (u32, u32),
+        data: *const c_void,
+        type_: GLenum,
+        format: GLenum,
+        internal_format: GLenum,
+    ) {
+        unsafe {
+            gl::TexImage2D(
+                self.target,
+                0,
+                internal_format as i32,
+                size.0 as i32,
+                size.1 as i32,
+                0,
+                format,
+                type_,
+                data,
+            );
+        }
     }
 
     pub fn generate_mipmaps(&self) {
         unsafe {
-            self.bind();
             gl::GenerateMipmap(self.target);
         }
     }
@@ -388,54 +370,66 @@ impl Texture {
         }
     }
 
-    fn delete(&self) {
-        unsafe {
-            gl::DeleteTextures(1, &self.id);
-        }
-    }
-
-    pub fn from_file(path: &str) -> Option<Self> {
-        let image = image::open(path).unwrap();
-        let bytes = image.as_bytes();
-        let size = (image.width(), image.height());
-        let channel: GLenum;
-        if let DynamicImage::ImageRgba8(_) = image {
-            channel = gl::RGBA;
-        } else {
-            channel = gl::RGB;
-        }
-        Self::new_2d(bytes.as_ptr(), size, channel)
-    }
+    // pub fn from_file(path: &str) -> Option<Self> {
+    //     let image = image::open(path).unwrap();
+    //     let bytes = image.as_bytes();
+    //     let size = (image.width(), image.height());
+    //     let channel: GLenum;
+    //     if let DynamicImage::ImageRgba8(_) = image {
+    //         channel = gl::RGBA;
+    //     } else {
+    //         channel = gl::RGB;
+    //     }
+    //     Self::from_bytes2d(size, bytes.as_ptr(), channel)
+    // }
 }
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        self.delete();
+        unsafe {
+            gl::DeleteTextures(1, &self.id);
+        }
     }
 }
 
 pub struct Framebuffer {
     id: GLuint,
-    size: (u32, u32),
+    target: GLenum,
 }
 
 impl Framebuffer {
-    pub fn new(size: (u32, u32)) -> Self {
+    pub fn new(target: GLenum) -> Option<Self> {
         let mut id: GLuint = 0;
-        let color_buffer = Texture::new_2d(ptr::null(), size, gl::RGB).unwrap();
-        color_buffer.bind();
-        color_buffer.parameter(gl::TEXTURE_MIN_FILTER, gl::NEAREST);
-        color_buffer.parameter(gl::TEXTURE_MAG_FILTER, gl::NEAREST);
-        let depth_buffer = Texture::new_2d(ptr::null(), size, gl::DEPTH_ATTACHMENT); 
         unsafe {
             gl::GenFramebuffers(1, &mut id);
         }
-        Self { id, size }
+        if id != 0 {
+            Some(Self { id, target })
+        } else {
+            None
+        }
+    }
+
+    pub fn attach_texture2d(&self, texture: &Texture, attachment: GLenum) {
+        unsafe {
+            gl::FramebufferTexture2D(self.target, attachment, texture.target, texture.id, 0);
+        }
+    }
+
+    pub fn attach_renderbuffer(&self, renderbuffer: &Renderbuffer, attachment: GLenum) {
+        unsafe {
+            gl::FramebufferRenderbuffer(
+                self.target,
+                attachment,
+                renderbuffer.target,
+                renderbuffer.id,
+            );
+        }
     }
 
     pub fn bind(&self) {
         unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, self.id);
+            gl::BindFramebuffer(self.target, self.id);
         }
     }
 
@@ -450,6 +444,45 @@ impl Drop for Framebuffer {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteFramebuffers(1, &self.id);
+        }
+    }
+}
+
+pub struct Renderbuffer {
+    id: GLuint,
+    target: GLenum,
+}
+
+impl Renderbuffer {
+    pub fn new(target: GLenum) -> Option<Self> {
+        let mut id: GLuint = 0;
+        unsafe {
+            gl::GenRenderbuffers(1, &mut id);
+        }
+        if id != 0 {
+            Some(Self { id, target })
+        } else {
+            None
+        }
+    }
+
+    pub fn bind(&self) {
+        unsafe {
+            gl::BindRenderbuffer(self.target, self.id);
+        }
+    }
+
+    pub fn buffer_storage(&self, size: (u32, u32), internal_format: GLenum) {
+        unsafe {
+            gl::RenderbufferStorage(self.target, internal_format, size.0 as i32, size.1 as i32);
+        }
+    }
+}
+
+impl Drop for Renderbuffer {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteRenderbuffers(1, &self.id);
         }
     }
 }
