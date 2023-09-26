@@ -277,6 +277,13 @@ pub struct VertexData {
     pub tex_coord: Vector2D,
 }
 
+#[derive(PartialEq)]
+pub enum VertexAttribute {
+    Position = 0,
+    Normal = 1,
+    TexCoord = 2,
+}
+
 pub struct Mesh {
     vao: VertexArrayObject,
     vbo: BufferObject,
@@ -301,90 +308,32 @@ impl Mesh {
         1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0,
         1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
     ];
-    pub const QUAD_VERTICES_TEX_COORDS: [f32; 1] = [0.0];
+    pub const QUAD_VERTICES_TEX_COORDS: [f32; 30] = [
+        -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 0.0, 0.0, 1.0, -1.0, -1.0,
+        0.0, 0.0, 0.0, 1.0, -1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
+    ];
 
-    pub fn from_pointer(
+    pub fn new(
         size: usize,
-        data: *const c_void,
+        vertex_data: *const c_void,
+        index_data: *const c_void,
+        attributes: Vec<VertexAttribute>,
         usage: GLenum,
         triangle_count: i32,
+        index_count: i32,
     ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
         let vertex_buffer = BufferObject::new(gl::ARRAY_BUFFER).unwrap();
         vertex_buffer.bind();
-        vertex_buffer.buffer_data(size, data, usage);
-
-        let element_buffer = BufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
-        // сделать шота с атрибутами
-        gl_wrappers::configure_attribute(
-            0,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            6 * size_of::<f32>(),
-            0 as *const _,
-        );
-        gl_wrappers::configure_attribute(
-            1,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            6 * size_of::<f32>(),
-            (3 * size_of::<f32>()) as *const _,
-        );
-        // gl_wrappers::configure_attribute(
-        //     2,
-        //     2,
-        //     gl::FLOAT,
-        //     gl::FALSE,
-        //     8 * size_of::<f32>(),
-        //     (6 * size_of::<f32>()) as *const _,
-        // );
-        gl_wrappers::enable_attribute(0);
-        gl_wrappers::enable_attribute(1);
-        // gl_wrappers::enable_attribute(2);
-
-        Mesh {
-            vao,
-            vbo: vertex_buffer,
-            ebo: element_buffer,
-            triangle_count,
-            index_count: 0,
-        }
-    }
-
-    pub fn from_vertex_index_data(
-        vertex_data: &Vec<VertexData>,
-        index_data: &Vec<u32>,
-        usage: GLenum,
-    ) -> Mesh {
-        let vao = VertexArrayObject::new().unwrap();
-        vao.bind();
-
-        let vertex_buffer = BufferObject::new(gl::ARRAY_BUFFER).unwrap();
-        vertex_buffer.bind();
-        vertex_buffer.buffer_data(
-            vertex_data.len() * size_of::<VertexData>(),
-            vertex_data.as_ptr().cast(),
-            usage,
-        );
+        vertex_buffer.buffer_data(size, vertex_data, usage);
 
         let element_buffer = BufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
         element_buffer.bind();
-        element_buffer.buffer_data(
-            index_data.len() * size_of::<u32>(),
-            index_data.as_ptr().cast(),
-            usage,
-        );
+        element_buffer.buffer_data(index_count as usize * size_of::<u32>(), index_data, usage);
 
-        // configure in other place
-        // use ShaderInput to configure
-        Mesh::configure_vertex_attributes();
-
-        let triangle_count = vertex_data.len() as i32 / 3;
-        let index_count = index_data.len() as i32;
+        Mesh::configure_vertex_attributes(attributes);
 
         Mesh {
             vao,
@@ -395,34 +344,86 @@ impl Mesh {
         }
     }
 
-    fn configure_vertex_attributes() {
-        gl_wrappers::configure_attribute(
-            AttributeLocation::Position as u32,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            8 * size_of::<f32>(),
-            0 as *const _,
-        );
-        gl_wrappers::configure_attribute(
-            AttributeLocation::Normal as u32,
-            3,
-            gl::FLOAT,
-            gl::FALSE,
-            8 * size_of::<f32>(),
-            (3 * size_of::<f32>()) as *const _,
-        );
-        gl_wrappers::configure_attribute(
-            AttributeLocation::TexCoord as u32,
-            2,
-            gl::FLOAT,
-            gl::FALSE,
-            8 * size_of::<f32>(),
-            (6 * size_of::<f32>()) as *const _,
-        );
-        gl_wrappers::enable_attribute(AttributeLocation::Position as u32);
-        gl_wrappers::enable_attribute(AttributeLocation::Normal as u32);
-        gl_wrappers::enable_attribute(AttributeLocation::TexCoord as u32);
+    pub fn from_vertex_index_data(
+        vertex_data: &Vec<VertexData>,
+        index_data: &Vec<u32>,
+        usage: GLenum,
+    ) -> Mesh {
+        let attributes = vec![
+            VertexAttribute::Position,
+            VertexAttribute::Normal,
+            VertexAttribute::TexCoord,
+        ];
+        let triangle_count = vertex_data.len() as i32 / 3;
+        let index_count = index_data.len() as i32;
+        Mesh::new(
+            vertex_data.len() * size_of::<VertexData>(),
+            vertex_data.as_ptr().cast(),
+            index_data.as_ptr().cast(),
+            attributes,
+            usage,
+            triangle_count,
+            index_count,
+        )
+    }
+
+    fn configure_vertex_attributes(attributes: Vec<VertexAttribute>) {
+        let mut stride = 0;
+
+        let position_ptr = 0;
+        let mut normal_ptr = 0;
+        let mut tex_coord_ptr = 0;
+
+        if attributes.contains(&VertexAttribute::Position) {
+            stride += 3;
+            normal_ptr += 3;
+            tex_coord_ptr += 3;
+        }
+        if attributes.contains(&VertexAttribute::Normal) {
+            stride += 3;
+            tex_coord_ptr += 3;
+        }
+        if attributes.contains(&VertexAttribute::TexCoord) {
+            stride += 2;
+        }
+
+        stride *= size_of::<f32>();
+        normal_ptr *= size_of::<f32>();
+        tex_coord_ptr *= size_of::<f32>();
+
+        if attributes.contains(&VertexAttribute::Position) {
+            gl_wrappers::configure_attribute(
+                VertexAttribute::Position as u32,
+                3,
+                gl::FLOAT,
+                gl::FALSE,
+                stride,
+                position_ptr as *const _,
+            );
+            gl_wrappers::enable_attribute(VertexAttribute::Position as u32);
+        }
+        if attributes.contains(&VertexAttribute::Normal) {
+            gl_wrappers::configure_attribute(
+                VertexAttribute::Normal as u32,
+                3,
+                gl::FLOAT,
+                gl::FALSE,
+                stride,
+                normal_ptr as *const _,
+            );
+            gl_wrappers::enable_attribute(VertexAttribute::Normal as u32);
+        }
+        if attributes.contains(&VertexAttribute::TexCoord) {
+            gl_wrappers::configure_attribute(
+                VertexAttribute::TexCoord as u32,
+                2,
+                gl::FLOAT,
+                gl::FALSE,
+                stride,
+                tex_coord_ptr as *const _,
+            );
+            gl_wrappers::enable_attribute(VertexAttribute::TexCoord as u32);
+        }
     }
 
     pub fn bind(&self) {
@@ -446,126 +447,6 @@ impl Model {
     pub fn get_meshes(&self) -> &Vec<Mesh> {
         &self.meshes
     }
-}
-
-// pub struct ShaderInput {
-//     shader_program: gl_wrappers::ShaderProgram,
-//     mvp_location: i32,
-//     model_location: i32,
-//     orientation_location: i32,
-//     viewer_position_location: i32,
-//     light_direction_location: i32,
-//     light_color_location: i32,
-//     diffuse_location: i32,
-//     specular_location: i32,
-// }
-
-// impl ShaderInput {
-//     pub fn new() -> Self {
-//         let shader_program = gl_wrappers::ShaderProgram::from_vert_frag_file(
-//             "src\\shaders\\3d-model.vert",
-//             "src\\shaders\\phong-directional.frag",
-//         )
-//         .unwrap();
-//         shader_program.use_();
-
-//         let mvp_location = shader_program.get_uniform(&UniformInput::Mvp.get_uniform_string());
-//         let model_location = shader_program.get_uniform(&UniformInput::Model.get_uniform_string());
-//         let orientation_location =
-//             shader_program.get_uniform(&UniformInput::Orientation.get_uniform_string());
-//         let viewer_position_location =
-//             shader_program.get_uniform(&UniformInput::ViewerPosition.get_uniform_string());
-//         let light_direction_location =
-//             shader_program.get_uniform(&UniformInput::LightDirection.get_uniform_string());
-//         let light_color_location =
-//             shader_program.get_uniform(&UniformInput::LightColor.get_uniform_string());
-//         let diffuse_location =
-//             shader_program.get_uniform(&UniformInput::Diffuse.get_uniform_string());
-//         let specular_location =
-//             shader_program.get_uniform(&UniformInput::Specular.get_uniform_string());
-
-//         ShaderInput {
-//             shader_program,
-//             mvp_location,
-//             model_location,
-//             orientation_location,
-//             viewer_position_location,
-//             light_direction_location,
-//             light_color_location,
-//             diffuse_location,
-//             specular_location,
-//         }
-//     }
-
-//     pub fn use_(&self) {
-//         self.shader_program.use_();
-//     }
-
-//     pub fn draw(
-//         &self,
-//         transform: &Transform,
-//         model: &Model,
-//         viewer: &ViewObject,
-//         light: &LightSource,
-//     ) {
-//         unsafe {
-//             gl::UniformMatrix4fv(
-//                 self.mvp_location,
-//                 1,
-//                 gl::FALSE,
-//                 glm::value_ptr(
-//                     &(viewer.projection_matrix * viewer.get_view() * transform.get_model()),
-//                 )
-//                 .as_ptr()
-//                 .cast(),
-//             );
-//             gl::UniformMatrix4fv(
-//                 self.model_location,
-//                 1,
-//                 gl::FALSE,
-//                 glm::value_ptr(&transform.get_model()).as_ptr().cast(),
-//             );
-//             gl::UniformMatrix4fv(
-//                 self.orientation_location,
-//                 1,
-//                 gl::FALSE,
-//                 glm::value_ptr(&glm::quat_to_mat4(&transform.orientation))
-//                     .as_ptr()
-//                     .cast(),
-//             );
-//             gl::Uniform3fv(
-//                 self.viewer_position_location,
-//                 1,
-//                 glm::value_ptr(&viewer.transform.position).as_ptr().cast(),
-//             );
-//             gl::Uniform3fv(
-//                 self.light_direction_location,
-//                 1,
-//                 glm::value_ptr(&light.direction).as_ptr().cast(),
-//             );
-//             gl::Uniform3fv(
-//                 self.light_color_location,
-//                 1,
-//                 glm::value_ptr(&light.color).as_ptr().cast(),
-//             );
-//             gl::Uniform1i(self.diffuse_location, 0);
-//             gl::Uniform1i(self.specular_location, 1);
-//         }
-
-//         model.draw();
-//     }
-// }
-
-pub enum AttributeLocation {
-    Position = 0,
-    Normal = 1,
-    TexCoord = 2,
-}
-
-pub enum AttributeInput {
-    Position = 1,
-    Normal = 2,
-    TexCoord = 4,
 }
 
 pub struct Material {
@@ -625,23 +506,22 @@ impl LightSource {
     }
 }
 
-pub struct PridumatNazvanie {
+pub struct ScreenBuffer {
     framebuffer: Framebuffer,
     pub color_buffer: Texture,
     depth_stencil_buffer: Renderbuffer,
-    size: (u32, u32),
+    pub size: (i32, i32),
 }
 
-impl PridumatNazvanie {
-    pub fn new(size: (u32, u32)) -> Self {
+impl ScreenBuffer {
+    pub fn new(size: (i32, i32), mag: GLenum, min: GLenum) -> Self {
         let framebuffer = Framebuffer::new(gl::FRAMEBUFFER).unwrap();
 
         let color_buffer = Texture::new(gl::TEXTURE_2D).unwrap();
         color_buffer.bind();
         color_buffer.texture_data(size, ptr::null(), gl::UNSIGNED_BYTE, gl::RGB, gl::RGB);
-
-        // color_buffer.parameter(gl::TEXTURE_MIN_FILTER, gl::NEAREST);
-        // color_buffer.parameter(gl::TEXTURE_MAG_FILTER, gl::NEAREST);
+        color_buffer.parameter(gl::TEXTURE_MIN_FILTER, min);
+        color_buffer.parameter(gl::TEXTURE_MAG_FILTER, mag);
 
         let depth_stencil_buffer = Renderbuffer::new(gl::RENDERBUFFER).unwrap();
         depth_stencil_buffer.bind();
@@ -651,11 +531,6 @@ impl PridumatNazvanie {
         framebuffer.attach_texture2d(&color_buffer, gl::COLOR_ATTACHMENT0);
         framebuffer.attach_renderbuffer(&depth_stencil_buffer, gl::DEPTH_STENCIL_ATTACHMENT);
 
-        unsafe {
-            if gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE {
-                println!("Framebuffer is completed");
-            }
-        }
         Framebuffer::bind_default();
 
         Self {
@@ -668,14 +543,35 @@ impl PridumatNazvanie {
 
     pub fn bind(&self) {
         self.framebuffer.bind();
+        unsafe { gl::Viewport(0, 0, self.size.0, self.size.1) }
+    }
+
+    pub fn bind_default(size: (i32, i32)) {
+        Framebuffer::bind_default();
+        unsafe {
+            gl::Viewport(0, 0, size.0, size.1);
+        }
     }
 }
 
 pub struct Canvas {
-    render_quad: Mesh,
+    pub render_quad: Mesh,
 }
 
 impl Canvas {
+    pub fn new() -> Self {
+        let quad = Mesh::new(
+            Mesh::QUAD_VERTICES_TEX_COORDS.len() * size_of::<f32>(),
+            Mesh::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
+            ptr::null() as *const c_void,
+            vec![VertexAttribute::Position, VertexAttribute::TexCoord],
+            gl::STATIC_DRAW,
+            6,
+            0,
+        );
+        Self { render_quad: quad }
+    }
+
     pub fn bind(&self) {
         self.render_quad.bind();
     }

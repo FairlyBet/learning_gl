@@ -9,7 +9,7 @@ struct LightSource {
     float quadiratic;
     float inner_cuttoff;
     float outer_cuttoff;
-    int type; // type 0 - Directional, type 1 - Point, type 2 - Spot
+    int type;
 };
 
 in VertexData {
@@ -19,14 +19,13 @@ in VertexData {
 } vertex_data;
 
 vec3 compute_directional_light(LightSource ligth_source, vec3 viewer_position) {
-    float ambient_intensity = 0.25;
+    float ambient_intensity = 0.3;
     float diffuse_intensity = max(dot(vertex_data.normal, -ligth_source.direction), 0);
 
     vec3 viewer_direction = normalize(viewer_position - vertex_data.global_position);
     vec3 reflect_direction = reflect(ligth_source.direction, vertex_data.normal);
-    float specular_intensity = max(dot(viewer_direction, reflect_direction), 0);
-    specular_intensity = pow(specular_intensity, 8);
+    // float specular_intensity = max(dot(viewer_direction, reflect_direction), 0);
+    // specular_intensity = pow(specular_intensity, 8);
 
-    return (ambient_intensity + diffuse_intensity + specular_intensity) * ligth_source.color;
-    // return vec3(0);
+    return (ambient_intensity + diffuse_intensity) * ligth_source.color;
 }

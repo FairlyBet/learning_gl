@@ -1,5 +1,5 @@
-use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
-use image::DynamicImage;
+use gl::types::{GLboolean, GLenum, GLint, GLintptr, GLsizei, GLuint};
+// use image::DynamicImage;
 use std::ffi::{c_void, CString};
 use std::{fs::File, io::Read, path::Path};
 
@@ -273,6 +273,12 @@ impl BufferObject {
         }
     }
 
+    pub fn buffer_subdata(&self, size: usize, data: *const c_void, offset: u32) {
+        unsafe {
+            gl::BufferSubData(self.target, offset as isize, size as isize, data);
+        }
+    }
+
     pub fn bind_buffer_base(&self, index: GLuint) {
         unsafe {
             gl::BindBufferBase(self.target, index, self.id);
@@ -317,7 +323,7 @@ impl Texture {
 
     pub fn texture_data(
         &self,
-        size: (u32, u32),
+        size: (i32, i32),
         data: *const c_void,
         type_: GLenum,
         format: GLenum,
@@ -328,8 +334,8 @@ impl Texture {
                 self.target,
                 0,
                 internal_format as i32,
-                size.0 as i32,
-                size.1 as i32,
+                size.0,
+                size.1,
                 0,
                 format,
                 type_,
@@ -472,9 +478,9 @@ impl Renderbuffer {
         }
     }
 
-    pub fn buffer_storage(&self, size: (u32, u32), internal_format: GLenum) {
+    pub fn buffer_storage(&self, size: (i32, i32), internal_format: GLenum) {
         unsafe {
-            gl::RenderbufferStorage(self.target, internal_format, size.0 as i32, size.1 as i32);
+            gl::RenderbufferStorage(self.target, internal_format, size.0, size.1);
         }
     }
 }

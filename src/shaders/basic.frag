@@ -24,11 +24,13 @@ in VertexData {
 } vertex_data;
 
 vec3 compute_directional_light(LightSource ligth_source, vec3 viewer_position);
+vec3 color_scale(vec3 frag_color);
 
 void main() {
     vec3 frag_color = vec3(0);
     if (light_souce.type == 0) {
         frag_color = compute_directional_light(light_souce, viewer_position);
     }
+    frag_color = color_scale(frag_color);
     gl_FragColor = vec4(frag_color, 0);
 }

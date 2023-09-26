@@ -9,5 +9,5 @@ out VertexData {
 
 void main() {
     vertex_data.tex_coord = tex_coord;
-    gl_Position = vec4(position, 0);
+    gl_Position = vec4(position, 1.0);
 }

@@ -2,8 +2,11 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{EngineApi, LightSource, Projection, Transform, ViewObject};
+use data_structures::{
+    Canvas, EngineApi, LightSource, Projection, ScreenBuffer, Transform, ViewObject,
+};
 use glfw::{Context, WindowEvent};
+use renderers::{ModelRenderer, ScreenRenderer};
 use russimp::scene::PostProcess;
 use std::ffi::CStr;
 
@@ -18,14 +21,14 @@ fn main() {
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
 
     window.set_cursor_mode(glfw::CursorMode::Disabled);
-    window.set_raw_mouse_motion(true);
+    // window.set_raw_mouse_motion(true);
 
     let projection =
         Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
     let mut camera = ViewObject::new(projection);
 
     initializers::init_rendering();
-    let renderer = renderers::ModelRenderer::new();
+    let model_renderer = ModelRenderer::new();
     let model = data_structures::load_model(
         "assets\\meshes\\backpack.obj",
         vec![
@@ -36,10 +39,21 @@ fn main() {
     );
     let model_transform = Transform::new();
     let light_source = LightSource::new_directional(
-        glm::vec3(1.0, 0.4, 0.4),
+        glm::vec3(0.5, 0.5, 0.5),
         glm::normalize(&glm::vec3(1.0, -1.0, -1.0)),
     );
+    let mut screen_buffer = ScreenBuffer::new(
+        (
+            window.get_framebuffer_size().0 / 2,
+            window.get_framebuffer_size().1 / 2,
+        ),
+        gl::NEAREST,
+        gl::NEAREST,
+    );
+    screen_buffer.color_buffer.bind();
 
+    let canvas = Canvas::new();
+    let screen_renderer = ScreenRenderer::new();
     while !window.should_close() {
         let frametime = glfw.get_time() as f32;
         glfw.set_time(0.0);
@@ -59,28 +73,32 @@ fn main() {
         for (_, event) in glfw::flush_messages(&receiver) {
             match event {
                 WindowEvent::FramebufferSize(w, h) => {
-                    updaters::update_viewport(w, h);
                     camera.projection = updaters::update_perspective(w, h);
+                    screen_buffer = ScreenBuffer::new((w / 2, h / 2), gl::NEAREST, gl::NEAREST);
                 }
                 _ => {}
             }
         }
 
-        if api.get_should_close() {
-            window.set_should_close(true);
-        }
-
+        screen_buffer.bind();
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
-        renderer.draw(&camera, &model_transform, &model, &light_source);
+        model_renderer.draw(&camera, &model_transform, &model, &light_source);
+
+        ScreenBuffer::bind_default(window.get_framebuffer_size());
+        unsafe {
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        }
+        screen_renderer.draw_texture(&canvas, &screen_buffer.color_buffer);
+
         window.swap_buffers();
     }
 
     gl_loader::end_gl();
 }
 
-fn get_aspect(framebuffer_size: (i32, i32)) -> f32 {
+pub fn get_aspect(framebuffer_size: (i32, i32)) -> f32 {
     framebuffer_size.0 as f32 / framebuffer_size.1 as f32
 }
 

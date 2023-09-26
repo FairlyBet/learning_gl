@@ -1,9 +1,9 @@
 use crate::{
-    data_structures::{LightSource, Model, Canvas, Transform, ViewObject},
+    data_structures::{Canvas, LightSource, Model, Transform, ViewObject},
     gl_wrappers::{BufferObject, Shader, ShaderProgram, Texture},
 };
 use glm::{Mat4x4, Vec3, Vec4};
-use std::mem::size_of;
+use std::{ffi::c_void, mem::size_of, ptr};
 
 pub struct ModelRenderer {
     shader_program: ShaderProgram,
@@ -17,20 +17,32 @@ impl ModelRenderer {
             Shader::from_file(gl::VERTEX_SHADER, "src\\shaders\\basic.vert").unwrap();
         let fragment_shader =
             Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\basic.frag").unwrap();
-        let lighting_shader = Shader::from_file(
-            gl::FRAGMENT_SHADER,
-            "src\\shaders\\directional-monocolor.frag",
-        )
-        .unwrap();
+        let lighting_shader =
+            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\directional-light.frag").unwrap();
+        let color_scale_shader =
+            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\color-scale.frag").unwrap();
         let shader_program = ShaderProgram::new().unwrap();
         shader_program.attach_shader(&vertex_shader);
         shader_program.attach_shader(&fragment_shader);
         shader_program.attach_shader(&lighting_shader);
+        shader_program.attach_shader(&color_scale_shader);
         shader_program.link();
         // println!("{}", shader_program.link_success());
 
         let matrix_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
+        matrix_data_buffer.bind();
+        matrix_data_buffer.buffer_data(
+            size_of::<MatrixData>(),
+            ptr::null() as *const c_void,
+            gl::DYNAMIC_DRAW,
+        );
         let lighting_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
+        lighting_data_buffer.bind();
+        lighting_data_buffer.buffer_data(
+            size_of::<LightingData>(),
+            ptr::null() as *const c_void,
+            gl::DYNAMIC_DRAW,
+        );
         matrix_data_buffer.bind_buffer_base(UniformBufferBinding::MatrixData as u32);
         lighting_data_buffer.bind_buffer_base(UniformBufferBinding::LightingData as u32);
 
@@ -58,34 +70,37 @@ impl ModelRenderer {
         let lighting_data = LightingData::new(*light_source, camera.transform.position);
 
         self.matrix_data_buffer.bind();
-        self.matrix_data_buffer.buffer_data(
+        self.matrix_data_buffer.buffer_subdata(
             size_of::<MatrixData>(),
             (&matrix_data as *const MatrixData).cast(),
-            gl::STATIC_DRAW,
+            0,
         );
+
         self.lighting_data_buffer.bind();
-        self.lighting_data_buffer.buffer_data(
+        self.lighting_data_buffer.buffer_subdata(
             size_of::<LightingData>(),
             (&lighting_data as *const LightingData).cast(),
-            gl::STATIC_DRAW,
+            0,
         );
 
         for mesh in model.get_meshes() {
             mesh.bind();
-            Self::draw_elements(mesh.index_count);
+            unsafe {
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    mesh.index_count,
+                    gl::UNSIGNED_INT,
+                    0 as *const _,
+                );
+            }
         }
     }
 
-    fn draw_arrays(triangle_count: i32) {
-        unsafe {
-            gl::DrawArrays(gl::TRIANGLES, 0, triangle_count);
-        }
-    }
-
-    fn draw_elements(index_count: i32) {
-        unsafe {
-            gl::DrawElements(gl::TRIANGLES, index_count, gl::UNSIGNED_INT, 0 as *const _);
-        }
+    fn draw_arrays() {
+        todo!();
+        // unsafe {
+        //     gl::DrawArrays(gl::TRIANGLES, 0, triangle_count);
+        // }
     }
 }
 
@@ -128,7 +143,6 @@ impl LightingData {
 
 pub struct ScreenRenderer {
     shader_program: ShaderProgram,
-    screen_texture: i32,
 }
 
 impl ScreenRenderer {
@@ -138,21 +152,15 @@ impl ScreenRenderer {
             "src\\shaders\\texture-rendering.frag",
         )
         .unwrap();
-        shader_program.use_();
-        let screen_texture = shader_program.get_uniform("screen_texture");
-
-        Self {
-            shader_program,
-            screen_texture,
-        }
+        Self { shader_program }
     }
 
     pub fn draw_texture(&self, canvas: &Canvas, texture: &Texture) {
         unsafe {
-            gl::Uniform1ui(self.screen_texture, gl::TEXTURE0);
             texture.bind();
+            canvas.bind();
             self.shader_program.use_();
-            gl::DrawArrays(gl::TRIANGLES, 0, 6);
+            gl::DrawArrays(gl::TRIANGLES, 0, canvas.render_quad.triangle_count);
         }
     }
 }
