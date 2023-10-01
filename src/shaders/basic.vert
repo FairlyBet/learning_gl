@@ -11,15 +11,15 @@ layout (std140, binding = 0) uniform MatrixData {
 };
 
 out VertexData {
-    vec3 global_position;
+    vec3 position;
     vec3 normal;
     vec2 tex_coord;
-} vertex_data;
+} vertex;
 
 void main() {
-    vertex_data.global_position = (model * vec4(position, 1)).xyz;
-    vertex_data.normal = (orientation * vec4(normal, 1)).xyz;
-    vertex_data.tex_coord = tex_coord;
+    vertex.position = (model * vec4(position, 1)).xyz;
+    vertex.normal = (orientation * vec4(normal, 1)).xyz;
+    vertex.tex_coord = tex_coord;
 
     gl_Position = mvp * vec4(position, 1);
 }

@@ -6,12 +6,6 @@ use glfw::{Action, Key};
 use glm::Mat4;
 use nalgebra_glm::{vec3, Vec3};
 
-pub fn update_viewport(w: i32, h: i32) {
-    unsafe {
-        gl::Viewport(0, 0, w, h);
-    }
-}
-
 pub fn update_perspective(w: i32, h: i32) -> Mat4 {
     let aspect = get_aspect((w, h));
     Projection::Perspective(aspect, 45.0, 0.1, 100.0).calculate_matrix()
@@ -27,7 +21,10 @@ pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
     let global_rotation = vec3(0.0, -x, 0.0) * sensitivity;
 
     let mut delta = Vec3::zeros();
-    let velocity = 4.0;
+    let mut velocity = 4.0;
+    if let Action::Press | Action::Repeat = api.get_key(Key::LeftShift) {
+        velocity *= 10.0;
+    }
     if let Action::Press | Action::Repeat = api.get_key(Key::W) {
         delta.z -= 1.0;
     }
@@ -40,6 +37,7 @@ pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
     if let Action::Press | Action::Repeat = api.get_key(Key::D) {
         delta.x += 1.0;
     }
+
     if delta.magnitude() > 0.0 {
         delta = glm::normalize(&delta); // returning nan
     }

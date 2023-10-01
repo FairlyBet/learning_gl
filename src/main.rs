@@ -38,10 +38,24 @@ fn main() {
         ],
     );
     let model_transform = Transform::new();
-    let light_source = LightSource::new_directional(
-        glm::vec3(0.5, 0.5, 0.5),
-        glm::normalize(&glm::vec3(1.0, -1.0, -1.0)),
+    // model_transform.set_rotation(&glm::vec3(-90.0, -90.0, 0.0));
+    let light_source = LightSource::new_spot(
+        glm::vec3(0.9, 0.9, 0.9),
+        glm::vec3(0.0, 0.0, 1.0),
+        glm::vec3(0.0, 0.0, -1.0),
+        1.0,
+        0.7,
+        0.017,
+        15.0,
+        45.0,
     );
+    // LightSource::new_point(
+    //     glm::vec3(0.9, 0.9, 0.9),
+    //     glm::vec3(1.0, 2.0, 1.0),
+    //     1.0,
+    //     0.07,
+    //     0.017,
+    // );
     let mut screen_buffer = ScreenBuffer::new(
         (
             window.get_framebuffer_size().0 / 2,

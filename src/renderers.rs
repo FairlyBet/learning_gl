@@ -18,16 +18,16 @@ impl ModelRenderer {
         let fragment_shader =
             Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\basic.frag").unwrap();
         let lighting_shader =
-            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\directional-light.frag").unwrap();
-        let color_scale_shader =
-            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\color-scale.frag").unwrap();
+            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\lighting.frag").unwrap();
+        let color_grade_shader =
+            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\color-grade.frag").unwrap();
         let shader_program = ShaderProgram::new().unwrap();
         shader_program.attach_shader(&vertex_shader);
         shader_program.attach_shader(&fragment_shader);
         shader_program.attach_shader(&lighting_shader);
-        shader_program.attach_shader(&color_scale_shader);
+        shader_program.attach_shader(&color_grade_shader);
         shader_program.link();
-        // println!("{}", shader_program.link_success());
+        println!("{}", shader_program.link_success());
 
         let matrix_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
         matrix_data_buffer.bind();
@@ -96,7 +96,7 @@ impl ModelRenderer {
         }
     }
 
-    fn draw_arrays() {
+    pub fn draw_arrays() {
         todo!();
         // unsafe {
         //     gl::DrawArrays(gl::TRIANGLES, 0, triangle_count);
@@ -129,14 +129,14 @@ impl MatrixData {
 #[repr(C)]
 pub struct LightingData {
     light_source: LightSource,
-    viewer_position: Vec4,
+    viewer_position: Vec3,
 }
 
 impl LightingData {
     pub fn new(light_source: LightSource, viewer_position: Vec3) -> Self {
         Self {
             light_source,
-            viewer_position: glm::vec3_to_vec4(&viewer_position),
+            viewer_position,
         }
     }
 }
