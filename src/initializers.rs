@@ -1,4 +1,4 @@
-use crate::data_structures::{GlfwConfig, WindowConfig};
+use crate::temp::{GlfwConfig, WindowConfig};
 use glfw::{Context, Glfw, SwapInterval, Window, WindowEvent, WindowHint};
 use std::sync::mpsc::Receiver;
 

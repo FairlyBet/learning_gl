@@ -2,18 +2,21 @@
 
 extern crate nalgebra_glm as glm;
 
-use data_structures::{
-    Canvas, EngineApi, LightSource, Projection, ScreenBuffer, Transform, ViewObject,
-};
 use glfw::{Context, WindowEvent};
-use renderers::{ModelRenderer, ScreenRenderer};
+use lighting::LightSource;
+use linear::{Projection, Transform, ViewObject};
+use rendering::{Canvas, Framebuffer, ModelRenderer, ScreenRenderer};
 use russimp::scene::PostProcess;
 use std::ffi::CStr;
+use temp::EngineApi;
 
-mod data_structures;
+mod data_3d;
 mod gl_wrappers;
 mod initializers;
-mod renderers;
+mod lighting;
+mod linear;
+mod rendering;
+mod temp;
 mod updaters;
 
 fn main() {
@@ -21,15 +24,14 @@ fn main() {
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
 
     window.set_cursor_mode(glfw::CursorMode::Disabled);
-    // window.set_raw_mouse_motion(true);
 
     let projection =
-        Projection::Perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
+        Projection::new_perspective(get_aspect(window.get_framebuffer_size()), 45.0, 0.1, 100.0);
     let mut camera = ViewObject::new(projection);
 
     initializers::init_rendering();
     let model_renderer = ModelRenderer::new();
-    let model = data_structures::load_model(
+    let model = data_3d::load_model(
         "assets\\meshes\\backpack.obj",
         vec![
             PostProcess::Triangulate,
@@ -37,29 +39,24 @@ fn main() {
             PostProcess::OptimizeMeshes,
         ],
     );
-    let model_transform = Transform::new();
-    // model_transform.set_rotation(&glm::vec3(-90.0, -90.0, 0.0));
-    let light_source = LightSource::new_spot(
-        glm::vec3(0.9, 0.9, 0.9),
-        glm::vec3(0.0, 0.0, 1.0),
-        glm::vec3(0.0, 0.0, -1.0),
-        1.0,
-        0.7,
-        0.017,
-        15.0,
-        45.0,
+    let mut model_transform = Transform::new();
+
+    let light_source = LightSource::new_directional(
+        glm::Vec3::from_element(0.7),
+        glm::normalize(&glm::vec3(-1.0, -1.0, -1.0)),
     );
     // LightSource::new_point(
-    //     glm::vec3(0.9, 0.9, 0.9),
-    //     glm::vec3(1.0, 2.0, 1.0),
+    //     glm::Vec3::from_element(0.7),
+    //     glm::vec3(1.0, 0.0, 1.0),
     //     1.0,
     //     0.07,
     //     0.017,
     // );
-    let mut screen_buffer = ScreenBuffer::new(
+
+    let mut screen_buffer = Framebuffer::new(
         (
-            window.get_framebuffer_size().0 / 2,
-            window.get_framebuffer_size().1 / 2,
+            window.get_framebuffer_size().0,
+            window.get_framebuffer_size().1,
         ),
         gl::NEAREST,
         gl::NEAREST,
@@ -82,13 +79,13 @@ fn main() {
         let api = EngineApi::new(&window, frametime, cursor_offset);
 
         updaters::default_camera_controller(&mut camera, &api);
-        // model_transform.rotate(&(vec3(0.0, 60.0, 0.0) * frametime));
+        model_transform.rotate(&(glm::vec3(0.0, 30.0, 0.0) * frametime));
 
         for (_, event) in glfw::flush_messages(&receiver) {
             match event {
                 WindowEvent::FramebufferSize(w, h) => {
                     camera.projection = updaters::update_perspective(w, h);
-                    screen_buffer = ScreenBuffer::new((w / 2, h / 2), gl::NEAREST, gl::NEAREST);
+                    screen_buffer = Framebuffer::new((w, h), gl::NEAREST, gl::NEAREST);
                 }
                 _ => {}
             }
@@ -100,7 +97,7 @@ fn main() {
         }
         model_renderer.draw(&camera, &model_transform, &model, &light_source);
 
-        ScreenBuffer::bind_default(window.get_framebuffer_size());
+        Framebuffer::bind_default(window.get_framebuffer_size());
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }

@@ -1,4 +1,4 @@
-use gl::types::{GLboolean, GLenum, GLint, GLintptr, GLsizei, GLuint};
+use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 // use image::DynamicImage;
 use std::ffi::{c_void, CString};
 use std::{fs::File, io::Read, path::Path};

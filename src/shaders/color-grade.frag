@@ -1,7 +1,9 @@
-#version 420 core 
+#version 420 core
+
+const float GRADE = 10;
 
 void color_grade() {
-    ivec3 icolor = ivec3(gl_FragColor.rgb * 100);
-    icolor /= 10;
+    ivec3 icolor = ivec3(gl_FragColor.rgb * GRADE * 10);
+    icolor /= int(GRADE);
     gl_FragColor = vec4(vec3(icolor) / 10, 1);
 }
