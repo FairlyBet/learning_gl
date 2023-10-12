@@ -1,18 +1,8 @@
-use crate::{
-    get_aspect,
-    linear::{Projection, ViewObject},
-    temp::EngineApi,
-};
+use crate::{camera::Camera, temp::Application};
 use glfw::{Action, Key};
-use glm::Mat4;
 use nalgebra_glm::{vec3, Vec3};
 
-pub fn update_perspective(w: i32, h: i32) -> Mat4 {
-    let aspect = get_aspect((w, h));
-    Projection::Perspective(aspect, 45.0, 0.1, 100.0).calculate_matrix()
-}
-
-pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
+pub fn default_camera_controller(camera: &mut Camera, api: &Application) {
     let sensitivity = 0.07;
     let pos = api.get_cursor_offset();
     let x = pos.0;
@@ -23,19 +13,19 @@ pub fn default_camera_controller(camera: &mut ViewObject, api: &EngineApi) {
 
     let mut delta = Vec3::zeros();
     let mut velocity = 4.0;
-    if let Action::Press | Action::Repeat = api.get_key(Key::LeftShift) {
+    if let Action::Press = api.get_key(Key::LeftShift) {
         velocity *= 10.0;
     }
-    if let Action::Press | Action::Repeat = api.get_key(Key::W) {
+    if let Action::Press = api.get_key(Key::W) {
         delta.z -= 1.0;
     }
-    if let Action::Press | Action::Repeat = api.get_key(Key::A) {
+    if let Action::Press = api.get_key(Key::A) {
         delta.x -= 1.0;
     }
-    if let Action::Press | Action::Repeat = api.get_key(Key::S) {
+    if let Action::Press = api.get_key(Key::S) {
         delta.z += 1.0;
     }
-    if let Action::Press | Action::Repeat = api.get_key(Key::D) {
+    if let Action::Press = api.get_key(Key::D) {
         delta.x += 1.0;
     }
 

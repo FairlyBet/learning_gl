@@ -36,16 +36,16 @@ impl Default for WindowConfig<'_> {
     }
 }
 
-pub struct EngineApi<'a> {
+pub struct Application<'a> {
     window: &'a Window,
     frametime: f32,
     should_close: bool,
     cursor_offset: (f32, f32),
 }
 
-impl<'a> EngineApi<'a> {
+impl<'a> Application<'a> {
     pub fn new(window: &'a Window, frametime: f32, cursor_offset: (f32, f32)) -> Self {
-        EngineApi {
+        Application {
             window,
             frametime,
             should_close: false,

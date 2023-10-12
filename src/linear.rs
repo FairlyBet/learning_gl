@@ -1,6 +1,5 @@
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat};
-use std::f32::consts;
 
 /* Подведем итог:
 1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения,
@@ -12,12 +11,6 @@ use std::f32::consts;
 кватернионе, поэтому для корректной работы необходимо поворачивать
 нулевой кватернион отдельно для каждой оси и уже
 полученный результат комбинировать перемножением */
-
-pub const DEG_TO_RAD: f32 = consts::PI / 180.0;
-
-pub fn to_rad(deg: f32) -> f32 {
-    deg * DEG_TO_RAD
-}
 
 #[derive(Clone, Copy)]
 pub struct Transform {
@@ -35,9 +28,8 @@ impl Transform {
         }
     }
 
-    pub fn get_model(&self) -> Mat4 {
+    pub fn model(&self) -> Mat4 {
         let identity = glm::identity();
-
         let tranlation = glm::translate(&identity, &self.position);
         let rotation = glm::quat_to_mat4(&self.orientation);
         let scale = glm::scale(&identity, &self.scale);
@@ -77,36 +69,13 @@ impl Transform {
     }
 
     fn rotate_around_axises(&mut self, euler: &Vec3, axises: &(Vec3, Vec3, Vec3)) {
-        let euler_rad = euler * DEG_TO_RAD;
+        let radians = glm::radians(euler);
         let identity = glm::quat_identity();
-        let x_rotation = glm::quat_rotate_normalized_axis(&identity, euler_rad.x, &axises.0);
-        let y_rotation = glm::quat_rotate_normalized_axis(&identity, euler_rad.y, &axises.1);
-        let z_rotation = glm::quat_rotate_normalized_axis(&identity, euler_rad.z, &axises.2);
+        let x_rotation = glm::quat_rotate_normalized_axis(&identity, radians.x, &axises.0);
+        let y_rotation = glm::quat_rotate_normalized_axis(&identity, radians.y, &axises.1);
+        let z_rotation = glm::quat_rotate_normalized_axis(&identity, radians.z, &axises.2);
 
         self.orientation = z_rotation * y_rotation * x_rotation * self.orientation;
-    }
-}
-
-pub struct ViewObject {
-    pub transform: Transform,
-    pub projection: Mat4,
-}
-
-impl ViewObject {
-    pub fn new(projection: Projection) -> ViewObject {
-        ViewObject {
-            transform: Transform::new(),
-            projection: projection.calculate_matrix(),
-        }
-    }
-
-    pub fn get_view(&self) -> Mat4 {
-        let identity = glm::identity();
-        let translation = glm::translate(&identity, &(-self.transform.position));
-        let rotation = glm::inverse(&glm::quat_to_mat4(&self.transform.orientation));
-
-        rotation * translation // applying quat rotation after translation makes object rotate
-                               // around coordinate center and around themselves simultaneoulsy
     }
 }
 
@@ -132,14 +101,23 @@ impl Projection {
         Projection::Perspective(aspect, fovy, near, far)
     }
 
-    pub fn calculate_matrix(&self) -> Mat4 {
+    pub fn matrix(&self) -> Mat4 {
         match *self {
             Projection::Orthographic(left, right, bottom, top, znear, zfar) => {
                 glm::ortho(left, right, bottom, top, znear, zfar)
             }
             Projection::Perspective(aspect, fovy, near, far) => {
-                glm::perspective(aspect, to_rad(fovy), near, far)
+                glm::perspective(aspect, fovy.to_radians(), near, far)
             }
         }
     }
+}
+
+pub fn view_matrix(transform: &Transform) -> Mat4 {
+    let identity = glm::identity();
+    let translation = glm::translate(&identity, &(-transform.position));
+    let rotation = glm::inverse(&glm::quat_to_mat4(&transform.orientation));
+
+    rotation * translation // applying quat rotation after translation makes object rotate
+                           // around coordinate center and around themselves simultaneoulsy
 }

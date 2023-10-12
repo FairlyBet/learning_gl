@@ -1,11 +1,12 @@
 use crate::{
+    camera::Camera,
     data_3d::{Mesh, Model, VertexAttribute},
     gl_wrappers::{self, BufferObject, Renderbuffer, Shader, ShaderProgram, Texture},
-    lighting::LightSource,
-    linear::{Transform, ViewObject},
+    lighting::{LightObject, LightSource},
+    linear::Transform,
 };
 use gl::types::GLenum;
-use glm::{Mat4x4, Vec3};
+use nalgebra_glm::{Mat4, Vec3};
 use std::{ffi::c_void, mem::size_of, ptr};
 
 enum UniformBufferBinding {
@@ -15,14 +16,14 @@ enum UniformBufferBinding {
 
 #[repr(C)]
 pub struct MatrixData {
-    mvp: Mat4x4,
-    model: Mat4x4,
-    orientation: Mat4x4,
-    light_space: Mat4x4,
+    mvp: Mat4,
+    model: Mat4,
+    orientation: Mat4,
+    light_space: Mat4,
 }
 
 impl MatrixData {
-    pub fn new(mvp: Mat4x4, model: Mat4x4, orientation: Mat4x4, light_space: Mat4x4) -> Self {
+    pub fn new(mvp: Mat4, model: Mat4, orientation: Mat4, light_space: Mat4) -> Self {
         Self {
             mvp,
             model,
@@ -49,7 +50,7 @@ impl LightingData {
 
 pub struct Framebuffer {
     framebuffer: gl_wrappers::Framebuffer,
-    pub color_buffer: Texture,
+    pub sampler_buffer: Texture,
     depth_stencil_buffer: Renderbuffer,
     pub size: (i32, i32),
 }
@@ -74,13 +75,13 @@ impl Framebuffer {
 
         Self {
             framebuffer,
-            color_buffer: sampler_buffer,
+            sampler_buffer,
             depth_stencil_buffer,
             size,
         }
     }
 
-    pub fn new_shadowmapbuffer(size: (i32, i32), mag: GLenum, min: GLenum) -> Self {
+    pub fn new_shadowmap(size: (i32, i32), mag: GLenum, min: GLenum) -> Self {
         let sampler_buffer = Texture::new(gl::TEXTURE_2D).unwrap();
         sampler_buffer.bind();
         sampler_buffer.texture_data(
@@ -104,7 +105,7 @@ impl Framebuffer {
 
         Self {
             framebuffer,
-            color_buffer: sampler_buffer,
+            sampler_buffer,
             depth_stencil_buffer: Renderbuffer::new(gl::RENDERBUFFER).unwrap(),
             size,
         }
@@ -175,7 +176,7 @@ impl ModelRenderer {
         matrix_data_buffer.buffer_data(
             size_of::<MatrixData>(),
             ptr::null() as *const c_void,
-            gl::DYNAMIC_DRAW,
+            gl::DYNAMIC_DRAW, // or static?
         );
         let lighting_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
         lighting_data_buffer.bind();
@@ -196,34 +197,14 @@ impl ModelRenderer {
 
     pub fn draw(
         &self,
-        camera: &ViewObject,
+        camera: &Camera,
         transform: &Transform,
         model: &Model,
-        light_source: &LightSource,
+        light: &mut LightObject,
     ) {
         self.shader_program.use_();
 
-        let matrix_data = MatrixData::new(
-            camera.projection * camera.get_view() * transform.get_model(),
-            transform.get_model(),
-            glm::quat_to_mat4(&transform.orientation),
-            light_source.light_space_matrix(100.0),
-        );
-        let lighting_data = LightingData::new(*light_source, camera.transform.position);
-
-        self.matrix_data_buffer.bind();
-        self.matrix_data_buffer.buffer_subdata(
-            size_of::<MatrixData>(),
-            (&matrix_data as *const MatrixData).cast(),
-            0,
-        );
-
-        self.lighting_data_buffer.bind();
-        self.lighting_data_buffer.buffer_subdata(
-            size_of::<LightingData>(),
-            (&lighting_data as *const LightingData).cast(),
-            0,
-        );
+        self.fill_buffers(camera, transform, light);
 
         for mesh in model.get_meshes() {
             mesh.bind();
@@ -236,6 +217,29 @@ impl ModelRenderer {
                 );
             }
         }
+    }
+
+    fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightObject) {
+        let matrix_data = MatrixData::new(
+            camera.projection_view() * transform.model(),
+            transform.model(),
+            glm::quat_to_mat4(&transform.orientation),
+            light.get_lightspace(),
+        );
+        self.matrix_data_buffer.bind();
+        self.matrix_data_buffer.buffer_subdata(
+            size_of::<MatrixData>(),
+            (&matrix_data as *const MatrixData).cast(),
+            0,
+        );
+
+        let lighting_data = LightingData::new(light.get_source(), camera.transform.position);
+        self.lighting_data_buffer.bind();
+        self.lighting_data_buffer.buffer_subdata(
+            size_of::<LightingData>(),
+            (&lighting_data as *const LightingData).cast(),
+            0,
+        );
     }
 
     // pub fn draw_arrays() {

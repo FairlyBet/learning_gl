@@ -1,7 +1,11 @@
 use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 // use image::DynamicImage;
-use std::ffi::{c_void, CString};
-use std::{fs::File, io::Read, path::Path};
+use std::{
+    ffi::{c_void, CString},
+    fs::File,
+    io::Read,
+    path::Path,
+};
 
 pub fn configure_attribute(
     index: GLuint,

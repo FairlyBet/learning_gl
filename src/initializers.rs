@@ -48,7 +48,7 @@ pub fn init_rendering() {
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
         gl::Enable(gl::CULL_FACE);
-        gl::ClearColor(0.7, 0.7, 0.67, 1.0);
+        gl::ClearColor(0.01, 0.01, 0.01, 1.0);
         gl::Enable(gl::FRAMEBUFFER_SRGB);
         // gl::Enable(gl::STENCIL_TEST);
         // gl::StencilOp(gl::KEEP, gl::KEEP, gl::REPLACE);

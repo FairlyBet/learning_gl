@@ -12,5 +12,5 @@ layout (std140, binding = 0) uniform MatrixData {
 };
 
 void main() {
-    gl_Position = light_space * vec4(position, 1);
+    gl_Position = light_space * model * vec4(position, 1);
 }
