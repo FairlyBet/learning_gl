@@ -23,6 +23,13 @@ mod temp;
 mod updaters;
 
 fn main() {
+    // let p1 = projection.matrix() * glm::Vec4::new(0.0, 0.0, -0.3, 1.0);
+    // let p2 = projection.matrix() * glm::Vec4::new(0.0, 0.0, -0.2, 1.0);
+    // let p3 = projection.matrix() * glm::Vec4::new(0.0, 0.0, -0.1, 1.0);
+    // println!("z {}", p1.z / p1.w);
+    // println!("z {}", p2.z / p2.w);
+    // println!("z {}", p3.z / p3.w);
+
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     window.set_cursor_mode(glfw::CursorMode::Disabled);
@@ -46,7 +53,7 @@ fn main() {
     );
     let mut model_transform = Transform::new();
 
-    let light_source = LightSource::new_spot(Vec3::from_element(0.8), 1.0, 0.0, 0.3, 3.0, 17.0);
+    let light_source = LightSource::new_spot(Vec3::from_element(0.3), 0.5, 0.5, 0.01, 10.0, 15.0);
     let mut light_obj = LightObject::new(light_source);
     // light_obj.transform.move_(&Vec3::new(0.0, 0.0, 2.0));
     // LightSource::new_directional(
@@ -69,12 +76,12 @@ fn main() {
         gl::NEAREST,
         gl::NEAREST,
     );
-    offscreen_framebuffer.sampler_buffer.bind();
     let canvas = Canvas::new();
 
     let model_renderer = ModelRenderer::new();
-    let screen_renderer = ScreenRenderer::new();
-    let mut rotating = false;
+    let mut screen_renderer = ScreenRenderer::new();
+    let mut is_rotating = false;
+
     while !window.should_close() {
         let frametime = glfw.get_time() as f32;
         glfw.set_time(0.0);
@@ -90,13 +97,18 @@ fn main() {
 
         updaters::default_camera_controller(&mut camera, &api);
         light_obj.transform = camera.transform;
-
-        model_transform.rotate(&(glm::vec3(0.0, 30.0, 0.0) * frametime * f32::from(rotating)));
+        model_transform.rotate(&(glm::vec3(0.0, 30.0, 0.0) * frametime * f32::from(is_rotating)));
 
         for (_, event) in glfw::flush_messages(&receiver) {
             match event {
                 WindowEvent::Key(Key::R, _, Action::Press, _) => {
-                    rotating = !rotating;
+                    is_rotating = !is_rotating;
+                }
+                WindowEvent::Key(Key::Up, _, Action::Repeat | Action::Press, _) => {
+                    screen_renderer.gamma += 0.1;
+                }
+                WindowEvent::Key(Key::Down, _, Action::Repeat | Action::Press, _) => {
+                    screen_renderer.gamma -= 0.1;
                 }
                 WindowEvent::FramebufferSize(w, h) => {
                     camera.update_projection((w, h));

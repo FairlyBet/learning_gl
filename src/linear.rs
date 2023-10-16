@@ -1,5 +1,5 @@
 use glm::Vec3;
-use nalgebra_glm::{Mat4, Quat};
+use nalgebra_glm::{Mat4, Quat, Vec4};
 
 /* Подведем итог:
 1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения,
@@ -113,11 +113,42 @@ impl Projection {
     }
 }
 
+pub const FRUSTUM_CORNERS_AMOUNT: usize = 8;
+
 pub fn view_matrix(transform: &Transform) -> Mat4 {
-    let identity = glm::identity();
-    let translation = glm::translate(&identity, &(-transform.position));
+    let translation = glm::translation(&(-transform.position));
     let rotation = glm::inverse(&glm::quat_to_mat4(&transform.orientation));
 
     rotation * translation // applying quat rotation after translation makes object rotate
                            // around coordinate center and around themselves simultaneoulsy
+}
+
+pub fn frustum_corners_worldspace(projection_view: &Mat4) -> [Vec4; FRUSTUM_CORNERS_AMOUNT] {
+    let inv = glm::inverse(&projection_view);
+    let mut corners: [Vec4; 8] = Default::default();
+
+    corners[0] = inv * Vec4::new(1.0, 1.0, 1.0, 1.0);
+    corners[1] = inv * Vec4::new(1.0, -1.0, 1.0, 1.0);
+    corners[2] = inv * Vec4::new(1.0, -1.0, -1.0, 1.0);
+    corners[3] = inv * Vec4::new(1.0, 1.0, -1.0, 1.0);
+
+    corners[4] = inv * Vec4::new(-1.0, 1.0, 1.0, 1.0);
+    corners[5] = inv * Vec4::new(-1.0, -1.0, 1.0, 1.0);
+    corners[6] = inv * Vec4::new(-1.0, -1.0, -1.0, 1.0);
+    corners[7] = inv * Vec4::new(-1.0, 1.0, -1.0, 1.0);
+
+    for i in 0..corners.len() {
+        corners[i] = corners[i] / corners[i].w;
+    }
+
+    corners
+}
+
+pub fn frustum_center(corners: &[Vec4; FRUSTUM_CORNERS_AMOUNT]) -> Vec3 {
+    let mut center: Vec3 = Default::default();
+    for corner in corners {
+        center += glm::vec4_to_vec3(&corner);
+    }
+    center /= corners.len() as f32;
+    center
 }

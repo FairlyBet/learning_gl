@@ -29,8 +29,8 @@ pub fn default_camera_controller(camera: &mut Camera, api: &Application) {
         delta.x += 1.0;
     }
 
-    if delta.magnitude() > 0.0 {
-        delta = glm::normalize(&delta); // returning nan
+    if delta.magnitude() > 1.0 {
+        delta = glm::normalize(&delta); // returning nan if mag == 0
     }
     delta *= velocity * api.get_frametime();
 

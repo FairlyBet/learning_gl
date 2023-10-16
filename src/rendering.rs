@@ -221,10 +221,10 @@ impl ModelRenderer {
 
     fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightObject) {
         let matrix_data = MatrixData::new(
-            camera.projection_view() * transform.model(),
+            camera.projection_view() * transform.model(), // change
             transform.model(),
             glm::quat_to_mat4(&transform.orientation),
-            light.get_lightspace(),
+            light.lightspace(),
         );
         self.matrix_data_buffer.bind();
         self.matrix_data_buffer.buffer_subdata(
@@ -249,16 +249,26 @@ impl ModelRenderer {
 
 pub struct ScreenRenderer {
     shader_program: ShaderProgram,
+    gamma_correction_uniform: i32,
+    pub gamma: f32,
 }
 
 impl ScreenRenderer {
+    pub const GAMMA: f32 = 2.2;
+
     pub fn new() -> Self {
         let shader_program = ShaderProgram::from_vert_frag_file(
-            "src\\shaders\\texture-rendering.vert",
-            "src\\shaders\\texture-rendering.frag",
+            "src\\shaders\\screen.vert",
+            "src\\shaders\\screen.frag",
         )
         .unwrap();
-        Self { shader_program }
+        shader_program.use_();
+        let uniform = shader_program.get_uniform("gamma_correction");
+        Self {
+            shader_program,
+            gamma: Self::GAMMA,
+            gamma_correction_uniform: uniform,
+        }
     }
 
     pub fn draw_texture(&self, canvas: &Canvas, texture: &Texture) {
@@ -266,6 +276,7 @@ impl ScreenRenderer {
             texture.bind();
             canvas.bind();
             self.shader_program.use_();
+            gl::Uniform1f(self.gamma_correction_uniform, 1.0 / self.gamma);
             gl::DrawArrays(gl::TRIANGLES, 0, canvas.render_quad.triangle_count);
         }
     }

@@ -49,7 +49,6 @@ pub fn init_rendering() {
         gl::Enable(gl::DEPTH_TEST);
         gl::Enable(gl::CULL_FACE);
         gl::ClearColor(0.01, 0.01, 0.01, 1.0);
-        gl::Enable(gl::FRAMEBUFFER_SRGB);
         // gl::Enable(gl::STENCIL_TEST);
         // gl::StencilOp(gl::KEEP, gl::KEEP, gl::REPLACE);
         // gl::StencilFunc(gl::ALWAYS, 1, 0xFF);

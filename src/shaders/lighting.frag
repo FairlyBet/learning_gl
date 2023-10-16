@@ -37,6 +37,7 @@ float blinn_specular(vec3 to_ligth_source_direction, float shininess) {
 float attenuation() {
     float distance = length(light_source.position - vertex.position);
     return 1 / (light_source.constant + light_source.linear * distance + light_source.quadiratic * distance * distance);
+    // return 1 / distance;
 }
 
 float fragment_luminocity() {

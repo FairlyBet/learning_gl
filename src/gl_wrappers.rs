@@ -386,9 +386,9 @@ impl Texture {
     //     let size = (image.width(), image.height());
     //     let channel: GLenum;
     //     if let DynamicImage::ImageRgba8(_) = image {
-    //         channel = gl::RGBA;
+    //         channel = gl::SRGB_ALPHA;
     //     } else {
-    //         channel = gl::RGB;
+    //         channel = gl::SRGB;
     //     }
     //     Self::from_bytes2d(size, bytes.as_ptr(), channel)
     // }

@@ -1,4 +1,7 @@
-use crate::linear::{self, Projection, Transform};
+use crate::{
+    camera::Camera,
+    linear::{self, Projection, Transform},
+};
 use nalgebra_glm::{Mat4, Vec3};
 use num::FromPrimitive;
 use num_derive::FromPrimitive;
@@ -108,12 +111,14 @@ impl LightObject {
                 todo!()
             }
             LightType::Point => {
-                todo!()
+                let projection =
+                    Projection::new_perspective(1.0, 90.0, 0.01, Self::SHADOW_DISTANCE);
+                projection.matrix()
             }
             LightType::Spot => {
                 let projection = Projection::new_perspective(
                     1.0,
-                    source.outer_cutoff.acos().to_degrees(),
+                    source.outer_cutoff.acos().to_degrees() * 2.0,
                     0.01,
                     Self::SHADOW_DISTANCE,
                 );
@@ -122,7 +127,7 @@ impl LightObject {
         }
     }
 
-    pub fn get_lightspace(&self) -> Mat4 {
+    pub fn lightspace(&self) -> Mat4 {
         self.projection * linear::view_matrix(&self.transform)
     }
 
@@ -132,5 +137,31 @@ impl LightObject {
             glm::quat_rotate_vec3(&self.transform.orientation, &(-Vec3::z_axis()));
 
         self.light_source
+    }
+}
+
+pub fn foo(camera: &Camera, light_obj: &LightObject) {
+    let corners = linear::frustum_corners_worldspace(&camera.projection_view());
+    let center = linear::frustum_center(&corners);
+    let mut tr = Transform::new();
+    tr.position = center;
+    tr.orientation = light_obj.transform.orientation;
+    let light_view = linear::view_matrix(&tr); // might cause a bug
+                                               //or not
+    let mut minx = f32::MAX;
+    let mut maxx = f32::MIN;
+    let mut miny = f32::MAX;
+    let mut maxy = f32::MIN;
+    let mut minz = f32::MAX;
+    let mut maxz = f32::MIN;
+
+    for corner in &corners {
+        let corner = light_view * corner;
+        minx = minx.min(corner.x);
+        maxx = maxx.max(corner.x);
+        miny = miny.min(corner.y);
+        maxy = maxy.max(corner.y);
+        minz = minz.min(corner.z);
+        maxz = maxz.max(corner.z);
     }
 }
