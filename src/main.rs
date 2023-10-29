@@ -1,12 +1,14 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 
 extern crate nalgebra_glm as glm;
 
 use camera::Camera;
+use data_3d::Model;
 use glfw::{Action, Context, Key, WindowEvent};
 use glm::Vec3;
 use lighting::{LightObject, LightSource};
 use linear::{Projection, Transform};
+use netcorehost::{nethost, pdcstr};
 use rendering::{Canvas, Framebuffer, ModelRenderer, ScreenRenderer};
 use russimp::scene::PostProcess;
 use std::ffi::CStr;
@@ -23,13 +25,7 @@ mod temp;
 mod updaters;
 
 fn main() {
-    // let p1 = projection.matrix() * glm::Vec4::new(0.0, 0.0, -0.3, 1.0);
-    // let p2 = projection.matrix() * glm::Vec4::new(0.0, 0.0, -0.2, 1.0);
-    // let p3 = projection.matrix() * glm::Vec4::new(0.0, 0.0, -0.1, 1.0);
-    // println!("z {}", p1.z / p1.w);
-    // println!("z {}", p2.z / p2.w);
-    // println!("z {}", p3.z / p3.w);
-
+    test();
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     window.set_cursor_mode(glfw::CursorMode::Disabled);
@@ -53,7 +49,7 @@ fn main() {
     );
     let mut model_transform = Transform::new();
 
-    let light_source = LightSource::new_spot(Vec3::from_element(0.3), 0.5, 0.5, 0.01, 10.0, 15.0);
+    let light_source = LightSource::new_spot(Vec3::from_element(0.3), 0.7, 0.5, 0.01, 10.0, 15.0);
     let mut light_obj = LightObject::new(light_source);
     // light_obj.transform.move_(&Vec3::new(0.0, 0.0, 2.0));
     // LightSource::new_directional(
@@ -147,4 +143,21 @@ pub fn get_extensions() -> Vec<String> {
         }
         result
     }
+}
+
+fn test() {
+    let hostfxr = nethost::load_hostfxr().unwrap();
+    let context = hostfxr
+        .initialize_for_runtime_config(pdcstr!("BitEngine.runtimeconfig.json"))
+        .unwrap();
+    let fn_loader = context
+        .get_delegate_loader_for_assembly(pdcstr!("BitEngine.dll"))
+        .unwrap();
+    let entry = fn_loader
+        .get_function_with_unmanaged_callers_only::<fn()>(
+            pdcstr!("BitEngine.EntitySystem, BitEngine"),
+            pdcstr!("EntryPoint"),
+        )
+        .unwrap();
+    entry();
 }

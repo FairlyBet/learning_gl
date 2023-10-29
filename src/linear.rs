@@ -1,17 +1,6 @@
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
 
-/* Подведем итог:
-1. Матрица поворота полученная из кватерниона влияет на матрицу перемещения,
-т.е. если применять поворот после перемещения то объект будет двигаться по кругу
-на такой же угол как и поворот вокруг центра координат,
-что полезно для создания матрицы вида
-2. Если последовательно поворачивать один и тот же кватернион то к осям
-поворота будет применяться поворот уже имеющийся в
-кватернионе, поэтому для корректной работы необходимо поворачивать
-нулевой кватернион отдельно для каждой оси и уже
-полученный результат комбинировать перемножением */
-
 #[derive(Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
@@ -113,8 +102,6 @@ impl Projection {
     }
 }
 
-pub const FRUSTUM_CORNERS_AMOUNT: usize = 8;
-
 pub fn view_matrix(transform: &Transform) -> Mat4 {
     let translation = glm::translation(&(-transform.position));
     let rotation = glm::inverse(&glm::quat_to_mat4(&transform.orientation));
@@ -122,6 +109,8 @@ pub fn view_matrix(transform: &Transform) -> Mat4 {
     rotation * translation // applying quat rotation after translation makes object rotate
                            // around coordinate center and around themselves simultaneoulsy
 }
+
+pub const FRUSTUM_CORNERS_AMOUNT: usize = 8;
 
 pub fn frustum_corners_worldspace(projection_view: &Mat4) -> [Vec4; FRUSTUM_CORNERS_AMOUNT] {
     let inv = glm::inverse(&projection_view);

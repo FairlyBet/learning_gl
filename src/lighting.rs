@@ -3,8 +3,8 @@ use crate::{
     linear::{self, Projection, Transform},
 };
 use nalgebra_glm::{Mat4, Vec3};
-use num::FromPrimitive;
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 #[derive(Clone, Copy, FromPrimitive)]
 pub enum LightType {
