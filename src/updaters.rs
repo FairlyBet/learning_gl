@@ -34,7 +34,7 @@ pub fn default_camera_controller(camera: &mut Camera, api: &Application) {
     }
     delta *= velocity * api.get_frametime();
 
-    camera.transform.rotate(&global_rotation);
-    camera.transform.rotate_local(&local_rotation);
-    camera.transform.move_local(&delta);
+    // camera.transform.rotate(&global_rotation);
+    // camera.transform.rotate_local(&local_rotation);
+    // camera.transform.move_local(&delta); 
 }

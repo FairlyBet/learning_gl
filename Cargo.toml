@@ -6,21 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num-derive = "0.4.0"
-num-traits = "0.2.16"
 gl = "0.14.0"
-glfw = "0.51.0"
 gl_loader = "0.1.2"
 nalgebra-glm = "0.18.0"
-russimp = { version = "1.0.6", features = ["prebuilt"] }
-netcorehost = "0.15.1"
+glfw = "0.51.0"
+russimp = {version = "1.0.6", features = ["prebuilt"] }
+stb_image_rust = "2.27.2"
+rlua = "0.19.7"
+winapi = "0.3.9"
+serde = "1.0.190"
+serde_json = "1.0.108"
 
-# russimp = { version = "1.0.6", features = ["prebuilt"] }
-# image = "0.24.6"
-# clang-sys = "1.6.1"
-# bindgen = "0.66.1"
-# std140 = "0.2.6"
+# russimp-sys = {version = "2.0.0", features = ["prebuilt"] }
 # spin_sleep = "1.1.1"
 # rayon = "1.7.0"
-# serde_json = "1.0.99"
 # stb = "0.3.2"

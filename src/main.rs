@@ -1,18 +1,4 @@
-#![windows_subsystem = "windows"]
-
-extern crate nalgebra_glm as glm;
-
-use camera::Camera;
-use data_3d::Model;
-use glfw::{Action, Context, Key, WindowEvent};
-use glm::Vec3;
-use lighting::{LightObject, LightSource};
-use linear::{Projection, Transform};
-use netcorehost::{nethost, pdcstr};
-use rendering::{Canvas, Framebuffer, ModelRenderer, ScreenRenderer};
-use russimp::scene::PostProcess;
-use std::ffi::CStr;
-use temp::Application;
+// #![windows_subsystem = "windows"]
 
 mod camera;
 mod data_3d;
@@ -23,21 +9,34 @@ mod linear;
 mod rendering;
 mod temp;
 mod updaters;
+mod scene;
+
+extern crate nalgebra_glm as glm;
+
+use camera::Camera;
+use glfw::{Action, Context, Key, WindowEvent};
+use glm::Vec3;
+use lighting::{LightObject, LightSource};
+use linear::{Projection, Transform};
+use rendering::{Canvas, Framebuffer, ModelRenderer, ScreenRenderer};
+use russimp::scene::PostProcess;
+use std::ffi::CStr;
+use temp::Application;
 
 fn main() {
-    test();
     let mut glfw = initializers::init_from_config(Default::default());
     let (mut window, receiver) = initializers::create_from_config(Default::default(), &mut glfw);
     window.set_cursor_mode(glfw::CursorMode::Disabled);
     initializers::init_rendering();
 
+    let camera_tr = Transform::new();
     let projection = Projection::new_perspective(
         camera::aspect(window.get_framebuffer_size()),
         45.0,
         0.1,
         100.0,
     );
-    let mut camera = Camera::new(projection);
+    let mut camera = Camera::new(&camera_tr, projection);
 
     let model = data_3d::load_model(
         "assets\\meshes\\backpack.obj",
@@ -48,9 +47,11 @@ fn main() {
         ],
     );
     let mut model_transform = Transform::new();
+    model_transform.position = Vec3::new(0.0, 0.0, -4.0);
 
     let light_source = LightSource::new_spot(Vec3::from_element(0.3), 0.7, 0.5, 0.01, 10.0, 15.0);
-    let mut light_obj = LightObject::new(light_source);
+    let light_transform = Transform::new();
+    let mut light_obj = LightObject::new(&light_transform, light_source);
     // light_obj.transform.move_(&Vec3::new(0.0, 0.0, 2.0));
     // LightSource::new_directional(
     //     glm::Vec3::from_element(0.7),
@@ -81,7 +82,6 @@ fn main() {
     while !window.should_close() {
         let frametime = glfw.get_time() as f32;
         glfw.set_time(0.0);
-
         let cursor_pos_before = window.get_cursor_pos();
         glfw.poll_events();
         let cursor_pos_after = window.get_cursor_pos();
@@ -90,7 +90,6 @@ fn main() {
             (cursor_pos_after.1 - cursor_pos_before.1) as f32,
         );
         let api = Application::new(&window, frametime, cursor_offset);
-
         updaters::default_camera_controller(&mut camera, &api);
         light_obj.transform = camera.transform;
         model_transform.rotate(&(glm::vec3(0.0, 30.0, 0.0) * frametime * f32::from(is_rotating)));
@@ -119,13 +118,11 @@ fn main() {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
         model_renderer.draw(&camera, &model_transform, &model, &mut light_obj);
-
         Framebuffer::bind_default(window.get_framebuffer_size());
         unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
         screen_renderer.draw_texture(&canvas, &offscreen_framebuffer.sampler_buffer);
-
         window.swap_buffers();
     }
 
@@ -143,21 +140,4 @@ pub fn get_extensions() -> Vec<String> {
         }
         result
     }
-}
-
-fn test() {
-    let hostfxr = nethost::load_hostfxr().unwrap();
-    let context = hostfxr
-        .initialize_for_runtime_config(pdcstr!("BitEngine.runtimeconfig.json"))
-        .unwrap();
-    let fn_loader = context
-        .get_delegate_loader_for_assembly(pdcstr!("BitEngine.dll"))
-        .unwrap();
-    let entry = fn_loader
-        .get_function_with_unmanaged_callers_only::<fn()>(
-            pdcstr!("BitEngine.EntitySystem, BitEngine"),
-            pdcstr!("EntryPoint"),
-        )
-        .unwrap();
-    entry();
 }

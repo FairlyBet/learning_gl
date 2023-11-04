@@ -169,7 +169,7 @@ impl ModelRenderer {
         shader_program.attach_shader(&lighting_shader);
         shader_program.attach_shader(&color_grade_shader);
         shader_program.link();
-        println!("{}", shader_program.link_success());
+        // println!("{}", shader_program.link_success());
 
         let matrix_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
         matrix_data_buffer.bind();
@@ -233,7 +233,8 @@ impl ModelRenderer {
             0,
         );
 
-        let lighting_data = LightingData::new(light.get_source(), camera.transform.position);
+        let lighting_data =
+            LightingData::new(light.get_source(), unsafe { (*camera.transform).position });
         self.lighting_data_buffer.bind();
         self.lighting_data_buffer.buffer_subdata(
             size_of::<LightingData>(),

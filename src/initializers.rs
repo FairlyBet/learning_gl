@@ -25,10 +25,9 @@ pub fn create_from_config(
     window.set_framebuffer_size_polling(true);
     window.set_cursor_pos_polling(true);
     window.set_cursor_mode(config.cursor_mode);
-
     window.make_current();
 
-    init_gl();
+    load_gl();
 
     if config.vsync {
         glfw.set_swap_interval(SwapInterval::Sync(1));
@@ -39,7 +38,7 @@ pub fn create_from_config(
     (window, receiver)
 }
 
-fn init_gl() {
+fn load_gl() {
     gl_loader::init_gl();
     gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
 }
