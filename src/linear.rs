@@ -6,6 +6,8 @@ pub struct Transform {
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
+    pub parent: Option<*const Transform>,
+    padding: u64,
 }
 
 impl Transform {
@@ -14,12 +16,22 @@ impl Transform {
             position: Vec3::zeros(),
             orientation: glm::quat_identity(),
             scale: Vec3::from_element(1.0),
+            parent: None,
+            padding: Default::default(),
+        }
+    }
+
+    pub fn global_position(&self) -> Vec3 {
+        if let Some(parent_pos) = self.parent {
+            unsafe { (*parent_pos).global_position() + self.position }
+        } else {
+            self.position
         }
     }
 
     pub fn model(&self) -> Mat4 {
         let identity = glm::identity();
-        let tranlation = glm::translate(&identity, &self.position);
+        let tranlation = glm::translate(&identity, &self.global_position());
         let rotation = glm::quat_to_mat4(&self.orientation);
         let scale = glm::scale(&identity, &self.scale);
 
@@ -110,11 +122,11 @@ pub fn view_matrix(transform: &Transform) -> Mat4 {
                            // around coordinate center and around themselves simultaneoulsy
 }
 
-pub const FRUSTUM_CORNERS_AMOUNT: usize = 8;
+pub const FRUSTUM_CORNERS_COUNT: usize = 8;
 
-pub fn frustum_corners_worldspace(projection_view: &Mat4) -> [Vec4; FRUSTUM_CORNERS_AMOUNT] {
-    let inv = glm::inverse(&projection_view);
-    let mut corners: [Vec4; 8] = Default::default();
+pub fn frustum_corners_worldspace(projection: &Mat4) -> [Vec4; FRUSTUM_CORNERS_COUNT] {
+    let inv = glm::inverse(&projection);
+    let mut corners: [Vec4; FRUSTUM_CORNERS_COUNT] = Default::default();
 
     corners[0] = inv * Vec4::new(1.0, 1.0, 1.0, 1.0);
     corners[1] = inv * Vec4::new(1.0, -1.0, 1.0, 1.0);
@@ -133,7 +145,7 @@ pub fn frustum_corners_worldspace(projection_view: &Mat4) -> [Vec4; FRUSTUM_CORN
     corners
 }
 
-pub fn frustum_center(corners: &[Vec4; FRUSTUM_CORNERS_AMOUNT]) -> Vec3 {
+pub fn frustum_center(corners: &[Vec4; FRUSTUM_CORNERS_COUNT]) -> Vec3 {
     let mut center: Vec3 = Default::default();
     for corner in corners {
         center += glm::vec4_to_vec3(&corner);

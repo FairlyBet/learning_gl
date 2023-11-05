@@ -1,0 +1,23 @@
+{
+    "somedata": {},
+    "objects": [
+        {
+            "id": "0",
+            "name": "obj1",
+            "transform": {
+                "position": "0.0, 2.0, 3.0",
+                "orientation": "0.0, 0.0, 0.0",
+                "scale": "1.0, 1.0, 1.0"
+            }
+        },
+        {
+            "id": "1",
+            "name": "obj2",
+            "transform": {
+                "position": "10.0, 2.0, 3.0",
+                "orientation": "2.0, 0.0, 0.0",
+                "scale": "1.0, 1.0, 1.0"
+            }
+        }
+    ]
+}
