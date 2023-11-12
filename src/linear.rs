@@ -1,13 +1,13 @@
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
 
+#[repr(align(64))]
 #[derive(Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
     pub parent: Option<*const Transform>,
-    padding: u64,
 }
 
 impl Transform {
@@ -17,7 +17,6 @@ impl Transform {
             orientation: glm::quat_identity(),
             scale: Vec3::from_element(1.0),
             parent: None,
-            padding: Default::default(),
         }
     }
 

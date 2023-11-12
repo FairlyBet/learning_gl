@@ -1,8 +1,8 @@
 use crate::{
     camera::Camera,
-    data_3d::{Mesh, Model, VertexAttribute},
+    data3d::{Mesh, Model, VertexAttribute},
     gl_wrappers::{self, BufferObject, Renderbuffer, Shader, ShaderProgram, Texture},
-    lighting::{LightObject, LightSource},
+    lighting::{LightData, LightSource},
     linear::Transform,
 };
 use gl::types::GLenum;
@@ -35,12 +35,12 @@ impl MatrixData {
 
 #[repr(C)]
 pub struct LightingData {
-    light_source: LightSource,
+    light_source: LightData,
     viewer_position: Vec3,
 }
 
 impl LightingData {
-    pub fn new(light_source: LightSource, viewer_position: Vec3) -> Self {
+    pub fn new(light_source: LightData, viewer_position: Vec3) -> Self {
         Self {
             light_source,
             viewer_position,
@@ -200,7 +200,7 @@ impl ModelRenderer {
         camera: &Camera,
         transform: &Transform,
         model: &Model,
-        light: &mut LightObject,
+        light: &mut LightSource,
     ) {
         self.shader_program.use_();
 
@@ -219,7 +219,7 @@ impl ModelRenderer {
         }
     }
 
-    fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightObject) {
+    fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightSource) {
         let matrix_data = MatrixData::new(
             camera.projection_view() * transform.model(), // change
             transform.model(),
@@ -234,7 +234,7 @@ impl ModelRenderer {
         );
 
         let lighting_data =
-            LightingData::new(light.get_source(), unsafe { (*camera.transform).position });
+            LightingData::new(light.get_data(), unsafe { (*camera.transform).position });
         self.lighting_data_buffer.bind();
         self.lighting_data_buffer.buffer_subdata(
             size_of::<LightingData>(),

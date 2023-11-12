@@ -20,8 +20,9 @@ impl Default for LightType {
 
 // std140 requires structs to be x16 sized
 #[derive(Default, Clone, Copy)]
+#[repr(align(64))]
 #[repr(C)]
-pub struct LightSource {
+pub struct LightData {
     color: Vec3,
     type_: LightType,
     position: Vec3,
@@ -31,19 +32,18 @@ pub struct LightSource {
     quadratic: f32,
     inner_cutoff: f32,
     outer_cutoff: f32,
-    padding: i32,
 }
 
-impl LightSource {
+impl LightData {
     pub fn new_directional(color: Vec3) -> Self {
-        let mut source: LightSource = Default::default();
+        let mut source: LightData = Default::default();
         source.color = color;
         source.type_ = LightType::Directional;
         source
     }
 
     pub fn new_point(color: Vec3, constant: f32, linear: f32, quadratic: f32) -> Self {
-        let mut source: LightSource = Default::default();
+        let mut source: LightData = Default::default();
         source.color = color;
         source.constant = constant;
         source.linear = linear;
@@ -60,7 +60,7 @@ impl LightSource {
         inner_cutoff: f32,
         outer_cutoff: f32,
     ) -> Self {
-        let mut source: LightSource = Default::default();
+        let mut source: LightData = Default::default();
         source.color = color;
         source.constant = constant;
         source.linear = linear;
@@ -72,16 +72,16 @@ impl LightSource {
     }
 }
 
-pub struct LightObject {
+pub struct LightSource {
     pub transform: *const Transform,
-    light_source: LightSource,
+    light_source: LightData,
     projection: Mat4,
 }
 
-impl LightObject {
+impl LightSource {
     const SHADOW_DISTANCE: f32 = 100.0;
 
-    pub fn new(transform: &Transform, light_source: LightSource) -> Self {
+    pub fn new(transform: &Transform, light_source: LightData) -> Self {
         Self {
             transform,
             projection: Self::light_projection(&light_source),
@@ -89,7 +89,7 @@ impl LightObject {
         }
     }
 
-    pub fn light_projection(source: &LightSource) -> Mat4 {
+    pub fn light_projection(source: &LightData) -> Mat4 {
         match source.type_ {
             LightType::Directional => {
                 //     let projection = Projection::new_orthographic(
@@ -129,7 +129,7 @@ impl LightObject {
         unsafe { self.projection * linear::view_matrix(&*self.transform) }
     }
 
-    pub fn get_source(&mut self) -> LightSource {
+    pub fn get_data(&mut self) -> LightData {
         unsafe {
             self.light_source.position = (*self.transform).position;
             self.light_source.direction =
@@ -140,7 +140,7 @@ impl LightObject {
     }
 }
 
-pub fn foo(camera: &Camera, light_obj: &LightObject) {
+pub fn foo(camera: &Camera, light_obj: &LightSource) {
     let corners = linear::frustum_corners_worldspace(&camera.projection_view());
     let center = linear::frustum_center(&corners);
     let mut tr = Transform::new();

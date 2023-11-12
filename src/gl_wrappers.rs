@@ -1,7 +1,7 @@
+use crate::application::OnFramebufferSize;
 use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
-// use image::DynamicImage;
 use std::{
-    ffi::{c_void, CString},
+    ffi::{c_void, CStr, CString},
     fs::File,
     io::Read,
     path::Path,
@@ -23,6 +23,52 @@ pub fn configure_attribute(
 pub fn enable_attribute(index: GLuint) {
     unsafe {
         gl::EnableVertexAttribArray(index);
+    }
+}
+
+pub struct Gl {}
+
+impl Gl {
+    pub fn load() -> Self {
+        gl_loader::init_gl();
+        gl::load_with(|symbol| gl_loader::get_proc_address(symbol) as *const _);
+        Self {}
+    }
+
+    pub fn enable_basic_things(&self) {
+        unsafe {
+            gl::ClearColor(0.3, 0.25, 0.2, 1.0);
+            gl::Enable(gl::DEPTH_TEST);
+            gl::Enable(gl::CULL_FACE);
+        }
+    }
+
+    pub fn get_extensions() -> Vec<String> {
+        let mut amount = 0;
+        unsafe {
+            gl::GetIntegerv(gl::NUM_EXTENSIONS, &mut amount);
+        }
+        let mut result = Vec::<String>::with_capacity(amount as usize);
+        for i in 0..amount {
+            let name =
+                unsafe { CStr::from_ptr(gl::GetStringi(gl::EXTENSIONS, i as u32) as *const _) };
+            result.push(name.to_string_lossy().to_string());
+        }
+        result
+    }
+}
+
+impl Drop for Gl {
+    fn drop(&mut self) {
+        gl_loader::end_gl();
+    }
+}
+
+impl OnFramebufferSize for Gl {
+    fn on_framebuffer_size(&mut self, size: (i32, i32)) {
+        unsafe {
+            gl::Viewport(0, 0, size.0, size.1);
+        }
     }
 }
 
