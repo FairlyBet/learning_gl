@@ -8,12 +8,12 @@ use std::{ffi::c_void, mem::size_of};
 
 pub fn load_model(path: &str, post_pocess: Vec<PostProcess>) -> Model {
     let scene = Scene::from_file(path, post_pocess).unwrap();
-
+    
     let mut meshes = Vec::<Mesh>::with_capacity(scene.meshes.len());
     for mesh in &scene.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
-
+        
         for i in 0..vertex_count {
             let position = mesh.vertices[i];
             let normal = mesh.normals[i];

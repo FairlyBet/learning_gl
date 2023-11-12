@@ -2,6 +2,8 @@
 #![deny(rust_2018_compatibility)]
 #![allow(unused)]
 
+extern crate nalgebra_glm as glm;
+
 mod application;
 mod camera;
 mod data3d;
@@ -10,8 +12,6 @@ mod lighting;
 mod linear;
 mod rendering;
 mod scene;
-
-extern crate nalgebra_glm as glm;
 
 use application::Application;
 
@@ -41,29 +41,6 @@ fn main() {
     //     0.1,
     //     100.0,
     // );
-    // let mut camera = Camera::new(&camera_tr, projection);
-
-    // let model = data_3d::load_model(
-    //     "assets\\meshes\\backpack.obj",
-    //     vec![
-    //         PostProcess::Triangulate,
-    //         PostProcess::OptimizeGraph,
-    //         PostProcess::OptimizeMeshes,
-    //     ],
-    // );
-    // let mut model_transform = Transform::new();
-    // let ptr = (&model_transform) as *const _;
-    // model_transform.position = Vec3::new(0.0, 0.0, -4.0);
-
-    // let mut offscreen_framebuffer = Framebuffer::new(
-    //     (
-    //         window.get_framebuffer_size().0,
-    //         window.get_framebuffer_size().1,
-    //     ),
-    //     gl::NEAREST,
-    //     gl::NEAREST,
-    // );
-    // let canvas = Canvas::new();
 
     // while !window.should_close() {
     //     let frametime = glfw.get_time() as f32;

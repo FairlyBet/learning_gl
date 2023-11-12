@@ -1,8 +1,9 @@
 use crate::gl_wrappers::Gl;
 use glfw::{
-    Context, Glfw, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint, WindowMode,
+    Action, Context, Glfw, Key, Modifiers, OpenGlProfileHint, SwapInterval, Window, WindowEvent,
+    WindowHint, WindowMode,
 };
-use std::{ffi::CStr, sync::mpsc::Receiver};
+use std::sync::mpsc::Receiver;
 
 const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 2);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
@@ -22,8 +23,7 @@ pub struct Application {
 
 impl Application {
     pub fn new() -> Self {
-        let mut gl = Gl::load();
-        gl.enable_basic_things();
+        let gl = Gl::load();
 
         let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
         glfw.window_hint(OPENGL_PROFILE);
@@ -37,7 +37,6 @@ impl Application {
         glfw.set_swap_interval(SwapInterval::Sync(VSYNC.into()));
 
         let mut event_sys = EventSys::new();
-        event_sys.subscribe_framebuffersize(&mut gl as *mut Gl as *mut dyn OnFramebufferSize);
 
         Self {
             gl,
@@ -61,16 +60,20 @@ impl Application {
                 break;
             }
             self.glfw.set_time(0.0);
+            self.event_sys.clear_key_events();
             self.glfw.poll_events();
-            std::thread::sleep(std::time::Duration::from_millis(100));
             for (_, event) in glfw::flush_messages(&self.receiver) {
                 match event {
                     WindowEvent::FramebufferSize(w, h) => {
-                        self.event_sys.framebuffer_size((w, h));
+                        self.event_sys.update_framebuffer_size((w, h));
+                    }
+                    WindowEvent::Key(key, _, action, modifier) => {
+                        self.event_sys.push_key_event((key, action, modifier));
                     }
                     _ => {}
                 }
             }
+            std::thread::sleep(std::time::Duration::from_millis(100));
             frame_time = self.glfw.get_time();
         }
     }
@@ -78,12 +81,14 @@ impl Application {
 
 pub struct EventSys {
     on_framebuffer_size: Vec<*mut dyn OnFramebufferSize>,
+    key_events: Vec<(Key, Action, Modifiers)>,
 }
 
 impl EventSys {
     pub fn new() -> Self {
         Self {
             on_framebuffer_size: Vec::new(),
+            key_events: vec![],
         }
     }
 
@@ -91,11 +96,27 @@ impl EventSys {
         self.on_framebuffer_size.push(listener);
     }
 
-    fn framebuffer_size(&self, size: (i32, i32)) {
+    pub fn get_key_events(&self) -> &Vec<(Key, Action, Modifiers)> {
+        &self.key_events
+    }
+
+    pub fn get_key_event(&self, event: (Key, Action, Modifiers)) -> bool {
+        self.key_events.contains(&event)
+    }
+
+    fn update_framebuffer_size(&self, size: (i32, i32)) {
         for subscriber in &self.on_framebuffer_size {
             let subscriber = unsafe { &mut **subscriber as &mut dyn OnFramebufferSize };
             subscriber.on_framebuffer_size(size);
         }
+    }
+
+    fn push_key_event(&mut self, event: (Key, Action, Modifiers)) {
+        self.key_events.push(event);
+    }
+
+    fn clear_key_events(&mut self) {
+        self.key_events.clear();
     }
 }
 

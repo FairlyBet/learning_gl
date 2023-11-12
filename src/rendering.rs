@@ -124,11 +124,11 @@ impl Framebuffer {
     }
 }
 
-pub struct Canvas {
+pub struct ScreenQuad {
     pub render_quad: Mesh,
 }
 
-impl Canvas {
+impl ScreenQuad {
     pub fn new() -> Self {
         let quad = Mesh::new(
             Mesh::QUAD_VERTICES_TEX_COORDS.len() * size_of::<f32>(),
@@ -147,13 +147,13 @@ impl Canvas {
     }
 }
 
-pub struct ModelRenderer {
+pub struct DefaultRenderProgram {
     shader_program: ShaderProgram,
     matrix_data_buffer: BufferObject,
     lighting_data_buffer: BufferObject,
 }
 
-impl ModelRenderer {
+impl DefaultRenderProgram {
     pub fn new() -> Self {
         let vertex_shader =
             Shader::from_file(gl::VERTEX_SHADER, "src\\shaders\\main.vert").unwrap();
@@ -161,13 +161,10 @@ impl ModelRenderer {
             Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\main.frag").unwrap();
         let lighting_shader =
             Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\lighting.frag").unwrap();
-        let color_grade_shader =
-            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\color-grade.frag").unwrap();
         let shader_program = ShaderProgram::new().unwrap();
         shader_program.attach_shader(&vertex_shader);
         shader_program.attach_shader(&fragment_shader);
         shader_program.attach_shader(&lighting_shader);
-        shader_program.attach_shader(&color_grade_shader);
         shader_program.link();
         // println!("{}", shader_program.link_success());
 
@@ -203,9 +200,7 @@ impl ModelRenderer {
         light: &mut LightSource,
     ) {
         self.shader_program.use_();
-
         self.fill_buffers(camera, transform, light);
-
         for mesh in model.get_meshes() {
             mesh.bind();
             unsafe {
@@ -248,14 +243,15 @@ impl ModelRenderer {
     // }
 }
 
-pub struct ScreenRenderer {
+pub struct ScreenRenderProgram {
     shader_program: ShaderProgram,
     gamma_correction_uniform: i32,
     pub gamma: f32,
 }
 
-impl ScreenRenderer {
-    pub const GAMMA: f32 = 2.2;
+impl ScreenRenderProgram {
+    const DEFAULT_GAMMA: f32 = 2.2;
+    const GAMMA_CORRECTION_NAME: &str = "gamma_correction";
 
     pub fn new() -> Self {
         let shader_program = ShaderProgram::from_vert_frag_file(
@@ -264,21 +260,37 @@ impl ScreenRenderer {
         )
         .unwrap();
         shader_program.use_();
-        let uniform = shader_program.get_uniform("gamma_correction");
+        let uniform = shader_program.get_uniform(Self::GAMMA_CORRECTION_NAME);
         Self {
             shader_program,
-            gamma: Self::GAMMA,
+            gamma: Self::DEFAULT_GAMMA,
             gamma_correction_uniform: uniform,
         }
     }
 
-    pub fn draw_texture(&self, canvas: &Canvas, texture: &Texture) {
+    pub fn draw_texture(&self, canvas: &ScreenQuad, texture: &Texture) {
+        texture.bind();
+        canvas.bind();
+        self.shader_program.use_();
         unsafe {
-            texture.bind();
-            canvas.bind();
-            self.shader_program.use_();
             gl::Uniform1f(self.gamma_correction_uniform, 1.0 / self.gamma);
             gl::DrawArrays(gl::TRIANGLES, 0, canvas.render_quad.triangle_count);
         }
+    }
+}
+
+pub struct RenderPipeline {
+    offscreen_buffer: Framebuffer,
+    screen_quad: ScreenQuad,
+    program: DefaultRenderProgram,
+    main_camera: *const Camera,
+    match_window_size: bool,
+}
+
+impl RenderPipeline {
+    pub fn new(framebuffer_size: (i32, i32)) {
+        let screen_quad = ScreenQuad::new();
+        let offscreen_buffer = Framebuffer::new(framebuffer_size, gl::LINEAR, gl::LINEAR);
+        
     }
 }

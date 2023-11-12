@@ -35,14 +35,6 @@ impl Gl {
         Self {}
     }
 
-    pub fn enable_basic_things(&self) {
-        unsafe {
-            gl::ClearColor(0.3, 0.25, 0.2, 1.0);
-            gl::Enable(gl::DEPTH_TEST);
-            gl::Enable(gl::CULL_FACE);
-        }
-    }
-
     pub fn get_extensions() -> Vec<String> {
         let mut amount = 0;
         unsafe {
@@ -61,14 +53,6 @@ impl Gl {
 impl Drop for Gl {
     fn drop(&mut self) {
         gl_loader::end_gl();
-    }
-}
-
-impl OnFramebufferSize for Gl {
-    fn on_framebuffer_size(&mut self, size: (i32, i32)) {
-        unsafe {
-            gl::Viewport(0, 0, size.0, size.1);
-        }
     }
 }
 

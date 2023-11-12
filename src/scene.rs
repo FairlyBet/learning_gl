@@ -1,11 +1,15 @@
 use crate::{camera::Camera, data3d::Model, lighting::LightSource, linear::Transform};
 
 pub struct Scene {
-    
+    transform_buffer: Vec<Transform>
 }
 
 impl Scene {
-    pub fn load() {}
+    pub fn load() {
+        // load from file
+        // create entities
+        // create components
+    }
 }
 
 struct Entity {
