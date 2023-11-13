@@ -1,4 +1,5 @@
 use crate::{
+    application::OnFramebufferSize,
     camera::Camera,
     data3d::{Mesh, Model, VertexAttribute},
     gl_wrappers::{self, BufferObject, Renderbuffer, Shader, ShaderProgram, Texture},
@@ -147,27 +148,14 @@ impl ScreenQuad {
     }
 }
 
-pub struct DefaultRenderProgram {
+pub struct RenderProgram {
     shader_program: ShaderProgram,
     matrix_data_buffer: BufferObject,
     lighting_data_buffer: BufferObject,
 }
 
-impl DefaultRenderProgram {
-    pub fn new() -> Self {
-        let vertex_shader =
-            Shader::from_file(gl::VERTEX_SHADER, "src\\shaders\\main.vert").unwrap();
-        let fragment_shader =
-            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\main.frag").unwrap();
-        let lighting_shader =
-            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\lighting.frag").unwrap();
-        let shader_program = ShaderProgram::new().unwrap();
-        shader_program.attach_shader(&vertex_shader);
-        shader_program.attach_shader(&fragment_shader);
-        shader_program.attach_shader(&lighting_shader);
-        shader_program.link();
-        // println!("{}", shader_program.link_success());
-
+impl RenderProgram {
+    pub fn new(shader_program: ShaderProgram) -> Self {
         let matrix_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
         matrix_data_buffer.bind();
         matrix_data_buffer.buffer_data(
@@ -243,13 +231,30 @@ impl DefaultRenderProgram {
     // }
 }
 
-pub struct ScreenRenderProgram {
+impl Default for RenderProgram {
+    fn default() -> Self {
+        let vertex_shader =
+            Shader::from_file(gl::VERTEX_SHADER, "src\\shaders\\main.vert").unwrap();
+        let fragment_shader =
+            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\main.frag").unwrap();
+        let lighting_shader =
+            Shader::from_file(gl::FRAGMENT_SHADER, "src\\shaders\\lighting.frag").unwrap();
+        let shader_program = ShaderProgram::new().unwrap();
+        shader_program.attach_shader(&vertex_shader);
+        shader_program.attach_shader(&fragment_shader);
+        shader_program.attach_shader(&lighting_shader);
+        shader_program.link();
+        Self::new(shader_program)
+    }
+}
+
+pub struct ScreenQuadRenderer {
     shader_program: ShaderProgram,
     gamma_correction_uniform: i32,
     pub gamma: f32,
 }
 
-impl ScreenRenderProgram {
+impl ScreenQuadRenderer {
     const DEFAULT_GAMMA: f32 = 2.2;
     const GAMMA_CORRECTION_NAME: &str = "gamma_correction";
 
@@ -268,29 +273,72 @@ impl ScreenRenderProgram {
         }
     }
 
-    pub fn draw_texture(&self, canvas: &ScreenQuad, texture: &Texture) {
+    pub fn draw_texture(&self, quad: &ScreenQuad, texture: &Texture) {
         texture.bind();
-        canvas.bind();
+        quad.bind();
         self.shader_program.use_();
         unsafe {
             gl::Uniform1f(self.gamma_correction_uniform, 1.0 / self.gamma);
-            gl::DrawArrays(gl::TRIANGLES, 0, canvas.render_quad.triangle_count);
+            gl::DrawArrays(gl::TRIANGLES, 0, quad.render_quad.triangle_count);
         }
     }
 }
 
 pub struct RenderPipeline {
     offscreen_buffer: Framebuffer,
+    render_program: RenderProgram,
     screen_quad: ScreenQuad,
-    program: DefaultRenderProgram,
-    main_camera: *const Camera,
+    screen_quad_renderer: ScreenQuadRenderer,
     match_window_size: bool,
+    main_framebuffer_size: (i32, i32),
 }
 
 impl RenderPipeline {
-    pub fn new(framebuffer_size: (i32, i32)) {
-        let screen_quad = ScreenQuad::new();
+    pub fn new(framebuffer_size: (i32, i32)) -> Self {
         let offscreen_buffer = Framebuffer::new(framebuffer_size, gl::LINEAR, gl::LINEAR);
-        
+        let render_program = Default::default();
+        let screen_quad = ScreenQuad::new();
+        let screen_quad_renderer = ScreenQuadRenderer::new();
+        Self::setup();
+        Self {
+            offscreen_buffer,
+            render_program,
+            screen_quad,
+            screen_quad_renderer,
+            match_window_size: true,
+            main_framebuffer_size: framebuffer_size,
+        }
+    }
+
+    fn setup() {
+        unsafe {
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::Enable(gl::DEPTH_TEST);
+            gl::Enable(gl::CULL_FACE);
+        }
+    }
+
+    pub fn draw_cycle(&self) {
+        self.offscreen_buffer.bind();
+        unsafe {
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        }
+        // draw
+        Framebuffer::bind_default(self.main_framebuffer_size);
+        self.screen_quad.bind();
+        unsafe {
+            gl::Clear(gl::COLOR_BUFFER_BIT);
+        }
+        self.screen_quad_renderer
+            .draw_texture(&self.screen_quad, &self.offscreen_buffer.sampler_buffer);
+    }
+}
+
+impl OnFramebufferSize for RenderPipeline {
+    fn on_framebuffer_size(&mut self, size: (i32, i32)) {
+        self.main_framebuffer_size = size;
+        if self.match_window_size {
+            self.offscreen_buffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
+        }
     }
 }

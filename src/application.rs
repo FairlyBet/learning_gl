@@ -1,9 +1,9 @@
-use crate::gl_wrappers::Gl;
+use crate::{gl_wrappers::Gl, rendering::RenderPipeline};
 use glfw::{
     Action, Context, Glfw, Key, Modifiers, OpenGlProfileHint, SwapInterval, Window, WindowEvent,
     WindowHint, WindowMode,
 };
-use std::sync::mpsc::Receiver;
+use std::{ptr, sync::mpsc::Receiver};
 
 const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 2);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
@@ -23,8 +23,6 @@ pub struct Application {
 
 impl Application {
     pub fn new() -> Self {
-        let gl = Gl::load();
-
         let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
         glfw.window_hint(OPENGL_PROFILE);
         glfw.window_hint(CONTEXT_VERSION);
@@ -36,6 +34,7 @@ impl Application {
         window.make_current();
         glfw.set_swap_interval(SwapInterval::Sync(VSYNC.into()));
 
+        let gl = Gl::load();
         let mut event_sys = EventSys::new();
 
         Self {
@@ -54,11 +53,18 @@ impl Application {
     }
 
     pub fn run(mut self) {
+        let mut render_pipeline =
+            RenderPipeline::new(self.window.get_framebuffer_size());
+        self.event_sys.subscribe_framebuffersize(
+            &mut render_pipeline as *mut _ as *mut dyn OnFramebufferSize,
+        );
+
         let mut frame_time = 0.0;
         loop {
             if self.window.should_close() {
                 break;
             }
+
             self.glfw.set_time(0.0);
             self.event_sys.clear_key_events();
             self.glfw.poll_events();
@@ -73,7 +79,11 @@ impl Application {
                     _ => {}
                 }
             }
-            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            render_pipeline.draw_cycle();
+            self.window.swap_buffers();
+            // std::thread::sleep(std::time::Duration::from_millis(100));
+
             frame_time = self.glfw.get_time();
         }
     }
