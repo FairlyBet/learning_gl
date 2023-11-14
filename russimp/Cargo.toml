@@ -1,0 +1,33 @@
+[package]
+name = "russimp"
+version = "2.0.6"
+authors = ["Jhonny Knaak de Vargas"]
+edition = "2021"
+license-file = "LICENSE"
+readme = "README.md"
+homepage = "https://github.com/jkvargas/russimp"
+categories = [
+    "rendering",
+    "external-ffi-bindings",
+    "game-engines",
+    "multimedia",
+]
+keywords = ["assimp", "3d", "blend", "3ds", "glTF"]
+repository = "https://github.com/jkvargas/russimp"
+description = "Assimp bindings for rust"
+exclude = ["*.bash", "/models"]
+
+[lib]
+name = "russimp"
+path = "src/lib.rs"
+crate-type = ["dylib"]
+
+[dependencies]
+russimp-sys = { version = "1.0.3", features = ["prebuilt"] }
+num-derive = "0.4"
+num-traits = "0.2.15"
+num_enum = "0.6.1"
+derivative = "2.2.0"
+strum = "0.25"
+strum_macros = "0.25"
+mint = { version = "0.5.9", optional = true }
