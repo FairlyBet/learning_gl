@@ -10,7 +10,7 @@ gl = "0.14.0"
 gl_loader = "0.1.2"
 nalgebra-glm = "0.18.0"
 glfw = "0.51.0"
-# need to make russimp to link dynamically
+# makes russimp dynamic dependency
 # in order to work properly remove std.dll from rust toolchain msvc lib folder
 russimp = { path = "russimp" }
 stb_image_rust = "2.27.2"
