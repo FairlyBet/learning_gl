@@ -16,7 +16,7 @@ mod scene;
 use application::Application;
 
 fn main() {
-    let mut app = Application::new();
+    let app = Application::new();
     app.run();
 
     // let lua = Lua::new();

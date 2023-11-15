@@ -1,9 +1,9 @@
 use crate::{gl_wrappers::Gl, rendering::RenderPipeline};
 use glfw::{
-    Action, Context, Glfw, Key, Modifiers, OpenGlProfileHint, SwapInterval, Window, WindowEvent,
-    WindowHint, WindowMode,
+    Action, Context, Glfw, Key, Modifiers, MouseButton, OpenGlProfileHint, SwapInterval, Window,
+    WindowEvent, WindowHint, WindowMode,
 };
-use std::{ptr, sync::mpsc::Receiver};
+use std::sync::mpsc::Receiver;
 
 const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 2);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
@@ -18,7 +18,6 @@ pub struct Application {
     glfw: Glfw,
     window: Window,
     receiver: Receiver<(f64, WindowEvent)>,
-    event_sys: EventSys,
 }
 
 impl Application {
@@ -35,29 +34,25 @@ impl Application {
         glfw.set_swap_interval(SwapInterval::Sync(VSYNC.into()));
 
         let gl = Gl::load();
-        let mut event_sys = EventSys::new();
 
         Self {
             gl,
             glfw,
             window,
             receiver,
-            event_sys,
         }
     }
 
     fn enable_polling(window: &mut Window) {
         window.set_key_polling(true);
         window.set_cursor_pos_polling(true);
+        window.set_mouse_button_polling(true);
         window.set_framebuffer_size_polling(true);
     }
 
     pub fn run(mut self) {
-        let mut render_pipeline =
-            RenderPipeline::new(self.window.get_framebuffer_size());
-        self.event_sys.subscribe_framebuffersize(
-            &mut render_pipeline as *mut _ as *mut dyn OnFramebufferSize,
-        );
+        let mut render_pipeline = RenderPipeline::new(self.window.get_framebuffer_size());
+        let mut event_sys = EventSys::new();
 
         let mut frame_time = 0.0;
         loop {
@@ -66,15 +61,20 @@ impl Application {
             }
 
             self.glfw.set_time(0.0);
-            self.event_sys.clear_key_events();
             self.glfw.poll_events();
+            event_sys.clear_events();
             for (_, event) in glfw::flush_messages(&self.receiver) {
                 match event {
                     WindowEvent::FramebufferSize(w, h) => {
-                        self.event_sys.update_framebuffer_size((w, h));
+                        render_pipeline.on_framebuffer_size((w, h));
                     }
                     WindowEvent::Key(key, _, action, modifier) => {
-                        self.event_sys.push_key_event((key, action, modifier));
+                        event_sys.key_events.push((key, action, modifier));
+                    }
+                    WindowEvent::MouseButton(button, action, modifier) => {
+                        event_sys
+                            .mouse_button_events
+                            .push((button, action, modifier));
                     }
                     _ => {}
                 }
@@ -90,46 +90,43 @@ impl Application {
 }
 
 pub struct EventSys {
-    on_framebuffer_size: Vec<*mut dyn OnFramebufferSize>,
     key_events: Vec<(Key, Action, Modifiers)>,
+    mouse_button_events: Vec<(MouseButton, Action, Modifiers)>,
 }
 
 impl EventSys {
     pub fn new() -> Self {
         Self {
-            on_framebuffer_size: Vec::new(),
             key_events: vec![],
+            mouse_button_events: vec![],
         }
     }
 
-    pub fn subscribe_framebuffersize(&mut self, listener: *mut dyn OnFramebufferSize) {
-        self.on_framebuffer_size.push(listener);
+    // pub fn subscribe_framebuffersize(&mut self, listener: &'a mut dyn OnFramebufferSize) {
+    //     self.on_framebuffer_size.push(listener);
+    // }
+
+    pub fn get_key(&self, key: (Key, Action, Modifiers)) -> bool {
+        self.key_events.contains(&key)
     }
 
-    pub fn get_key_events(&self) -> &Vec<(Key, Action, Modifiers)> {
-        &self.key_events
+    pub fn get_mouse_button(&self, button: (MouseButton, Action, Modifiers)) -> bool {
+        self.mouse_button_events.contains(&button)
     }
 
-    pub fn get_key_event(&self, event: (Key, Action, Modifiers)) -> bool {
-        self.key_events.contains(&event)
-    }
+    // fn update_framebuffer_size(&self, size: (i32, i32)) {
+    //     for subscriber in &self.on_framebuffer_size {
+    //         let subscriber = unsafe { &mut **subscriber as &mut dyn OnFramebufferSize };
+    //         subscriber.on_framebuffer_size(size);
+    //     }
+    // }
 
-    fn update_framebuffer_size(&self, size: (i32, i32)) {
-        for subscriber in &self.on_framebuffer_size {
-            let subscriber = unsafe { &mut **subscriber as &mut dyn OnFramebufferSize };
-            subscriber.on_framebuffer_size(size);
-        }
-    }
-
-    fn push_key_event(&mut self, event: (Key, Action, Modifiers)) {
-        self.key_events.push(event);
-    }
-
-    fn clear_key_events(&mut self) {
+    fn clear_events(&mut self) {
         self.key_events.clear();
+        self.mouse_button_events.clear();
     }
 }
 
-pub trait OnFramebufferSize {
-    fn on_framebuffer_size(&mut self, size: (i32, i32));
-}
+// pub trait OnFramebufferSize {
+//     fn on_framebuffer_size(&mut self, size: (i32, i32));
+// }

@@ -1,4 +1,3 @@
-use crate::application::OnFramebufferSize;
 use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
 use std::{
     ffi::{c_void, CStr, CString},

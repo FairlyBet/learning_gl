@@ -1,5 +1,4 @@
 use crate::{
-    application::OnFramebufferSize,
     camera::Camera,
     data3d::{Mesh, Model, VertexAttribute},
     gl_wrappers::{self, BufferObject, Renderbuffer, Shader, ShaderProgram, Texture},
@@ -332,10 +331,8 @@ impl RenderPipeline {
         self.screen_quad_renderer
             .draw_texture(&self.screen_quad, &self.offscreen_buffer.sampler_buffer);
     }
-}
 
-impl OnFramebufferSize for RenderPipeline {
-    fn on_framebuffer_size(&mut self, size: (i32, i32)) {
+    pub fn on_framebuffer_size(&mut self, size: (i32, i32)) {
         self.main_framebuffer_size = size;
         if self.match_window_size {
             self.offscreen_buffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
