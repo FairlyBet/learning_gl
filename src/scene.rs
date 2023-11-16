@@ -1,4 +1,4 @@
-use crate::{camera::Camera, data3d::Model, lighting::LightSource};
+use crate::{camera::Camera, data3d::Model, lighting::LightSource, linear};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -10,14 +10,27 @@ const TRANSFORMS_FILENAME: &str = "transforms.json";
 
 pub struct Scene {
     path: String,
+    transforms: Vec<linear::Transform>,
 }
 
 impl Scene {
-    pub fn load(&self) {
+    pub fn load(&mut self) {
         let scene_dir = Path::new(&self.path);
-        let entities = Self::read_vec::<Vec<Entity>>(&scene_dir.with_file_name(ENTITIES_FILENAME));
+
+        let entities = Self::read_vec::<Entity>(&scene_dir.with_file_name(ENTITIES_FILENAME));
         let transforms =
-            Self::read_vec::<Vec<Transform>>(&scene_dir.with_file_name(TRANSFORMS_FILENAME));
+            Self::read_vec::<Transform>(&scene_dir.with_file_name(TRANSFORMS_FILENAME));
+
+        self.transforms = Vec::with_capacity(transforms.len());
+        for (i, transform) in transforms.iter().enumerate() {
+            self.transforms[i] = transforms[i].into_actual();
+        }
+
+        for (i, entity) in entities.iter().enumerate() {
+            if let Some(parent_id) = entity.parent {
+                self.transforms[i].parent = Some(&self.transforms[parent_id as usize]);
+            }
+        }
     }
 
     fn read_vec<T>(path: &PathBuf) -> Vec<T>
@@ -30,10 +43,16 @@ impl Scene {
     }
 }
 
+struct EntityContainer {
+    
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Entity {
     pub id: u32,
     pub name: String,
+    pub parent: Option<u32>,
+    pub children: Option<Vec<u32>>,
 }
 
 #[derive(Deserialize)]
@@ -41,7 +60,27 @@ struct Transform {
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
-    pub parent_id: u32,
+}
+
+impl Transform {
+    pub fn into_actual(&self) -> linear::Transform {
+        let mut result = linear::Transform::new();
+
+        result.position.x = self.position.x;
+        result.position.y = self.position.y;
+        result.position.z = self.position.z;
+
+        result.orientation.coords.x = self.orientation.x;
+        result.orientation.coords.y = self.orientation.y;
+        result.orientation.coords.z = self.orientation.z;
+        result.orientation.coords.w = self.orientation.w;
+
+        result.scale.x = self.scale.x;
+        result.scale.y = self.scale.y;
+        result.scale.z = self.scale.z;
+
+        result
+    }
 }
 
 #[derive(Deserialize)]

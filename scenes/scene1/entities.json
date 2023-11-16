@@ -1,10 +1,14 @@
 [
     {
         "id": "0",
-        "name": "obj1"
+        "name": "obj1",
+        "parent": "None",
+        "children": "None"
     },
     {
         "id": "1",
-        "name": "obj2"
+        "name": "obj2",
+        "parent": "None",
+        "children": "None"
     }
 ]
