@@ -1,14 +1,16 @@
 [
     {
         "id": "0",
-        "name": "obj1",
+        "name": "Entity 1",
         "parent": "None",
-        "children": "None"
+        "children": [],
+        "transform_index": 0
     },
     {
         "id": "1",
-        "name": "obj2",
+        "name": "Entity 2",
         "parent": "None",
-        "children": "None"
+        "children": [],
+        "transform_index": 0
     }
 ]

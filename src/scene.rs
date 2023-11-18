@@ -1,36 +1,63 @@
-use crate::{camera::Camera, data3d::Model, lighting::LightSource, linear};
+use crate::{
+    camera::Camera,
+    data3d::{Mesh, Model},
+    lighting::LightSource,
+    linear, serializable,
+};
+use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     fs,
+    hash::BuildHasherDefault,
+    mem::size_of,
     path::{Path, PathBuf},
+    str::FromStr,
 };
+
+type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
 const ENTITIES_FILENAME: &str = "entities.json";
 const TRANSFORMS_FILENAME: &str = "transforms.json";
+const MESHES_FILENAME: &str = "meshes.json";
 
 pub struct Scene {
-    path: String,
-    transforms: Vec<linear::Transform>,
+    path: PathBuf,
+    container: EntityComponentContainer,
 }
 
 impl Scene {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            container: Default::default(),
+        }
+    }
+
     pub fn load(&mut self) {
         let scene_dir = Path::new(&self.path);
 
-        let entities = Self::read_vec::<Entity>(&scene_dir.with_file_name(ENTITIES_FILENAME));
-        let transforms =
-            Self::read_vec::<Transform>(&scene_dir.with_file_name(TRANSFORMS_FILENAME));
+        let mut entities = Self::read_vec::<Entity>(&scene_dir.with_file_name(ENTITIES_FILENAME));
+        let transforms = Self::read_vec::<serializable::Transform>(
+            &scene_dir.with_file_name(TRANSFORMS_FILENAME),
+        );
 
-        self.transforms = Vec::with_capacity(transforms.len());
+        // fill transform container
+        self.container.transforms = Vec::with_capacity(transforms.len());
         for (i, transform) in transforms.iter().enumerate() {
-            self.transforms[i] = transforms[i].into_actual();
+            self.container.transforms.push(transform.into_actual());
+            self.container.transforms[i].owner_id = entities[i].id;
+            entities[i].transform_index = i;
         }
 
-        for (i, entity) in entities.iter().enumerate() {
-            if let Some(parent_id) = entity.parent {
-                self.transforms[i].parent = Some(&self.transforms[parent_id as usize]);
-            }
+        self.container.entities =
+            FxHashMap::with_capacity_and_hasher(entities.len(), Default::default());
+        for entity in entities {
+            self.container.entities.insert(entity.id, entity);
         }
+
+        // assign parenting pointers and never ever reallocate container
+        self.container.update_parent_pointers();
     }
 
     fn read_vec<T>(path: &PathBuf) -> Vec<T>
@@ -43,59 +70,64 @@ impl Scene {
     }
 }
 
-struct EntityContainer {
-    
+#[derive(Default)]
+struct EntityComponentContainer {
+    entities: FxHashMap<u32, Entity>,
+    transforms: Vec<linear::Transform>,
+    static_meshes: Vec<Mesh>,
+    id_counter: u32,
 }
 
-#[derive(Serialize, Deserialize)]
+impl EntityComponentContainer {
+    /// Takes O(n), n - amount of entities
+    fn update_parent_pointers(&mut self) {
+        for entity in self.entities.values() {
+            if let Some(parent_id) = entity.parent {
+                let parent_transform_index = self.entities.get(&parent_id).unwrap().transform_index;
+                self.transforms[entity.transform_index].parent =
+                    Some(&self.transforms[parent_transform_index]);
+            }
+        }
+    }
+
+    pub fn insert_entity(&mut self, mut entity: Entity, mut transform: linear::Transform) {
+        transform.owner_id = entity.id;
+        entity.transform_index = self.transforms.len();
+        self.entities.insert(entity.id, entity);
+        let reallocating = self.transforms.len() == self.transforms.capacity();
+        self.transforms.push(transform);
+        if reallocating {
+            self.update_parent_pointers();
+        }
+    }
+
+    /// Returns id of created entity
+    pub fn create_entity(&mut self) -> u32 {
+        let mut entity: Entity = Default::default();
+        entity.name = String::from_str("New entity").unwrap();
+        self.id_counter += 1;
+        entity.id = self.id_counter;
+        let result = entity.id;
+        let transform = linear::Transform::new();
+        self.insert_entity(entity, transform);
+        result
+    }
+
+    pub fn init(entities: Vec<Entity>, transforms: Vec<serializable::Transform>) {
+        todo!()
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
 pub struct Entity {
     pub id: u32,
     pub name: String,
     pub parent: Option<u32>,
-    pub children: Option<Vec<u32>>,
+    pub children: Vec<u32>,
+    pub transform_index: usize,
 }
 
-#[derive(Deserialize)]
-struct Transform {
-    pub position: Vec3,
-    pub orientation: Quat,
-    pub scale: Vec3,
+struct StaticMeshComponent {
+    owner_id: u32,
+    mesh: *const Mesh,
 }
-
-impl Transform {
-    pub fn into_actual(&self) -> linear::Transform {
-        let mut result = linear::Transform::new();
-
-        result.position.x = self.position.x;
-        result.position.y = self.position.y;
-        result.position.z = self.position.z;
-
-        result.orientation.coords.x = self.orientation.x;
-        result.orientation.coords.y = self.orientation.y;
-        result.orientation.coords.z = self.orientation.z;
-        result.orientation.coords.w = self.orientation.w;
-
-        result.scale.x = self.scale.x;
-        result.scale.y = self.scale.y;
-        result.scale.z = self.scale.z;
-
-        result
-    }
-}
-
-#[derive(Deserialize)]
-struct Vec3 {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-
-#[derive(Deserialize)]
-struct Quat {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub w: f32,
-}
-
-struct Component {}

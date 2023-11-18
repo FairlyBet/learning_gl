@@ -14,7 +14,7 @@ pub enum LightType {
 
 impl Default for LightType {
     fn default() -> Self {
-        LightType::Directional
+        Self::Directional
     }
 }
 

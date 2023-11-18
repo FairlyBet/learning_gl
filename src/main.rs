@@ -1,6 +1,6 @@
-// #![windows_subsystem = "windows"]
 #![deny(rust_2018_compatibility)]
 #![allow(unused)]
+// #![windows_subsystem = "windows"]
 
 extern crate nalgebra_glm as glm;
 
@@ -12,6 +12,7 @@ mod lighting;
 mod linear;
 mod rendering;
 mod scene;
+mod serializable;
 
 use application::Application;
 
