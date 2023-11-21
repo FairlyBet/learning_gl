@@ -19,7 +19,6 @@ use application::Application;
 fn main() {
     let app = Application::new();
     app.run();
-
     // let lua = Lua::new();
     // let src = fs::read_to_string("src\\scripts\\load-scene.lua").unwrap();
     // let result = lua.context(|context| {

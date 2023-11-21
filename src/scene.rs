@@ -4,14 +4,17 @@ use crate::{
     lighting::LightSource,
     linear, serializable,
 };
+use core::panic;
 use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
 use std::{
+    alloc::{self, Layout},
     collections::HashMap,
     fs,
     hash::BuildHasherDefault,
     mem::size_of,
     path::{Path, PathBuf},
+    ptr,
     str::FromStr,
 };
 
@@ -22,20 +25,18 @@ const TRANSFORMS_FILENAME: &str = "transforms.json";
 const MESHES_FILENAME: &str = "meshes.json";
 
 pub struct Scene {
-    path: PathBuf,
-    container: EntityComponentContainer,
+    container: EntityComponentSys,
 }
 
 impl Scene {
     pub fn new(path: PathBuf) -> Self {
         Self {
-            path,
             container: Default::default(),
         }
     }
 
-    pub fn load(&mut self) {
-        let scene_dir = Path::new(&self.path);
+    pub fn load(&mut self, path: &PathBuf) {
+        let scene_dir = Path::new(path);
 
         let mut entities = Self::read_vec::<Entity>(&scene_dir.with_file_name(ENTITIES_FILENAME));
         let transforms = Self::read_vec::<serializable::Transform>(
@@ -71,14 +72,15 @@ impl Scene {
 }
 
 #[derive(Default)]
-struct EntityComponentContainer {
+struct EntityComponentSys {
     entities: FxHashMap<u32, Entity>,
+    components: Vec<ByteArray>,
     transforms: Vec<linear::Transform>,
-    static_meshes: Vec<Mesh>,
+    free_ids: Vec<u32>,
     id_counter: u32,
 }
 
-impl EntityComponentContainer {
+impl EntityComponentSys {
     /// Takes O(n), n - amount of entities
     fn update_parent_pointers(&mut self) {
         for entity in self.entities.values() {
@@ -125,9 +127,95 @@ pub struct Entity {
     pub parent: Option<u32>,
     pub children: Vec<u32>,
     pub transform_index: usize,
+    pub components: Vec<ComponentId>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ComponentId {
+    pub index: usize,
+    pub type_: ComponentType,
+}
+
+#[repr(u32)]
+#[derive(Serialize, Deserialize)]
+pub enum ComponentType {
+    Transform,
+    StaticMesh,
 }
 
 struct StaticMeshComponent {
     owner_id: u32,
     mesh: *const Mesh,
+    transform: *const linear::Transform,
+}
+
+pub struct ByteArray {
+    buf: *mut u8,
+    size: usize,
+    len: usize,
+}
+
+impl ByteArray {
+    pub fn init<T>(n: usize) -> Self {
+        let (buf, size) = Self::alloc_bytes(n * size_of::<T>());
+        Self { buf, size, len: 0 }
+    }
+
+    pub fn write<T>(&mut self, value: T) {
+        if self.len + size_of::<T>() > self.size {
+            self.resize(self.size + size_of::<T>() * (self.size / size_of::<T>() + 1));
+        }
+        unsafe {
+            self.buf
+                .add(self.len)
+                .copy_from(&value as *const T as *const u8, size_of::<T>());
+        }
+        self.len += size_of::<T>();
+    }
+
+    fn resize(&mut self, size: usize) {
+        let (buf, size) = Self::alloc_bytes(size);
+        unsafe {
+            buf.copy_from(self.buf, self.len);
+        }
+        self.dealloc();
+        self.buf = buf;
+        self.size = size;
+    }
+
+    fn alloc_bytes(n_bytes: usize) -> (*mut u8, usize) {
+        let layout = Layout::array::<u8>(n_bytes).unwrap();
+        let buf = unsafe { alloc::alloc(layout) };
+        if buf == ptr::null_mut::<u8>() {
+            panic!("Can't allocate memory")
+        }
+        (buf, layout.size())
+    }
+
+    fn dealloc(&mut self) {
+        let layout = Layout::array::<u8>(self.size).unwrap();
+        unsafe {
+            alloc::dealloc(self.buf, layout);
+        }
+    }
+
+    pub fn len<T>(&self) -> usize {
+        self.len / size_of::<T>()
+    }
+
+    pub fn get<T>(&self, index: usize) -> &T {
+        if index >= self.len::<T>() {
+            panic!("Index out of bounds")
+        }
+        unsafe {
+            let ptr = self.buf.add(size_of::<T>() * index) as *const u8 as *const T;
+            &(*ptr)
+        }
+    }
+}
+
+impl Drop for ByteArray {
+    fn drop(&mut self) {
+        self.dealloc();
+    }
 }

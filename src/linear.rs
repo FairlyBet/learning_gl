@@ -1,13 +1,13 @@
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
 
-#[repr(align(64))]
+// #[repr(align(64))]
 #[derive(Clone, Copy)]
 pub struct Transform {
+    pub parent: Option<*const Transform>,
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
-    pub parent: Option<*const Transform>,
     pub owner_id: u32,
 }
 

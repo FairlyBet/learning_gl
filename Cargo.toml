@@ -15,7 +15,6 @@ glfw = "0.51.0"
 russimp = { path = "russimp" }
 stb_image_rust = "2.27.2"
 rlua = "0.19.7"
-winapi = "0.3.9"
 serde = { version = "1.0.190", features = ["derive"] }
 serde_json = "1.0.108"
 fxhash = "0.2.1"
