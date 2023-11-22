@@ -29,7 +29,13 @@ impl Camera {
     }
 
     pub fn update_aspect(&mut self, framebuffer_size: (i32, i32)) {
-        if let Projection::Perspective(_, fovy, near, far) = self.projection {
+        if let Projection::Perspective {
+            aspect,
+            fovy,
+            near,
+            far,
+        } = self.projection
+        {
             self.projection =
                 Projection::new_perspective(camera::aspect(framebuffer_size), fovy, near, far);
             self.projection_matrix = self.projection.matrix();

@@ -25,7 +25,7 @@ pub fn enable_attribute(index: GLuint) {
     }
 }
 
-pub struct Gl {}
+pub struct Gl;
 
 impl Gl {
     pub fn load() -> Self {

@@ -1,6 +1,8 @@
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
 
+use crate::scene::EntityId;
+
 // #[repr(align(64))]
 #[derive(Clone, Copy)]
 pub struct Transform {
@@ -8,7 +10,7 @@ pub struct Transform {
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
-    pub owner_id: u32,
+    pub owner_id: EntityId,
 }
 
 impl Transform {
@@ -18,7 +20,7 @@ impl Transform {
             orientation: glm::quat_identity(),
             scale: Vec3::from_element(1.0),
             parent: None,
-            owner_id: 0
+            owner_id: 0,
         }
     }
 
@@ -89,8 +91,20 @@ impl Transform {
 
 #[derive(Clone, Copy)]
 pub enum Projection {
-    Orthographic(f32, f32, f32, f32, f32, f32),
-    Perspective(f32, f32, f32, f32),
+    Orthographic {
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        znear: f32,
+        zfar: f32,
+    },
+    Perspective {
+        aspect: f32,
+        fovy: f32,
+        near: f32,
+        far: f32,
+    },
 }
 
 impl Projection {
@@ -102,21 +116,41 @@ impl Projection {
         znear: f32,
         zfar: f32,
     ) -> Self {
-        Self::Orthographic(left, right, bottom, top, znear, zfar)
+        Self::Orthographic {
+            left,
+            right,
+            bottom,
+            top,
+            znear,
+            zfar,
+        }
     }
 
     pub fn new_perspective(aspect: f32, fovy: f32, near: f32, far: f32) -> Self {
-        Self::Perspective(aspect, fovy, near, far)
+        Self::Perspective {
+            aspect,
+            fovy,
+            near,
+            far,
+        }
     }
 
     pub fn matrix(&self) -> Mat4 {
         match *self {
-            Self::Orthographic(left, right, bottom, top, znear, zfar) => {
-                glm::ortho(left, right, bottom, top, znear, zfar)
-            }
-            Self::Perspective(aspect, fovy, near, far) => {
-                glm::perspective(aspect, fovy.to_radians(), near, far)
-            }
+            Self::Orthographic {
+                left,
+                right,
+                bottom,
+                top,
+                znear,
+                zfar,
+            } => glm::ortho(left, right, bottom, top, znear, zfar),
+            Self::Perspective {
+                aspect,
+                fovy,
+                near,
+                far,
+            } => glm::perspective(aspect, fovy.to_radians(), near, far),
         }
     }
 }

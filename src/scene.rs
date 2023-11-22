@@ -19,6 +19,7 @@ use std::{
 };
 
 type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
+pub type EntityId = u32;
 
 const ENTITIES_FILENAME: &str = "entities.json";
 const TRANSFORMS_FILENAME: &str = "transforms.json";
@@ -73,11 +74,11 @@ impl Scene {
 
 #[derive(Default)]
 struct EntityComponentSys {
-    entities: FxHashMap<u32, Entity>,
-    components: Vec<ByteArray>,
+    entities: FxHashMap<EntityId, Entity>,
+    components: [ByteArray; ComponentType::VariantCount as usize],
     transforms: Vec<linear::Transform>,
-    free_ids: Vec<u32>,
-    id_counter: u32,
+    free_ids: Vec<EntityId>,
+    id_counter: EntityId,
 }
 
 impl EntityComponentSys {
@@ -115,6 +116,14 @@ impl EntityComponentSys {
         result
     }
 
+    pub fn attach_component(&mut self, target: u32, type_: ComponentType) {
+        match type_ {
+            ComponentType::Transform => todo!(),
+            ComponentType::StaticMesh => todo!(),
+            ComponentType::VariantCount => unreachable!(),
+        }
+    }
+
     pub fn init(entities: Vec<Entity>, transforms: Vec<serializable::Transform>) {
         todo!()
     }
@@ -122,25 +131,28 @@ impl EntityComponentSys {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Entity {
-    pub id: u32,
+    pub id: EntityId,
     pub name: String,
-    pub parent: Option<u32>,
-    pub children: Vec<u32>,
+    pub parent: Option<EntityId>,
+    pub children: Vec<EntityId>,
+    pub components: Vec<Component>,
+
     pub transform_index: usize,
-    pub components: Vec<ComponentId>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ComponentId {
+pub struct Component {
     pub index: usize,
     pub type_: ComponentType,
 }
 
-#[repr(u32)]
 #[derive(Serialize, Deserialize)]
+#[repr(u32)]
 pub enum ComponentType {
     Transform,
     StaticMesh,
+
+    VariantCount,
 }
 
 struct StaticMeshComponent {
@@ -159,6 +171,14 @@ impl ByteArray {
     pub fn init<T>(n: usize) -> Self {
         let (buf, size) = Self::alloc_bytes(n * size_of::<T>());
         Self { buf, size, len: 0 }
+    }
+
+    fn uninited() -> Self {
+        Self {
+            buf: ptr::null_mut::<u8>(),
+            size: Default::default(),
+            len: Default::default(),
+        }
     }
 
     pub fn write<T>(&mut self, value: T) {
@@ -208,7 +228,7 @@ impl ByteArray {
             panic!("Index out of bounds")
         }
         unsafe {
-            let ptr = self.buf.add(size_of::<T>() * index) as *const u8 as *const T;
+            let ptr = self.buf.add(index * size_of::<T>()) as *const u8 as *const T;
             &(*ptr)
         }
     }
@@ -217,5 +237,11 @@ impl ByteArray {
 impl Drop for ByteArray {
     fn drop(&mut self) {
         self.dealloc();
+    }
+}
+
+impl Default for ByteArray {
+    fn default() -> Self {
+        ByteArray::uninited()
     }
 }
