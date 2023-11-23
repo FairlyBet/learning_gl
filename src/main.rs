@@ -13,6 +13,8 @@ mod linear;
 mod rendering;
 mod scene;
 mod serializable;
+mod entity;
+mod util;
 
 use application::Application;
 

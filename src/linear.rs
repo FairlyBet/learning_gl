@@ -1,7 +1,6 @@
+use crate::entity::EntityId;
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
-
-use crate::scene::EntityId;
 
 // #[repr(align(64))]
 #[derive(Clone, Copy)]
@@ -10,7 +9,6 @@ pub struct Transform {
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
-    pub owner_id: EntityId,
 }
 
 impl Transform {
@@ -20,14 +18,7 @@ impl Transform {
             orientation: glm::quat_identity(),
             scale: Vec3::from_element(1.0),
             parent: None,
-            owner_id: 0,
         }
-    }
-
-    pub fn with_id(owner_id: u32) -> Self {
-        let mut tr = Self::new();
-        tr.owner_id = owner_id;
-        tr
     }
 
     pub fn global_position(&self) -> Vec3 {
