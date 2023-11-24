@@ -2,7 +2,7 @@ use crate::entity::EntityId;
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
 
-// #[repr(align(64))]
+#[repr(align(64))]
 #[derive(Clone, Copy)]
 pub struct Transform {
     pub parent: Option<*const Transform>,
