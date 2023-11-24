@@ -1,4 +1,4 @@
-use crate::linear;
+use crate::{entity_sys::EntityId, linear};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -42,4 +42,9 @@ pub struct Quat {
     pub y: f32,
     pub z: f32,
     pub w: f32,
+}
+
+#[derive(Deserialize)]
+pub struct StaticMesh {
+    owner_id: EntityId,
 }

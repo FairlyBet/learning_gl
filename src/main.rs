@@ -7,7 +7,7 @@ extern crate nalgebra_glm as glm;
 mod application;
 mod camera;
 mod data3d;
-mod entity;
+mod entity_sys;
 mod gl_wrappers;
 mod lighting;
 mod linear;

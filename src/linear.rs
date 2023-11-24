@@ -1,23 +1,24 @@
-use crate::entity::EntityId;
+use crate::entity_sys::EntityId;
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
 
-#[repr(align(64))]
 #[derive(Clone, Copy)]
 pub struct Transform {
     pub parent: Option<*const Transform>,
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
+    padding: [u8; 8],
 }
 
 impl Transform {
     pub fn new() -> Self {
         Self {
+            parent: None,
             position: Vec3::zeros(),
             orientation: glm::quat_identity(),
             scale: Vec3::from_element(1.0),
-            parent: None,
+            padding: Default::default(),
         }
     }
 

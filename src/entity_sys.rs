@@ -1,6 +1,6 @@
 use crate::{
     linear, serializable,
-    util::{ByteArray, Reallocated},
+    util::{ByteArray, Reallocated}, data3d::Mesh,
 };
 use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,7 @@ impl EntityComponentSys {
             transforms.len(),
             "Amount of entitites and transforms must be equal"
         );
+
         let mut res: Self = Default::default();
 
         let mut i = 0;
@@ -52,6 +53,7 @@ impl EntityComponentSys {
             Some(max) => *max + 1,
             None => 0,
         };
+
         res
     }
 
@@ -79,7 +81,7 @@ impl EntityComponentSys {
     }
 
     /// Takes O(n), n - amount of entities.
-    /// Only updates parent transform pointers 
+    /// Only updates parent transform pointers
     fn update_transform_pointers_on_reallocation(&mut self) {
         for entity in self.entities.values() {
             if let Some(parent_id) = entity.parent {
@@ -130,7 +132,7 @@ impl EntityComponentSys {
     //     result
     // }
 
-    pub fn attach_component(&mut self, target: u32, type_: ComponentType) {
+    pub fn attach_component(&mut self, target: EntityId, type_: ComponentType) {
         match type_ {
             ComponentType::Transform => todo!(),
             ComponentType::StaticMesh => todo!(),
@@ -160,8 +162,8 @@ pub enum ComponentType {
     StaticMesh,
 }
 
-// struct StaticMeshComponent {
-//     owner_id: u32,
-//     mesh: *const Mesh,
-//     transform: *const linear::Transform,
-// }
+struct StaticMeshComponent {
+    mesh: *const Mesh,
+    transform: *const linear::Transform,
+    owner_id: EntityId,
+}

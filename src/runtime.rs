@@ -1,7 +1,6 @@
-use std::sync::mpsc::Receiver;
-
 use crate::rendering::RenderPipeline;
 use glfw::{Action, Context as _, Glfw, Key, Modifiers, MouseButton, Window, WindowEvent};
+use std::{sync::mpsc::Receiver, path::Path};
 
 pub struct Runtime;
 
@@ -17,7 +16,7 @@ impl Runtime {
         receiver: &Receiver<(f64, WindowEvent)>,
     ) {
         let mut render_pipeline = RenderPipeline::new(window.get_framebuffer_size());
-        let mut event_sys = InputEvent::new();
+        let mut event_sys = InputEvents::new();
 
         let mut frame_time = 0.0;
         loop {
@@ -54,12 +53,12 @@ impl Runtime {
     }
 }
 
-pub struct InputEvent {
+pub struct InputEvents {
     key_events: Vec<(Key, Action, Modifiers)>,
     mouse_button_events: Vec<(MouseButton, Action, Modifiers)>,
 }
 
-impl InputEvent {
+impl InputEvents {
     pub fn new() -> Self {
         Self {
             key_events: vec![],
@@ -79,4 +78,8 @@ impl InputEvent {
         self.key_events.clear();
         self.mouse_button_events.clear();
     }
+}
+
+struct AssetResources {
+    meshes: Vec<String>
 }
