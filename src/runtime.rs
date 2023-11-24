@@ -1,6 +1,9 @@
 use crate::rendering::RenderPipeline;
 use glfw::{Action, Context as _, Glfw, Key, Modifiers, MouseButton, Window, WindowEvent};
-use std::{sync::mpsc::Receiver, path::Path};
+use std::{
+    path::{Path, PathBuf},
+    sync::mpsc::Receiver, fs,
+};
 
 pub struct Runtime;
 
@@ -80,6 +83,19 @@ impl InputEvents {
     }
 }
 
-struct AssetResources {
-    meshes: Vec<String>
+struct AssetManager {
+    meshes: Vec<String>,
+}
+
+impl AssetManager {
+    const ASSET_PATH: &str = "assets";
+    const MESHES_PATH: &str = "meshes";
+
+    pub fn read_meshes(&mut self) {
+        let path = Path::new(Self::ASSET_PATH).join(Self::MESHES_PATH);
+        let entries = fs::read_dir(path).unwrap();
+        for entry in entries {
+            entry
+        }
+    }
 }
