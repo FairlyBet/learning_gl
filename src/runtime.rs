@@ -1,6 +1,11 @@
-use crate::rendering::RenderPipeline;
-use glfw::{Action, Context as _, Glfw, Key, Modifiers, MouseButton, Window, WindowEvent};
-use std::{sync::mpsc::Receiver, path::Path};
+use crate::{
+    application::Application,
+    asset_loader,
+    data3d::ModelContainer,
+    entity_sys::EntitySystem,
+    scene::{self, Scene},
+};
+use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
 
 pub struct Runtime;
 
@@ -9,60 +14,91 @@ impl Runtime {
         Self {}
     }
 
-    pub fn run(
-        self,
-        glfw: &mut Glfw,
-        window: &mut Window,
-        receiver: &Receiver<(f64, WindowEvent)>,
-    ) {
-        let mut render_pipeline = RenderPipeline::new(window.get_framebuffer_size());
-        let mut event_sys = InputEvents::new();
+    fn process_window_events(app: &mut Application) {
+        app.glfw.poll_events();
+        for (_, event) in glfw::flush_messages(&app.receiver) {
+            match event {
+                WindowEvent::Key(key, _, action @ (Action::Press | Action::Release), modifiers) => {
+                }
+                WindowEvent::Char(char_) => {}
+                WindowEvent::CursorPos(x, y) => {}
+                WindowEvent::FramebufferSize(w, h) => {}
+                WindowEvent::Focus(focused) => {}
+                WindowEvent::FileDrop(paths) => {}
+                _ => {}
+            }
+        }
+    }
+
+    fn update_input() {}
+
+    fn script_cycle() {}
+
+    fn render_cycle(app: &mut Application) {
+        app.window.swap_buffers();
+    }
+
+    fn handle_closing(app: &Application) -> bool {
+        !app.window.should_close()
+    }
+
+    pub fn run(self, mut app: Application) {
+        app.window.focus();
 
         let mut frame_time = 0.0;
-        loop {
-            if window.should_close() {
-                break;
-            }
-
-            glfw.set_time(0.0);
-            glfw.poll_events();
-            event_sys.clear_events();
-            for (_, event) in glfw::flush_messages(receiver) {
-                match event {
-                    WindowEvent::FramebufferSize(w, h) => {
-                        render_pipeline.on_framebuffer_size((w, h));
-                    }
-                    WindowEvent::Key(key, _, action, modifier) => {
-                        event_sys.key_events.push((key, action, modifier));
-                    }
-                    WindowEvent::MouseButton(button, action, modifier) => {
-                        event_sys
-                            .mouse_button_events
-                            .push((button, action, modifier));
-                    }
-                    _ => {}
-                }
-            }
-
-            render_pipeline.draw_cycle();
-            window.swap_buffers();
-            // std::thread::sleep(std::time::Duration::from_millis(100));
-
-            frame_time = glfw.get_time();
+        while Self::handle_closing(&app) {
+            app.glfw.set_time(0.0);
+            Self::process_window_events(&mut app);
+            Self::update_input();
+            Self::script_cycle();
+            Self::render_cycle(&mut app);
+            frame_time = app.glfw.get_time();
         }
+
+        // let mut input = Input::new();
+        // let mut render_pipeline = RenderPipeline::new(app.window.get_framebuffer_size());
+        // let mut frame_time = 0.0;
+        // while !app.window.should_close() {
+        //     app.glfw.set_time(0.0);
+        //     app.glfw.poll_events();
+        //     input.clear_events();
+        //     for (_, event) in glfw::flush_messages(&app.receiver) {
+        //         match event {
+        //             WindowEvent::FramebufferSize(w, h) => {
+        //                 render_pipeline.on_framebuffer_size((w, h));
+        //             }
+        //             WindowEvent::Key(key, _, action, modifier) => {
+        //                 if action == Action::Repeat {
+        //                     return;
+        //                 }
+        //                 input.key_events.push((key, action, modifier));
+        //             }
+        //             WindowEvent::MouseButton(button, action, modifier) => {
+        //                 input.mouse_button_events.push((button, action, modifier));
+        //             }
+        //             _ => {}
+        //         }
+        //     }
+        //     render_pipeline.draw_cycle();
+        //     app.window.swap_buffers();
+        //     // std::thread::sleep(std::time::Duration::from_millis(100));
+        //     frame_time = app.glfw.get_time();
+        // }
     }
 }
 
-pub struct InputEvents {
+pub struct Input {
     key_events: Vec<(Key, Action, Modifiers)>,
     mouse_button_events: Vec<(MouseButton, Action, Modifiers)>,
+    cursor_pos: (u32, u32),
 }
 
-impl InputEvents {
+impl Input {
     pub fn new() -> Self {
         Self {
             key_events: vec![],
             mouse_button_events: vec![],
+            cursor_pos: Default::default(),
         }
     }
 
@@ -80,6 +116,19 @@ impl InputEvents {
     }
 }
 
-struct AssetResources {
-    meshes: Vec<String>
+struct Context {
+    entity_system: EntitySystem,
+    mesh_container: ModelContainer,
+    scenes: Vec<Scene>,
+}
+
+impl Context {
+    pub fn load() -> Result<Self, ()> {
+        let mut mesh_container = asset_loader::load_all_models();
+
+        let scenes = scene::get_scenes();
+        let initial = scenes.get(0).ok_or(())?;
+        let sys = EntitySystem::from_scene(&initial);
+        todo!()
+    }
 }

@@ -1,15 +1,32 @@
-use crate::{entity_sys::EntityId, linear};
-use serde::Deserialize;
+use crate::{
+    entity_sys::EntityId,
+    linear::{self, Projection},
+};
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Transform {
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
 }
 
-impl Transform {
-    pub fn into_actual(&self) -> linear::Transform {
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            position: Default::default(),
+            orientation: Default::default(),
+            scale: Vec3 {
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+        }
+    }
+}
+
+impl Into<linear::Transform> for Transform {
+    fn into(self) -> linear::Transform {
         let mut result = linear::Transform::new();
 
         result.position.x = self.position.x;
@@ -29,14 +46,14 @@ impl Transform {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,
     pub z: f32,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Quat {
     pub x: f32,
     pub y: f32,
@@ -44,7 +61,14 @@ pub struct Quat {
     pub w: f32,
 }
 
-#[derive(Deserialize)]
-pub struct StaticMesh {
-    owner_id: EntityId,
+#[derive(Serialize, Deserialize)]
+pub struct Mesh {
+    pub owner_id: EntityId,
+    pub mesh_path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Camera {
+    pub proj: Projection,
+    pub owner_id: EntityId,
 }

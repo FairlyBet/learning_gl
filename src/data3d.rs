@@ -1,53 +1,29 @@
 use crate::gl_wrappers::{self, BufferObject, VertexArrayObject};
+use fxhash::FxHashMap;
 use gl::types::GLenum;
-use russimp::{
-    scene::{PostProcess, Scene},
-    Vector2D, Vector3D,
-};
+use russimp::{Vector2D, Vector3D};
 use std::{ffi::c_void, mem::size_of};
 
-pub fn load_model(path: &str, post_pocess: Vec<PostProcess>) -> Model {
-    let scene = Scene::from_file(path, post_pocess).unwrap();
-    
-    let mut meshes = Vec::<Mesh>::with_capacity(scene.meshes.len());
-    for mesh in &scene.meshes {
-        let vertex_count = mesh.vertices.len();
-        let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
-        
-        for i in 0..vertex_count {
-            let position = mesh.vertices[i];
-            let normal = mesh.normals[i];
-            let tex_coord: Vector2D;
-            if let Some(tex_coords) = &(mesh.texture_coords[0]) {
-                tex_coord = Vector2D {
-                    x: tex_coords[i].x,
-                    y: tex_coords[i].y,
-                };
-            } else {
-                tex_coord = Default::default();
-            }
+pub const CUBE_VERTICES_NORMALS: [f32; 216] = [
+    -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0,
+    -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, -0.5, 0.0,
+    0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.0,
+    0.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0,
+    0.0, 1.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, -0.5,
+    -1.0, 0.0, 0.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5,
+    0.5, -1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5,
+    -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5,
+    0.5, 1.0, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5,
+    -0.5, 0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, -0.5, -0.5, 0.5, 0.0, -1.0, 0.0,
+    -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0,
+    0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0,
+    -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
+];
 
-            let vertex = VertexData {
-                position,
-                normal,
-                tex_coord,
-            };
-
-            vertex_data.push(vertex);
-        }
-
-        let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
-        for face in &mesh.faces {
-            for index in &face.0 {
-                index_data.push(*index);
-            }
-        }
-
-        let mesh = Mesh::from_vertex_index_data(&vertex_data, &index_data, gl::STATIC_DRAW);
-        meshes.push(mesh);
-    }
-    Model::new(meshes)
-}
+pub const QUAD_VERTICES_TEX_COORDS: [f32; 30] = [
+    -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 0.0, 0.0, 1.0, -1.0, -1.0, 0.0,
+    0.0, 0.0, 1.0, -1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
+];
 
 #[repr(C)]
 pub struct VertexData {
@@ -58,9 +34,9 @@ pub struct VertexData {
 
 #[derive(PartialEq)]
 pub enum VertexAttribute {
-    Position = 0,
-    Normal = 1,
-    TexCoord = 2,
+    Position,
+    Normal,
+    TexCoord,
 }
 
 pub struct Mesh {
@@ -72,26 +48,6 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub const CUBE_VERTICES_NORMALS: [f32; 216] = [
-        -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0,
-        0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5,
-        -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5,
-        0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5,
-        -0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5, -0.5, -1.0, 0.0, 0.0,
-        -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, -1.0,
-        0.0, 0.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5, -0.5,
-        1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5,
-        0.5, 1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5,
-        -0.5, -0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0,
-        -0.5, -0.5, 0.5, 0.0, -1.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, -0.5, 0.5, -0.5, 0.0,
-        1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0,
-        1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
-    ];
-    pub const QUAD_VERTICES_TEX_COORDS: [f32; 30] = [
-        -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 0.0, 0.0, 1.0, -1.0, -1.0,
-        0.0, 0.0, 0.0, 1.0, -1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
-    ];
-
     pub fn new(
         size: usize,
         vertex_data: *const c_void,
@@ -214,16 +170,41 @@ impl Mesh {
     }
 }
 
-pub struct Model {
+#[derive(Clone, Copy)]
+pub struct ModelIndex {
+    pub start: usize,
+    pub len: usize,
+}
+
+#[derive(Default)]
+pub struct ModelContainer {
+    table: FxHashMap<String, ModelIndex>,
     meshes: Vec<Mesh>,
 }
 
-impl Model {
-    pub fn new(meshes: Vec<Mesh>) -> Self {
-        Self { meshes }
+impl ModelContainer {
+    pub fn new() -> Self {
+        Default::default()
     }
 
-    pub fn get_meshes(&self) -> &Vec<Mesh> {
-        &self.meshes
+    pub fn push(&mut self, name: String, mut meshes: Vec<Mesh>) -> ModelIndex {
+        let model = ModelIndex {
+            start: self.meshes.len(),
+            len: meshes.len(),
+        };
+        if self.table.contains_key(&name) {
+            panic!("Container already has this mesh")
+        }
+        self.table.insert(name, model);
+        self.meshes.append(&mut meshes);
+        model
+    }
+
+    pub fn get_model(&self, model_idx: ModelIndex) -> &[Mesh] {
+        &self.meshes[model_idx.start..model_idx.len]
+    }
+
+    pub fn unload(&mut self) {
+        self.meshes.clear();
     }
 }

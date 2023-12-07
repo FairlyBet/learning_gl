@@ -35,7 +35,7 @@ impl ByteArray {
         unsafe {
             self.buf
                 .add(self.len)
-                .copy_from(&value as *const T as *const u8, size_of::<T>());
+                .copy_from_nonoverlapping(&value as *const T as *const u8, size_of::<T>());
         }
         self.len += size_of::<T>();
         realloc
@@ -44,7 +44,7 @@ impl ByteArray {
     fn resize<T>(&mut self, n: usize) {
         let (buf, layout) = Self::alloc_buf::<T>(n);
         unsafe {
-            buf.copy_from(self.buf, self.len);
+            buf.copy_from_nonoverlapping(self.buf, self.len);
         }
         self.dealloc();
         self.buf = buf;

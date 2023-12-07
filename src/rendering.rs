@@ -1,6 +1,6 @@
 use crate::{
     camera::Camera,
-    data3d::{Mesh, Model, VertexAttribute},
+    data3d::{self, Mesh, VertexAttribute},
     gl_wrappers::{self, BufferObject, Renderbuffer, Shader, ShaderProgram, Texture},
     lighting::{LightData, LightSource},
     linear::Transform,
@@ -131,9 +131,9 @@ pub struct ScreenQuad {
 impl ScreenQuad {
     pub fn new() -> Self {
         let quad = Mesh::new(
-            Mesh::QUAD_VERTICES_TEX_COORDS.len() * size_of::<f32>(),
-            Mesh::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
-            ptr::null() as *const c_void,
+            data3d::QUAD_VERTICES_TEX_COORDS.len() * size_of::<f32>(),
+            data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
+            ptr::null(),
             vec![VertexAttribute::Position, VertexAttribute::TexCoord],
             gl::STATIC_DRAW,
             6,
@@ -179,27 +179,27 @@ impl RenderProgram {
         }
     }
 
-    pub fn draw(
-        &self,
-        camera: &Camera,
-        transform: &Transform,
-        model: &Model,
-        light: &mut LightSource,
-    ) {
-        self.shader_program.use_();
-        self.fill_buffers(camera, transform, light);
-        for mesh in model.get_meshes() {
-            mesh.bind();
-            unsafe {
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    mesh.index_count,
-                    gl::UNSIGNED_INT,
-                    0 as *const _,
-                );
-            }
-        }
-    }
+    // pub fn draw(
+    //     &self,
+    //     camera: &Camera,
+    //     transform: &Transform,
+    //     model: &ModelIndex,
+    //     light: &mut LightSource,
+    // ) {
+    //     self.shader_program.use_();
+    //     self.fill_buffers(camera, transform, light);
+    //     for mesh in model.get_meshes() {
+    //         mesh.bind();
+    //         unsafe {
+    //             gl::DrawElements(
+    //                 gl::TRIANGLES,
+    //                 mesh.index_count,
+    //                 gl::UNSIGNED_INT,
+    //                 0 as *const _,
+    //             );
+    //         }
+    //     }
+    // }
 
     fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightSource) {
         let matrix_data = MatrixData::new(

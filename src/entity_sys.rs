@@ -1,24 +1,28 @@
 use crate::{
-    linear, serializable,
-    util::{ByteArray, Reallocated}, data3d::Mesh,
+    camera,
+    data3d::ModelIndex,
+    linear,
+    scene::Scene,
+    serializable,
+    util::{ByteArray, Reallocated},
 };
 use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, hash::BuildHasherDefault, str::FromStr as _};
+use std::{collections::HashMap, hash::BuildHasherDefault};
 use strum::EnumCount;
 
 pub type EntityId = u32;
 type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
 #[derive(Default)]
-pub struct EntityComponentSys {
+pub struct EntitySystem {
     entities: FxHashMap<EntityId, Entity>,
     component_arrays: [ByteArray; ComponentType::COUNT],
     free_ids: Vec<EntityId>,
     id_counter: EntityId,
 }
 
-impl EntityComponentSys {
+impl EntitySystem {
     pub fn empty() -> Self {
         todo!();
     }
@@ -34,7 +38,7 @@ impl EntityComponentSys {
 
         let mut i = 0;
         for mut entity in entities {
-            entity.components.push(Component {
+            entity.components.push(ComponentRecord {
                 array_index: i,
                 type_: ComponentType::Transform,
             });
@@ -45,7 +49,7 @@ impl EntityComponentSys {
         res.component_arrays[ComponentType::Transform as usize] =
             ByteArray::init::<linear::Transform>(transforms.len());
         for transform in transforms {
-            let transform = transform.into_actual();
+            let transform: linear::Transform = transform.into();
             res.component_arrays[ComponentType::Transform as usize].write(transform);
         }
 
@@ -63,7 +67,7 @@ impl EntityComponentSys {
         let result = entity.id;
         self.id_counter += 1;
 
-        let transform_component = Component {
+        let transform_component = ComponentRecord {
             array_index: self.component_arrays[ComponentType::Transform as usize]
                 .len::<linear::Transform>(),
             type_: ComponentType::Transform,
@@ -109,61 +113,79 @@ impl EntityComponentSys {
         }
     }
 
-    // pub fn insert_entity(&mut self, mut entity: Entity, mut transform: linear::Transform) {
-    //     transform.owner_id = entity.id;
-    //     entity.transform_index = self.transforms.len();
-    //     self.entities.insert(entity.id, entity);
-    //     let reallocating = self.transforms.len() == self.transforms.capacity();
-    //     self.transforms.push(transform);
-    //     if reallocating {
-    //         self.update_parent_pointers();
-    //     }
-    // }
+    pub fn attach_component<T>(&mut self, component: T)
+    where
+        T: Component,
+    {
+        assert_ne!(
+            T::component_type(),
+            ComponentType::Transform,
+            "Transform may not be attached manualy"
+        );
 
-    /// Returns id of created entity
-    // pub fn create_entity(&mut self) -> u32 {
-    //     let mut entity: Entity = Default::default();
-    //     entity.name = String::from_str("New entity").unwrap();
-    //     self.id_counter += 1;
-    //     entity.id = self.id_counter;
-    //     let result = entity.id;
-    //     let transform = linear::Transform::new();
-    //     self.insert_entity(entity, transform);
-    //     result
-    // }
+        let comp = ComponentRecord {
+            array_index: self.component_arrays[T::component_type() as usize].len::<T>(),
+            type_: T::component_type(),
+        };
+        let owner = self.entities.get_mut(&component.owner_id()).unwrap();
+        owner.components.push(comp);
+        self.component_arrays[T::component_type() as usize].write(component);
+    }
 
-    pub fn attach_component(&mut self, target: EntityId, type_: ComponentType) {
-        match type_ {
-            ComponentType::Transform => todo!(),
-            ComponentType::StaticMesh => todo!(),
+    pub fn attach_components<T>(&mut self, components: Vec<T>)
+    where
+        T: Component,
+    {
+        for component in components {
+            self.attach_component(component);
         }
+    }
+
+    pub fn from_scene(scene: &Scene) -> Self {
+        let entities = scene.read_vec::<Entity>();
+        let transforms = scene.read_vec::<serializable::Transform>();
+
+        Self::init(entities, transforms)
     }
 }
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Entity {
     pub name: String,
+    #[serde(skip_serializing)]
     pub children: Vec<EntityId>,
-    pub components: Vec<Component>,
+    #[serde(skip_serializing)]
+    pub components: Vec<ComponentRecord>,
     pub parent: Option<EntityId>,
     pub id: EntityId,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Component {
+pub struct ComponentRecord {
     pub array_index: usize,
     pub type_: ComponentType,
 }
 
-#[derive(Serialize, Deserialize, EnumCount, PartialEq)]
+#[derive(Serialize, Deserialize, EnumCount, PartialEq, Debug)]
 #[repr(u32)]
 pub enum ComponentType {
     Transform,
-    StaticMesh,
+    Mesh,
+    Camera,
 }
 
-struct StaticMeshComponent {
-    mesh: *const Mesh,
-    transform: *const linear::Transform,
+pub struct MeshComponent {
+    mesh: ModelIndex,
     owner_id: EntityId,
+}
+
+pub struct CameraComponent {
+    transform: *const linear::Transform,
+    camera: camera::Camera,
+    owner_id: EntityId,
+}
+
+pub trait Component {
+    fn component_type() -> ComponentType;
+    fn owner_id(&self) -> EntityId;
 }

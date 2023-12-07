@@ -1,6 +1,7 @@
 use crate::entity_sys::EntityId;
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy)]
 pub struct Transform {
@@ -81,7 +82,7 @@ impl Transform {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum Projection {
     Orthographic {
         left: f32,

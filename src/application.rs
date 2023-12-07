@@ -1,6 +1,6 @@
-use crate::{gl_wrappers::Gl, rendering::RenderPipeline, runtime::Runtime};
+use crate::{gl_wrappers::Gl, runtime::Runtime};
 use glfw::{
-    Action, Context, Glfw, Key, Modifiers, MouseButton, OpenGlProfileHint, SwapInterval, Window,
+    Action, Context as _, Glfw, Key, Modifiers, MouseButton, OpenGlProfileHint, SwapInterval, Window,
     WindowEvent, WindowHint, WindowMode,
 };
 use std::sync::mpsc::Receiver;
@@ -15,9 +15,9 @@ const VSYNC: bool = true;
 
 pub struct Application {
     gl: Gl,
-    glfw: Glfw,
-    window: Window,
-    receiver: Receiver<(f64, WindowEvent)>,
+    pub glfw: Glfw,
+    pub window: Window,
+    pub receiver: Receiver<(f64, WindowEvent)>,
 }
 
 impl Application {
@@ -45,13 +45,16 @@ impl Application {
 
     fn enable_polling(window: &mut Window) {
         window.set_key_polling(true);
+        window.set_char_polling(true);
         window.set_cursor_pos_polling(true);
         window.set_mouse_button_polling(true);
+        window.set_drag_and_drop_polling(true);
         window.set_framebuffer_size_polling(true);
+        window.set_focus_polling(true);
     }
 
     pub fn run(mut self) {
         let runtime = Runtime::new();
-        runtime.run(&mut self.glfw, &mut self.window, &self.receiver);
+        runtime.run(self);
     }
 }
