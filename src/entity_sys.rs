@@ -38,6 +38,10 @@ impl EntitySystem {
 
         let mut i = 0;
         for mut entity in entities {
+            assert_eq!(
+                i, entity.id as usize,
+                "Integrity of entities set is not satisfied"
+            );
             entity.components.push(ComponentRecord {
                 array_index: i,
                 type_: ComponentType::Transform,
@@ -52,12 +56,10 @@ impl EntitySystem {
             let transform: linear::Transform = transform.into();
             res.component_arrays[ComponentType::Transform as usize].write(transform);
         }
-
         res.id_counter = match res.entities.keys().max() {
             Some(max) => *max + 1,
             None => 0,
         };
-
         res
     }
 
@@ -77,7 +79,7 @@ impl EntitySystem {
         let transform = linear::Transform::new();
         let re = self.component_arrays[ComponentType::Transform as usize].write(transform);
         if let Reallocated::Yes = re {
-            // копец
+            // noooooo...
             // update pointers
             self.update_transform_pointers_on_reallocation();
         }
@@ -120,7 +122,7 @@ impl EntitySystem {
         assert_ne!(
             T::component_type(),
             ComponentType::Transform,
-            "Transform may not be attached manualy"
+            "Transform may not be attached manually"
         );
 
         let comp = ComponentRecord {
@@ -141,6 +143,25 @@ impl EntitySystem {
         }
     }
 
+    pub fn get_component<T>(&self, entity_id: EntityId) -> Option<&T>
+    where
+        T: Component,
+    {
+        let entity = self.entities.get(&entity_id).unwrap();
+        let component = entity
+            .components
+            .iter()
+            .find(|x| x.type_ == T::component_type());
+        match component {
+            Some(val) => Some(self.component_arrays[val.type_ as usize].get::<T>(val.array_index)),
+            None => None,
+        }
+    }
+
+    pub fn get_transfom(&self, entity_id: EntityId) -> &linear::Transform {
+        self.component_arrays[ComponentType::Transform as usize].get(entity_id as usize)
+    }
+
     pub fn from_scene(scene: &Scene) -> Self {
         let entities = scene.read_vec::<Entity>();
         let transforms = scene.read_vec::<serializable::Transform>();
@@ -152,9 +173,9 @@ impl EntitySystem {
 #[derive(Serialize, Deserialize, Default)]
 pub struct Entity {
     pub name: String,
-    #[serde(skip_serializing)]
+    // #[serde(skip_serializing)]
     pub children: Vec<EntityId>,
-    #[serde(skip_serializing)]
+    // #[serde(skip_serializing)]
     pub components: Vec<ComponentRecord>,
     pub parent: Option<EntityId>,
     pub id: EntityId,
@@ -166,26 +187,45 @@ pub struct ComponentRecord {
     pub type_: ComponentType,
 }
 
-#[derive(Serialize, Deserialize, EnumCount, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, EnumCount, PartialEq, Debug, Clone, Copy)]
 #[repr(u32)]
 pub enum ComponentType {
     Transform,
-    Mesh,
     Camera,
-}
-
-pub struct MeshComponent {
-    mesh: ModelIndex,
-    owner_id: EntityId,
-}
-
-pub struct CameraComponent {
-    transform: *const linear::Transform,
-    camera: camera::Camera,
-    owner_id: EntityId,
+    Mesh,
 }
 
 pub trait Component {
     fn component_type() -> ComponentType;
     fn owner_id(&self) -> EntityId;
+}
+
+pub struct MeshComponent {
+    pub model_index: ModelIndex,
+    pub owner_id: EntityId,
+}
+
+impl Component for MeshComponent {
+    fn component_type() -> ComponentType {
+        ComponentType::Mesh
+    }
+
+    fn owner_id(&self) -> EntityId {
+        self.owner_id
+    }
+}
+
+pub struct CameraComponent {
+    pub camera: camera::Camera,
+    pub owner_id: EntityId,
+}
+
+impl Component for CameraComponent {
+    fn component_type() -> ComponentType {
+        ComponentType::Camera
+    }
+
+    fn owner_id(&self) -> EntityId {
+        self.owner_id
+    }
 }

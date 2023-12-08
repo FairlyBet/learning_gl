@@ -5,22 +5,20 @@ use crate::{
 use nalgebra_glm::Mat4;
 
 pub struct Camera {
-    pub transform: *const Transform,
     projection: Projection,
     projection_matrix: Mat4,
 }
 
 impl Camera {
-    pub fn new(transform: &Transform, projection: Projection) -> Self {
+    pub fn new(projection: Projection) -> Self {
         Self {
-            transform,
             projection,
             projection_matrix: projection.matrix(),
         }
     }
 
-    pub fn projection_view(&self) -> Mat4 {
-        unsafe { self.projection_matrix * linear::view_matrix(&*self.transform) }
+    pub fn projection_view(&self, transform: &Transform) -> Mat4 {
+        self.projection_matrix * linear::view_matrix(transform)
     }
 
     pub fn set_projection(&mut self, projection: Projection) {

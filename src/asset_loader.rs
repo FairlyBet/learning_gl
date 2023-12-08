@@ -15,7 +15,7 @@ const TEXTURE_FOLDER: &str = "textures";
 
 const MESH_EXT: &str = "fbx";
 
-pub fn get_paths<T>() -> Vec<String>
+pub fn get_paths<T>(target_ext: Option<&str>) -> Vec<String>
 where
     T: StorageName,
 {
@@ -34,8 +34,10 @@ where
                 Some(ext) => extension = ext.to_owned().into_string().unwrap_or_default(),
                 None => extension = Default::default(),
             }
-            if extension == MESH_EXT {
-                result.push(entry.path().into_os_string().into_string().unwrap());
+            if let Some(target) = target_ext {
+                if extension == target {
+                    result.push(entry.path().into_os_string().into_string().unwrap());
+                }
             }
         }
     }
@@ -44,9 +46,9 @@ where
 
 pub fn load_all_models() -> ModelContainer {
     let mut result = ModelContainer::new();
-    let mesh_paths = get_paths::<Mesh>();
+    let mesh_paths = get_paths::<ModelContainer>(Some(MESH_EXT));
     for mesh_path in mesh_paths {
-        let meshes = load_meshes(
+        let meshes = load_model(
             &mesh_path,
             vec![
                 PostProcess::Triangulate,
@@ -59,7 +61,7 @@ pub fn load_all_models() -> ModelContainer {
     result
 }
 
-pub fn load_meshes(path: &String, post_pocess: Vec<PostProcess>) -> Vec<Mesh> {
+pub fn load_model(path: &String, post_pocess: Vec<PostProcess>) -> Vec<Mesh> {
     let scene = Scene::from_file(path, post_pocess).unwrap();
     let mut meshes = Vec::<Mesh>::with_capacity(scene.meshes.len());
     for mesh in &scene.meshes {
@@ -84,7 +86,8 @@ pub fn load_meshes(path: &String, post_pocess: Vec<PostProcess>) -> Vec<Mesh> {
             };
             vertex_data.push(vertex);
         }
-        let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3); // 1 face contains 3 indexes
+        // 1 face contains 3 indexes
+        let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
         for face in &mesh.faces {
             for index in &face.0 {
                 index_data.push(*index);
@@ -100,7 +103,7 @@ pub trait StorageName {
     fn storage_name() -> &'static Path;
 }
 
-impl StorageName for Mesh {
+impl StorageName for ModelContainer {
     fn storage_name() -> &'static Path {
         Path::new(MESHES_FOLDER)
     }

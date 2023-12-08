@@ -2,8 +2,9 @@ use crate::{
     application::Application,
     asset_loader,
     data3d::ModelContainer,
-    entity_sys::EntitySystem,
+    entity_sys::{CameraComponent, EntitySystem, MeshComponent},
     scene::{self, Scene},
+    serializable,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
 
@@ -44,7 +45,7 @@ impl Runtime {
 
     pub fn run(self, mut app: Application) {
         app.window.focus();
-
+        let context = Context::load().expect("Scene integrity is not satisfied");
         let mut frame_time = 0.0;
         while Self::handle_closing(&app) {
             app.glfw.set_time(0.0);
@@ -118,17 +119,47 @@ impl Input {
 
 struct Context {
     entity_system: EntitySystem,
-    mesh_container: ModelContainer,
+    model_container: ModelContainer,
     scenes: Vec<Scene>,
 }
 
 impl Context {
     pub fn load() -> Result<Self, ()> {
-        let mut mesh_container = asset_loader::load_all_models();
-
+        let model_container = asset_loader::load_all_models();
         let scenes = scene::get_scenes();
         let initial = scenes.get(0).ok_or(())?;
-        let sys = EntitySystem::from_scene(&initial);
-        todo!()
+        let entity_system = Self::load_scene(initial, &model_container);
+
+        Ok(Self {
+            entity_system,
+            model_container,
+            scenes,
+        })
+    }
+
+    fn load_scene(scene: &Scene, model_container: &ModelContainer) -> EntitySystem {
+        let mut entity_system = EntitySystem::from_scene(scene);
+        let mesh_components = Self::mesh_components(scene, &model_container);
+        entity_system.attach_components(mesh_components);
+        let cameras = scene.read_vec::<serializable::Camera>();
+        let mut camera_components = Vec::<CameraComponent>::with_capacity(cameras.len());
+        for camera in cameras {
+            camera_components.push(camera.into());
+        }
+        entity_system.attach_components(camera_components);
+        entity_system
+    }
+
+    fn mesh_components(scene: &Scene, model_container: &ModelContainer) -> Vec<MeshComponent> {
+        let meshes = scene.read_vec::<serializable::Mesh>();
+        let mut mesh_components = Vec::with_capacity(meshes.capacity());
+        for mesh in meshes {
+            let mesh_component = MeshComponent {
+                model_index: model_container.get_model_index(&mesh.mesh_path),
+                owner_id: mesh.owner_id,
+            };
+            mesh_components.push(mesh_component);
+        }
+        mesh_components
     }
 }

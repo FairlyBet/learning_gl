@@ -1,5 +1,6 @@
 use crate::{
-    entity_sys::EntityId,
+    camera,
+    entity_sys::{CameraComponent, EntityId},
     linear::{self, Projection},
 };
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,15 @@ pub struct Mesh {
 
 #[derive(Serialize, Deserialize)]
 pub struct Camera {
-    pub proj: Projection,
+    pub projection: Projection,
     pub owner_id: EntityId,
+}
+
+impl Into<CameraComponent> for Camera {
+    fn into(self) -> CameraComponent {
+        CameraComponent {
+            camera: camera::Camera::new(self.projection),
+            owner_id: self.owner_id,
+        }
+    }
 }

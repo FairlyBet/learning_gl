@@ -1,7 +1,4 @@
-use crate::{
-    camera::Camera,
-    linear::{self, Projection, Transform},
-};
+use crate::linear::{self, Projection, Transform};
 use nalgebra_glm::{Mat4, Vec3};
 
 #[derive(Clone, Copy)]
@@ -18,9 +15,8 @@ impl Default for LightType {
     }
 }
 
-// std140 requires structs to be x16 sized
 #[derive(Default, Clone, Copy)]
-#[repr(align(64))]
+#[repr(align(16))] // std140 requires align of 16 for user structs
 #[repr(C)]
 pub struct LightData {
     color: Vec3,
@@ -140,28 +136,28 @@ impl LightSource {
     }
 }
 
-pub fn foo(camera: &Camera, light_obj: &LightSource) {
-    let corners = linear::frustum_corners_worldspace(&camera.projection_view());
-    let center = linear::frustum_center(&corners);
-    let mut tr = Transform::new();
-    tr.position = center;
-    tr.orientation = unsafe { (*light_obj.transform).orientation };
-    let light_view = linear::view_matrix(&tr); // might cause a bug
-                                               //or not
-    let mut minx = f32::MAX;
-    let mut maxx = f32::MIN;
-    let mut miny = f32::MAX;
-    let mut maxy = f32::MIN;
-    let mut minz = f32::MAX;
-    let mut maxz = f32::MIN;
+// pub fn foo(camera: &Camera, light_obj: &LightSource) {
+//     let corners = linear::frustum_corners_worldspace(&camera.projection_view());
+//     let center = linear::frustum_center(&corners);
+//     let mut tr = Transform::new();
+//     tr.position = center;
+//     tr.orientation = unsafe { (*light_obj.transform).orientation };
+//     let light_view = linear::view_matrix(&tr); // might cause a bug
+//                                                //or not
+//     let mut minx = f32::MAX;
+//     let mut maxx = f32::MIN;
+//     let mut miny = f32::MAX;
+//     let mut maxy = f32::MIN;
+//     let mut minz = f32::MAX;
+//     let mut maxz = f32::MIN;
 
-    for corner in &corners {
-        let corner = light_view * corner;
-        minx = minx.min(corner.x);
-        maxx = maxx.max(corner.x);
-        miny = miny.min(corner.y);
-        maxy = maxy.max(corner.y);
-        minz = minz.min(corner.z);
-        maxz = maxz.max(corner.z);
-    }
-}
+//     for corner in &corners {
+//         let corner = light_view * corner;
+//         minx = minx.min(corner.x);
+//         maxx = maxx.max(corner.x);
+//         miny = miny.min(corner.y);
+//         maxy = maxy.max(corner.y);
+//         minz = minz.min(corner.z);
+//         maxz = maxz.max(corner.z);
+//     }
+// }

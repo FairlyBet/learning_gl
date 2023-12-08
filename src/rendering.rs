@@ -1,9 +1,7 @@
 use crate::{
-    camera::Camera,
     data3d::{self, Mesh, VertexAttribute},
     gl_wrappers::{self, BufferObject, Renderbuffer, Shader, ShaderProgram, Texture},
-    lighting::{LightData, LightSource},
-    linear::Transform,
+    lighting::LightData,
 };
 use gl::types::GLenum;
 use nalgebra_glm::{Mat4, Vec3};
@@ -201,29 +199,29 @@ impl RenderProgram {
     //     }
     // }
 
-    fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightSource) {
-        let matrix_data = MatrixData::new(
-            camera.projection_view() * transform.model(), // change
-            transform.model(),
-            glm::quat_to_mat4(&transform.orientation),
-            light.lightspace(),
-        );
-        self.matrix_data_buffer.bind();
-        self.matrix_data_buffer.buffer_subdata(
-            size_of::<MatrixData>(),
-            (&matrix_data as *const MatrixData).cast(),
-            0,
-        );
+    // fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightSource) {
+    //     let matrix_data = MatrixData::new(
+    //         camera.projection_view() * transform.model(), // change
+    //         transform.model(),
+    //         glm::quat_to_mat4(&transform.orientation),
+    //         light.lightspace(),
+    //     );
+    //     self.matrix_data_buffer.bind();
+    //     self.matrix_data_buffer.buffer_subdata(
+    //         size_of::<MatrixData>(),
+    //         (&matrix_data as *const MatrixData).cast(),
+    //         0,
+    //     );
 
-        let lighting_data =
-            LightingData::new(light.get_data(), unsafe { (*camera.transform).position });
-        self.lighting_data_buffer.bind();
-        self.lighting_data_buffer.buffer_subdata(
-            size_of::<LightingData>(),
-            (&lighting_data as *const LightingData).cast(),
-            0,
-        );
-    }
+    //     let lighting_data =
+    //         LightingData::new(light.get_data(), unsafe { (*camera.transform).position });
+    //     self.lighting_data_buffer.bind();
+    //     self.lighting_data_buffer.buffer_subdata(
+    //         size_of::<LightingData>(),
+    //         (&lighting_data as *const LightingData).cast(),
+    //         0,
+    //     );
+    // }
 
     // pub fn draw_arrays() {
     //     todo!();

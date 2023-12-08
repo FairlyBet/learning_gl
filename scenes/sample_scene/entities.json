@@ -1,7 +1,1 @@
-[
-    {
-        "name": "",
-        "parent": null,
-        "id": 0
-    }
-]
+[{"name":"","children":[],"components":[],"parent":null,"id":0},{"name":"camera","children":[],"components":[],"parent":null,"id":1}]

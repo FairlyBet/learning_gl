@@ -69,7 +69,7 @@ impl Mesh {
         element_buffer.buffer_data(index_count as usize * size_of::<u32>(), index_data, usage);
 
         Mesh::configure_vertex_attributes(attributes);
-
+        
         Mesh {
             vao,
             vbo: vertex_buffer,
@@ -200,8 +200,12 @@ impl ModelContainer {
         model
     }
 
-    pub fn get_model(&self, model_idx: ModelIndex) -> &[Mesh] {
+    pub fn get_meshes(&self, model_idx: ModelIndex) -> &[Mesh] {
         &self.meshes[model_idx.start..model_idx.len]
+    }
+
+    pub fn get_model_index(&self, name: &String) -> ModelIndex {
+        *self.table.get(name).unwrap()
     }
 
     pub fn unload(&mut self) {

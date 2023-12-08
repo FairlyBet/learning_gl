@@ -148,6 +148,17 @@ impl Projection {
     }
 }
 
+impl Default for Projection {
+    fn default() -> Self {
+        Projection::Perspective {
+            aspect: 1.0,
+            fovy: 45.0,
+            near: 0.01,
+            far: 100.0,
+        }
+    }
+}
+
 pub fn view_matrix(transform: &Transform) -> Mat4 {
     let translation = glm::translation(&(-transform.position));
     let rotation = glm::inverse(&glm::quat_to_mat4(&transform.orientation));

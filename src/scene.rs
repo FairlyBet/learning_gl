@@ -1,7 +1,7 @@
 use crate::{
     asset_loader::StorageName,
     entity_sys::Entity,
-    serializable::{Mesh, Transform},
+    serializable::{Camera, Mesh, Transform},
 };
 use serde::Deserialize;
 use std::{
@@ -46,8 +46,8 @@ impl Scene {
     where
         T: for<'a> Deserialize<'a> + StorageName,
     {
-        let mut path = PathBuf::new();
-        path.push(&self.path);
+        let mut path = PathBuf::from(&self.path);
+        // path.push(&self.path);
         path.push(T::storage_name());
         let json_str = fs::read_to_string(path).unwrap();
         let values = serde_json::from_str::<Vec<T>>(&json_str).unwrap();
@@ -79,13 +79,32 @@ impl StorageName for Mesh {
     }
 }
 
+impl StorageName for Camera {
+    fn storage_name() -> &'static Path {
+        Path::new(CAMERAS_FILENAME)
+    }
+}
+
 pub fn generate_sample() {
     let scene_name = "sample_scene";
-    let entities = vec![Entity::default()];
-    let transforms = vec![Transform::default()];
+    let entities = vec![
+        Entity::default(),
+        Entity {
+            name: String::from("camera"),
+            children: Default::default(),
+            components: Default::default(),
+            parent: None,
+            id: 1,
+        },
+    ];
+    let transforms = vec![Transform::default(), Transform::default()];
     let meshes = vec![Mesh {
         owner_id: 0,
         mesh_path: "assets\\meshes\\sample.fbx".to_owned(),
+    }];
+    let camera = vec![Camera {
+        projection: Default::default(),
+        owner_id: 1,
     }];
 
     let mut path_buf = Scene::storage_name().to_path_buf();
@@ -95,6 +114,7 @@ pub fn generate_sample() {
     let en_str = serde_json::to_string(&entities).unwrap();
     let tr_str = serde_json::to_string(&transforms).unwrap();
     let m_str = serde_json::to_string(&meshes).unwrap();
+    let cam_str = serde_json::to_string(&camera).unwrap();
 
     path_buf.push(Entity::storage_name());
     fs::write(path_buf.as_path(), en_str);
@@ -104,4 +124,7 @@ pub fn generate_sample() {
     path_buf.pop();
     path_buf.push(Mesh::storage_name());
     fs::write(path_buf.as_path(), m_str);
+    path_buf.pop();
+    path_buf.push(Camera::storage_name());
+    fs::write(path_buf, cam_str);
 }
