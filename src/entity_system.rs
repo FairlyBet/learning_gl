@@ -173,9 +173,7 @@ impl EntitySystem {
 #[derive(Serialize, Deserialize, Default)]
 pub struct Entity {
     pub name: String,
-    // #[serde(skip_serializing)]
     pub children: Vec<EntityId>,
-    // #[serde(skip_serializing)]
     pub components: Vec<ComponentRecord>,
     pub parent: Option<EntityId>,
     pub id: EntityId,

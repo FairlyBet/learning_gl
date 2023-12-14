@@ -2,7 +2,7 @@ use crate::{
     application::Application,
     asset_loader,
     data3d::ModelContainer,
-    entity_sys::{CameraComponent, EntitySystem, MeshComponent},
+    entity_system::{CameraComponent, EntitySystem, MeshComponent},
     scene::{self, Scene},
     serializable,
 };
@@ -45,7 +45,7 @@ impl Runtime {
 
     pub fn run(self, mut app: Application) {
         app.window.focus();
-        let context = Context::load().expect("Scene integrity is not satisfied");
+        let context = Context::init().expect("Scene integrity is violated");
         let mut frame_time = 0.0;
         while Self::handle_closing(&app) {
             app.glfw.set_time(0.0);
@@ -124,7 +124,7 @@ struct Context {
 }
 
 impl Context {
-    pub fn load() -> Result<Self, ()> {
+    pub fn init() -> Result<Self, ()> {
         let model_container = asset_loader::load_all_models();
         let scenes = scene::get_scenes();
         let initial = scenes.get(0).ok_or(())?;
@@ -141,7 +141,7 @@ impl Context {
         let mut entity_system = EntitySystem::from_scene(scene);
         let mesh_components = Self::mesh_components(scene, &model_container);
         entity_system.attach_components(mesh_components);
-        let cameras = scene.read_vec::<serializable::Camera>();
+        let cameras = scene.read_vec::<serializable::CameraComponent>();
         let mut camera_components = Vec::<CameraComponent>::with_capacity(cameras.len());
         for camera in cameras {
             camera_components.push(camera.into());
@@ -151,7 +151,7 @@ impl Context {
     }
 
     fn mesh_components(scene: &Scene, model_container: &ModelContainer) -> Vec<MeshComponent> {
-        let meshes = scene.read_vec::<serializable::Mesh>();
+        let meshes = scene.read_vec::<serializable::MeshComponent>();
         let mut mesh_components = Vec::with_capacity(meshes.capacity());
         for mesh in meshes {
             let mesh_component = MeshComponent {

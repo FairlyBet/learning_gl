@@ -1,4 +1,7 @@
 #version 420 core
+#define DIRECTIONAL 0
+#define POINT       1
+#define SPOT        2
 
 struct LightSource {
     vec3 color;
@@ -77,11 +80,11 @@ void spot() {
 }
 
 void compute_lighting() {
-    if (light_source.type == 0) {
+    if (light_source.type == DIRECTIONAL) {
         directional();
-    } else if (light_source.type == 1) {
+    } else if (light_source.type == POINT) {
         point();
-    } else if (light_source.type == 2) {
+    } else if (light_source.type == SPOT) {
         spot();
     }
 }

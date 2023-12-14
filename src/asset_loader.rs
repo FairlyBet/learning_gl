@@ -62,9 +62,9 @@ pub fn load_all_models() -> ModelContainer {
 }
 
 pub fn load_model(path: &String, post_pocess: Vec<PostProcess>) -> Vec<Mesh> {
-    let scene = Scene::from_file(path, post_pocess).unwrap();
-    let mut meshes = Vec::<Mesh>::with_capacity(scene.meshes.len());
-    for mesh in &scene.meshes {
+    let model = Scene::from_file(path, post_pocess).unwrap();
+    let mut meshes = Vec::<Mesh>::with_capacity(model.meshes.len());
+    for mesh in &model.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
         for i in 0..vertex_count {

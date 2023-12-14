@@ -1,7 +1,7 @@
 use crate::{
     asset_loader::StorageName,
-    entity_sys::Entity,
-    serializable::{Camera, Mesh, Transform},
+    entity_system::Entity,
+    serializable::{CameraComponent, MeshComponent, Transform},
 };
 use serde::Deserialize;
 use std::{
@@ -73,13 +73,13 @@ impl StorageName for Transform {
     }
 }
 
-impl StorageName for Mesh {
+impl StorageName for MeshComponent {
     fn storage_name() -> &'static Path {
         Path::new(MESHES_FILENAME)
     }
 }
 
-impl StorageName for Camera {
+impl StorageName for CameraComponent {
     fn storage_name() -> &'static Path {
         Path::new(CAMERAS_FILENAME)
     }
@@ -98,11 +98,11 @@ pub fn generate_sample() {
         },
     ];
     let transforms = vec![Transform::default(), Transform::default()];
-    let meshes = vec![Mesh {
+    let meshes = vec![MeshComponent {
         owner_id: 0,
         mesh_path: "assets\\meshes\\sample.fbx".to_owned(),
     }];
-    let camera = vec![Camera {
+    let camera = vec![CameraComponent {
         projection: Default::default(),
         owner_id: 1,
     }];
@@ -122,9 +122,9 @@ pub fn generate_sample() {
     path_buf.push(Transform::storage_name());
     fs::write(path_buf.as_path(), tr_str);
     path_buf.pop();
-    path_buf.push(Mesh::storage_name());
+    path_buf.push(MeshComponent::storage_name());
     fs::write(path_buf.as_path(), m_str);
     path_buf.pop();
-    path_buf.push(Camera::storage_name());
+    path_buf.push(CameraComponent::storage_name());
     fs::write(path_buf, cam_str);
 }

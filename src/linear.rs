@@ -1,4 +1,4 @@
-use crate::entity_sys::EntityId;
+use crate::entity_system::EntityId;
 use glm::Vec3;
 use nalgebra_glm::{Mat4, Quat, Vec4};
 use serde::{Deserialize, Serialize};

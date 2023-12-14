@@ -8,7 +8,7 @@ mod application;
 mod asset_loader;
 mod camera;
 mod data3d;
-mod entity_sys;
+mod entity_system;
 mod gl_wrappers;
 mod lighting;
 mod linear;
@@ -16,12 +16,12 @@ mod rendering;
 mod runtime;
 mod scene;
 mod serializable;
+mod shader;
 mod util;
 
 use application::Application;
 
 fn main() {
-    // scene::generate_sample();
     let app = Application::new();
     app.run();
 }

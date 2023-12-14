@@ -1,18 +1,14 @@
 use crate::linear::{self, Projection, Transform};
 use nalgebra_glm::{Mat4, Vec3};
+use std::default;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 #[repr(i32)]
 pub enum LightType {
+    #[default]
     Directional = 0,
     Point = 1,
     Spot = 2,
-}
-
-impl Default for LightType {
-    fn default() -> Self {
-        Self::Directional
-    }
 }
 
 #[derive(Default, Clone, Copy)]
@@ -69,7 +65,6 @@ impl LightData {
 }
 
 pub struct LightSource {
-    pub transform: *const Transform,
     light_source: LightData,
     projection: Mat4,
 }
@@ -77,9 +72,8 @@ pub struct LightSource {
 impl LightSource {
     const SHADOW_DISTANCE: f32 = 100.0;
 
-    pub fn new(transform: &Transform, light_source: LightData) -> Self {
+    pub fn new(light_source: LightData) -> Self {
         Self {
-            transform,
             projection: Self::light_projection(&light_source),
             light_source,
         }
@@ -121,18 +115,15 @@ impl LightSource {
         }
     }
 
-    pub fn lightspace(&self) -> Mat4 {
-        unsafe { self.projection * linear::view_matrix(&*self.transform) }
+    pub fn lightspace(&self, transform: &Transform) -> Mat4 {
+        self.projection * linear::view_matrix(transform)
     }
 
-    pub fn get_data(&mut self) -> LightData {
-        unsafe {
-            self.light_source.position = (*self.transform).position;
-            self.light_source.direction =
-                glm::quat_rotate_vec3(&(*self.transform).orientation, &(-Vec3::z_axis()));
-
-            self.light_source
-        }
+    pub fn get_data(&mut self, transform: &Transform) -> LightData {
+        self.light_source.position = transform.position;
+        self.light_source.direction =
+            glm::quat_rotate_vec3(&transform.orientation, &(-Vec3::z_axis()));
+        self.light_source
     }
 }
 

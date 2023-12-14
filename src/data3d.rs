@@ -204,8 +204,8 @@ impl ModelContainer {
         &self.meshes[model_idx.start..model_idx.len]
     }
 
-    pub fn get_model_index(&self, name: &String) -> ModelIndex {
-        *self.table.get(name).unwrap()
+    pub fn get_model_index(&self, path: &String) -> ModelIndex {
+        *self.table.get(path).unwrap()
     }
 
     pub fn unload(&mut self) {

@@ -1,5 +1,6 @@
 use std::{alloc, alloc::Layout, default, mem::size_of, ptr};
 
+/// Do not store impl Drop types there!!!
 pub struct ByteArray {
     buf: *mut u8,
     layout: Layout,
