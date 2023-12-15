@@ -1,6 +1,7 @@
 use crate::{
     camera,
     data3d::ModelIndex,
+    lighting::LightSource,
     linear,
     scene::Scene,
     serializable,
@@ -119,11 +120,11 @@ impl EntitySystem {
     where
         T: Component,
     {
-        assert_ne!(
-            T::component_type(),
-            ComponentType::Transform,
-            "Transform may not be attached manually"
-        );
+        // assert_ne!(
+        //     T::component_type(),
+        //     ComponentType::Transform,
+        //     "Transform may not be attached manually"
+        // );
 
         let comp = ComponentRecord {
             array_index: self.component_arrays[T::component_type() as usize].len::<T>(),
@@ -158,6 +159,21 @@ impl EntitySystem {
         }
     }
 
+    pub fn component_array<T>(&self) -> &ByteArray
+    where
+        T: Component,
+    {
+        &self.component_arrays[T::component_type() as usize]
+    }
+
+    pub fn component_slice<T>(&self) -> &[T]
+    where
+        T: Component,
+    {
+        self.component_array::<T>().slice::<T>()
+    }
+
+    /// This optomization requires entitis ids to be a consequtive progression (0, 1, 2...)
     pub fn get_transfom(&self, entity_id: EntityId) -> &linear::Transform {
         self.component_arrays[ComponentType::Transform as usize].get(entity_id as usize)
     }
@@ -172,11 +188,11 @@ impl EntitySystem {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Entity {
-    pub name: String,
-    pub children: Vec<EntityId>,
-    pub components: Vec<ComponentRecord>,
-    pub parent: Option<EntityId>,
     pub id: EntityId,
+    pub name: String,
+    pub components: Vec<ComponentRecord>,
+    pub children: Vec<EntityId>,
+    pub parent: Option<EntityId>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -190,6 +206,7 @@ pub struct ComponentRecord {
 pub enum ComponentType {
     Transform,
     Camera,
+    Light,
     Mesh,
 }
 
@@ -225,5 +242,20 @@ impl Component for CameraComponent {
 
     fn owner_id(&self) -> EntityId {
         self.owner_id
+    }
+}
+
+pub struct LightComponent {
+    pub light_source: LightSource,
+    pub onwer: EntityId,
+}
+
+impl Component for LightComponent {
+    fn component_type() -> ComponentType {
+        ComponentType::Light
+    }
+
+    fn owner_id(&self) -> EntityId {
+        self.onwer
     }
 }

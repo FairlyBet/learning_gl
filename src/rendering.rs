@@ -1,7 +1,9 @@
 use crate::{
     data3d::{self, Mesh, VertexAttribute},
+    entity_system::{CameraComponent, EntitySystem, LightComponent, MeshComponent},
     gl_wrappers::{self, BufferObject, Renderbuffer, Shader, ShaderProgram, Texture},
     lighting::LightData,
+    linear::Transform,
 };
 use gl::types::GLenum;
 use nalgebra_glm::{Mat4, Vec3};
@@ -100,6 +102,17 @@ impl Framebuffer {
             gl::Viewport(0, 0, size.0, size.1);
         }
     }
+}
+
+pub fn render_models(entity_system: &EntitySystem) {
+    let camera = entity_system.component_slice::<CameraComponent>().first();
+    let camera = match camera {
+        Some(camera) => camera,
+        None => return,
+    };
+    let light = entity_system.component_slice::<LightComponent>().first();
+    let meshes = entity_system.component_slice::<MeshComponent>();
+    
 }
 
 // pub struct ScreenQuad {

@@ -1,4 +1,4 @@
-use std::{alloc, alloc::Layout, default, mem::size_of, ptr};
+use std::{alloc, alloc::Layout, default, marker::PhantomData, mem::size_of, ptr};
 
 /// Do not store impl Drop types there!!!
 pub struct ByteArray {
@@ -80,6 +80,18 @@ impl ByteArray {
     pub fn get<T>(&self, index: usize) -> &T {
         self.get_mut(index)
     }
+
+    pub fn iter<T>(&self) -> Iter<'_, T> {
+        Iter {
+            data: self,
+            index: 0,
+            phantom: PhantomData::<T> {},
+        }
+    }
+
+    pub fn slice<T>(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.buf as *const T, self.len::<T>()) }
+    }
 }
 
 impl Drop for ByteArray {
@@ -99,4 +111,24 @@ pub enum Reallocated {
     #[default]
     No,
     Yes,
+}
+
+pub struct Iter<'a, T> {
+    data: &'a ByteArray,
+    index: usize,
+    phantom: PhantomData<T>,
+}
+
+impl<'a, T: 'a> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if (self.index < self.data.len::<T>()) {
+            let result = Some(self.data.get(self.index));
+            self.index += 1;
+            result
+        } else {
+            None
+        }
+    }
 }

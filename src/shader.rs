@@ -1,3 +1,5 @@
+use crate::rendering::MatrixData;
+
 pub trait CallSymbol: ShaderSource {
     fn symbol(&self) -> String;
 }
@@ -29,8 +31,6 @@ layout (std140) uniform MatrixData {
     mat4 orientation;
     mat4 light_space;
 };";
-
-pub struct MatrixData;
 
 impl ShaderSource for LightingData {
     fn source(&self) -> String {
@@ -146,7 +146,7 @@ impl ShaderSource for DefaultLightShader {
         let mut src = String::new();
         let shader_data: Vec<Box<dyn ShaderSource>> = vec![
             Box::new(OutputVertexData {}),
-            Box::new(MatrixData {}),
+            // Box::new(MatrixData {}),
             Box::new(LightingData {}),
         ];
         for data in shader_data {
