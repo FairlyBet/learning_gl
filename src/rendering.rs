@@ -104,6 +104,14 @@ impl Framebuffer {
     }
 }
 
+struct MatrixUniformBuffer {
+    buffer: BufferObject,
+}
+
+impl MatrixUniformBuffer {
+    
+}
+
 pub fn render_models(entity_system: &EntitySystem) {
     let camera = entity_system.component_slice::<CameraComponent>().first();
     let camera = match camera {
@@ -112,7 +120,8 @@ pub fn render_models(entity_system: &EntitySystem) {
     };
     let light = entity_system.component_slice::<LightComponent>().first();
     let meshes = entity_system.component_slice::<MeshComponent>();
-    
+
+    let matrix_unifom_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
 }
 
 // pub struct ScreenQuad {
