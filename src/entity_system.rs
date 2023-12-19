@@ -41,7 +41,7 @@ impl EntitySystem {
         for mut entity in entities {
             assert_eq!(
                 i, entity.id as usize,
-                "Integrity of entities set is not satisfied"
+                "Integrity of entities array is not satisfied"
             );
             entity.components.push(ComponentRecord {
                 array_index: i,
@@ -61,7 +61,15 @@ impl EntitySystem {
             Some(max) => *max + 1,
             None => 0,
         };
+
         res
+    }
+
+    pub fn from_scene(scene: &Scene) -> Self {
+        let entities = scene.read_vec::<Entity>();
+        let transforms = scene.read_vec::<serializable::Transform>();
+
+        Self::init(entities, transforms)
     }
 
     pub fn create_entity(&mut self) -> EntityId {
@@ -84,6 +92,7 @@ impl EntitySystem {
             // update pointers
             self.update_transform_pointers_on_reallocation();
         }
+
         result
     }
 
@@ -120,12 +129,6 @@ impl EntitySystem {
     where
         T: Component,
     {
-        // assert_ne!(
-        //     T::component_type(),
-        //     ComponentType::Transform,
-        //     "Transform may not be attached manually"
-        // );
-
         let comp = ComponentRecord {
             array_index: self.component_arrays[T::component_type() as usize].len::<T>(),
             type_: T::component_type(),
@@ -135,10 +138,7 @@ impl EntitySystem {
         self.component_arrays[T::component_type() as usize].write(component);
     }
 
-    pub fn attach_components<T>(&mut self, components: Vec<T>)
-    where
-        T: Component,
-    {
+    pub fn attach_components(&mut self, components: Vec<impl Component>) {
         for component in components {
             self.attach_component(component);
         }
@@ -176,13 +176,6 @@ impl EntitySystem {
     /// This optomization requires entitis ids to be a consequtive progression (0, 1, 2...)
     pub fn get_transfom(&self, entity_id: EntityId) -> &linear::Transform {
         self.component_arrays[ComponentType::Transform as usize].get(entity_id as usize)
-    }
-
-    pub fn from_scene(scene: &Scene) -> Self {
-        let entities = scene.read_vec::<Entity>();
-        let transforms = scene.read_vec::<serializable::Transform>();
-
-        Self::init(entities, transforms)
     }
 }
 
@@ -247,7 +240,7 @@ impl Component for CameraComponent {
 
 pub struct LightComponent {
     pub light_source: LightSource,
-    pub onwer: EntityId,
+    pub owner_id: EntityId,
 }
 
 impl Component for LightComponent {
@@ -256,6 +249,6 @@ impl Component for LightComponent {
     }
 
     fn owner_id(&self) -> EntityId {
-        self.onwer
+        self.owner_id
     }
 }

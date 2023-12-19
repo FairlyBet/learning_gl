@@ -65,7 +65,7 @@ impl LightData {
 }
 
 pub struct LightSource {
-    light_source: LightData,
+    light_data: LightData,
     projection: Mat4,
 }
 
@@ -75,12 +75,12 @@ impl LightSource {
     pub fn new(light_source: LightData) -> Self {
         Self {
             projection: Self::light_projection(&light_source),
-            light_source,
+            light_data: light_source,
         }
     }
 
-    pub fn light_projection(source: &LightData) -> Mat4 {
-        match source.type_ {
+    pub fn light_projection(data: &LightData) -> Mat4 {
+        match data.type_ {
             LightType::Directional => {
                 //     let projection = Projection::new_orthographic(
                 //         -frustum_size,
@@ -101,12 +101,13 @@ impl LightSource {
             LightType::Point => {
                 let projection =
                     Projection::new_perspective(1.0, 90.0, 0.01, Self::SHADOW_DISTANCE);
-                projection.matrix()
+                projection.matrix();
+                todo!()
             }
             LightType::Spot => {
                 let projection = Projection::new_perspective(
                     1.0,
-                    source.outer_cutoff.acos().to_degrees() * 2.0,
+                    data.outer_cutoff.acos().to_degrees() * 2.0,
                     0.01,
                     Self::SHADOW_DISTANCE,
                 );
@@ -119,11 +120,11 @@ impl LightSource {
         self.projection * linear::view_matrix(transform)
     }
 
-    pub fn get_data(&mut self, transform: &Transform) -> LightData {
-        self.light_source.position = transform.position;
-        self.light_source.direction =
-            glm::quat_rotate_vec3(&transform.orientation, &(-Vec3::z_axis()));
-        self.light_source
+    pub fn get_data(&self, transform: &Transform) -> LightData {
+        let mut data = self.light_data;
+        data.position = transform.position;
+        data.direction = glm::quat_rotate_vec3(&transform.orientation, &(-Vec3::z_axis()));
+        data
     }
 }
 

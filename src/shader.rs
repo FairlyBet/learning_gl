@@ -1,158 +1,285 @@
-use crate::rendering::MatrixData;
+use crate::gl_wrappers::Shader;
+use glfw::Version;
+use std::marker::PhantomData;
 
-pub trait CallSymbol: ShaderSource {
-    fn symbol(&self) -> String;
+pub enum ShaderDataSource {
+    VertexData,
+    MatrixData,
+    LightingData,
+    Custom(String),
+    // VertexAttributes?
+}
+
+impl ShaderDataSource {
+    const VERTEX_DATA: &'static str = "
+    in VertexData {
+        vec3 position;
+        vec3 normal;
+        vec2 tex_coord;
+        vec3 light_space_position;
+    } vertex;";
+
+    const MATRIX_DATA: &'static str = "
+    layout (std140, binding = 0) uniform MatrixData {
+        mat4 mvp;
+        mat4 model;
+        mat4 orientation;
+        mat4 light_space;
+    };";
+
+    const LIGHTING_DATA: &'static str = "
+    struct LightSource {
+        vec3 color;
+        int type; // 0 - Directional, 1 - Point, 2 - Spot
+        vec3 position;
+        float constant;
+        vec3 direction;
+        float linear;
+        float quadiratic;
+        float inner_cuttoff;
+        float outer_cuttoff;
+    };
+    layout (std140, binding = 1) uniform LightingData {
+        LightSource light_source;
+        vec3 viewer_position;
+    };";
+
+    pub fn source(&self) -> String {
+        match self {
+            ShaderDataSource::VertexData => String::from(Self::VERTEX_DATA),
+            ShaderDataSource::MatrixData => String::from(Self::MATRIX_DATA),
+            ShaderDataSource::LightingData => String::from(Self::LIGHTING_DATA),
+            ShaderDataSource::Custom(src) => src.clone(),
+        }
+    }
+}
+
+#[repr(u32)]
+pub enum ShaderType {
+    Vertex = gl::VERTEX_SHADER,
+    Fragment = gl::FRAGMENT_SHADER,
 }
 
 pub trait ShaderSource {
+    fn type_(&self) -> ShaderType;
     fn source(&self) -> String;
+    fn data(&self) -> Vec<ShaderDataSource>;
 }
 
-const OUTPUT_VERTEX_DATA: &'static str = "
-in VertexData {
-    vec3 position;
-    vec3 normal;
-    vec2 tex_coord;
-    vec3 light_space_position;
-} vertex;";
+pub trait SubShaderSource: ShaderSource {
+    // fn type_(&self) -> ShaderType;
+    // fn source(&self) -> String;
+    // fn data(&self) -> Vec<ShaderDataSource>;
+    fn signature(&self) -> String;
+    fn call_symbol(&self) -> String;
+}
 
-pub struct OutputVertexData;
+pub struct MainVertexShader;
+pub struct MainFragmentShader;
 
-impl ShaderSource for OutputVertexData {
+pub struct MainShader<T> {
+    signatures: Vec<String>,
+    calls: Vec<String>,
+    pd: PhantomData<T>,
+}
+
+impl<T> MainShader<T> {
+    const MAIN_VERT: &str = "
+    layout (location = 0) in vec3 position;
+    layout (location = 1) in vec3 normal;
+    layout (location = 2) in vec2 tex_coord;
+    
+    out VertexData {
+        vec3 position;
+        vec3 normal;
+        vec2 tex_coord;
+        vec3 light_space_position;
+    } vertex;
+    
+    void main() { 
+        vertex.position = (model * vec4(position, 1)).xyz;
+        vertex.normal = (orientation * vec4(normal, 1)).xyz;
+        vertex.tex_coord = tex_coord;
+        vec4 light_space_position = (light_space * model * vec4(position, 1));
+        vertex.light_space_position = light_space_position.xyz / light_space_position.w;
+        gl_Position = mvp * vec4(position, 1);";
+
+    const MAIN_FRAG: &str = "void main() {";
+
+    pub fn new() -> Self {
+        Self {
+            signatures: Default::default(),
+            calls: Default::default(),
+            pd: PhantomData::<T> {},
+        }
+    }
+
+    pub fn attach_shader(&mut self, shader_source: &impl SubShaderSource) {
+        self.signatures.push(shader_source.signature().clone());
+        self.calls.push(shader_source.call_symbol().clone());
+    }
+}
+
+impl ShaderSource for MainShader<MainVertexShader> {
     fn source(&self) -> String {
-        String::from(OUTPUT_VERTEX_DATA)
+        let mut source = String::new();
+        for signature in &self.signatures {
+            source.push_str(&signature);
+        }
+        let mut calls = String::new();
+        for call in &self.calls {
+            calls.push_str(&call);
+        }
+        source.push_str(Self::MAIN_VERT);
+        source.push_str(&format!("{calls}}}"));
+        source
+    }
+
+    fn data(&self) -> Vec<ShaderDataSource> {
+        vec![ShaderDataSource::MatrixData]
+    }
+
+    fn type_(&self) -> ShaderType {
+        ShaderType::Vertex
     }
 }
 
-const MATRIX_DATA: &'static str = "
-layout (std140) uniform MatrixData {
-    mat4 mvp;
-    mat4 model;
-    mat4 orientation;
-    mat4 light_space;
-};";
-
-impl ShaderSource for LightingData {
+impl ShaderSource for MainShader<MainFragmentShader> {
     fn source(&self) -> String {
-        String::from(LIGHTING_DATA)
+        let mut source = String::new();
+        for signature in &self.signatures {
+            source.push_str(&signature);
+        }
+        let mut calls = String::new();
+        for call in &self.calls {
+            calls.push_str(&call);
+        }
+        source.push_str(Self::MAIN_FRAG);
+        source.push_str(&format!("{calls}}}"));
+        source
+    }
+
+    fn data(&self) -> Vec<ShaderDataSource> {
+        vec![]
+    }
+
+    fn type_(&self) -> ShaderType {
+        ShaderType::Fragment
     }
 }
-
-const LIGHTING_DATA: &'static str = "
-struct LightSource {
-    vec3 color;
-    int type; // 0 - Directional, 1 - Point, 2 - Spot
-    vec3 position;
-    float constant;
-    vec3 direction;
-    float linear;
-    float quadiratic;
-    float inner_cuttoff;
-    float outer_cuttoff;
-};
-layout (std140) uniform LightingData {
-    LightSource light_source;
-    vec3 viewer_position;
-};";
-
-pub struct LightingData;
-
-impl ShaderSource for MatrixData {
-    fn source(&self) -> String {
-        String::from(MATRIX_DATA)
-    }
-}
-
-const LIGHT_SHADER_SRC: &'static str = "
-#define DIRECTIONAL 0
-#define POINT       1
-#define SPOT        2
-
-const float AMBIENT_INTENSITY = 0;
-const float SHININESS = 8;
-
-float blinn_specular(vec3 to_ligth_source_direction, float shininess) {
-    vec3 to_viewer_direction = normalize(viewer_position - vertex.position);
-    vec3 halfway_direction = normalize(to_ligth_source_direction + to_viewer_direction);
-    return pow(max(dot(vertex.normal, halfway_direction), 0), shininess);
-}
-
-float attenuation() {
-    float distance = length(light_source.position - vertex.position);
-    return 1 / (light_source.constant + light_source.linear * distance 
-        + light_source.quadiratic * distance * distance);
-    // return 1 / distance;
-}
-
-float fragment_luminocity() {
-    return 1;
-
-    // vec3 fragment_ndc = vertex.light_space_position * 0.5 + 0.5;
-    // float illuminated_depth = texture(shadow_map, fragment_ndc.xy).r;
-
-    // return float(fragment_ndc.z <= illuminated_depth);
-
-}
-
-void directional() {
-    float diffuse_intensity = clamp(dot(vertex.normal, -light_source.direction), 0, 1);
-    float specular_intensity = blinn_specular(-light_source.direction, SHININESS);
-
-    gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity() 
-        * (diffuse_intensity + specular_intensity)) * light_source.color, 1);
-}
-
-void point() {
-    vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
-    float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
-    float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
-
-    gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity() 
-        * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
-}
-
-void spot() {
-    vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
-    float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
-    float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
-    float theta = dot(to_light_source_direction, -light_source.direction);
-    float epsilon = light_source.inner_cuttoff - light_source.outer_cuttoff;
-    float edge_intensity = clamp((theta - light_source.outer_cuttoff) / epsilon, 0, 1);
-
-    gl_FragColor = vec4((AMBIENT_INTENSITY + edge_intensity * fragment_luminocity() 
-        * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
-}
-
-void compute_lighting() {
-    if (light_source.type == DIRECTIONAL) {
-        directional();
-    } else if (light_source.type == POINT) {
-        point();
-    } else if (light_source.type == SPOT) {
-        spot();
-    }
-}";
 
 pub struct DefaultLightShader;
 
-impl CallSymbol for DefaultLightShader {
-    fn symbol(&self) -> String {
-        String::from("compute_lighting();")
+impl DefaultLightShader {
+    const LIGHT_SHADER_SRC: &'static str = "
+    #define DIRECTIONAL 0
+    #define POINT       1
+    #define SPOT        2
+    
+    const float AMBIENT_INTENSITY = 0;
+    const float SHININESS = 8;
+    
+    float blinn_specular(vec3 to_ligth_source_direction, float shininess) {
+        vec3 to_viewer_direction = normalize(viewer_position - vertex.position);
+        vec3 halfway_direction = normalize(to_ligth_source_direction + to_viewer_direction);
+        return pow(max(dot(vertex.normal, halfway_direction), 0), shininess);
+    }
+    
+    float attenuation() {
+        float distance = length(light_source.position - vertex.position);
+        return 1 / (light_source.constant + light_source.linear * distance 
+            + light_source.quadiratic * distance * distance);
+        // return 1 / distance;
+    }
+    
+    float fragment_luminocity() {
+        return 1;
+    
+        // vec3 fragment_ndc = vertex.light_space_position * 0.5 + 0.5;
+        // float illuminated_depth = texture(shadow_map, fragment_ndc.xy).r;
+        // return float(fragment_ndc.z <= illuminated_depth);
+    }
+    
+    void directional() {
+        float diffuse_intensity = clamp(dot(vertex.normal, -light_source.direction), 0, 1);
+        float specular_intensity = blinn_specular(-light_source.direction, SHININESS);
+    
+        gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity() 
+            * (diffuse_intensity + specular_intensity)) * light_source.color, 1);
+    }
+    
+    void point() {
+        vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
+        float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
+        float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
+    
+        gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity() 
+            * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
+    }
+    
+    void spot() {
+        vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
+        float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
+        float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
+        float theta = dot(to_light_source_direction, -light_source.direction);
+        float epsilon = light_source.inner_cuttoff - light_source.outer_cuttoff;
+        float edge_intensity = clamp((theta - light_source.outer_cuttoff) / epsilon, 0, 1);
+    
+        gl_FragColor = vec4((AMBIENT_INTENSITY + edge_intensity * fragment_luminocity() 
+            * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
+    }
+    
+    void compute_lighting() {
+        if (light_source.type == DIRECTIONAL) {
+            directional();
+        } else if (light_source.type == POINT) {
+            point();
+        } else if (light_source.type == SPOT) {
+            spot();
+        }
+    }";
+
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
 impl ShaderSource for DefaultLightShader {
-    fn source(&self) -> String {
-        let mut src = String::new();
-        let shader_data: Vec<Box<dyn ShaderSource>> = vec![
-            Box::new(OutputVertexData {}),
-            // Box::new(MatrixData {}),
-            Box::new(LightingData {}),
-        ];
-        for data in shader_data {
-            src.push_str(&data.source());
-        }
-        src.push_str(LIGHT_SHADER_SRC);
-        src
+    fn type_(&self) -> ShaderType {
+        ShaderType::Fragment
     }
+
+    fn source(&self) -> String {
+        String::from(Self::LIGHT_SHADER_SRC)
+    }
+
+    fn data(&self) -> Vec<ShaderDataSource> {
+        vec![ShaderDataSource::LightingData, ShaderDataSource::VertexData]
+    }
+}
+
+impl SubShaderSource for DefaultLightShader {
+    fn signature(&self) -> String {
+        String::from("void compute_lighting();")
+    }
+
+    fn call_symbol(&self) -> String {
+        String::from("compute_lighting();")
+    }
+}
+
+pub fn build_shader(shader_source: &impl ShaderSource, gl_version: Version) -> Shader {
+    let shader = Shader::new(shader_source.type_() as u32).unwrap();
+    let mut source = String::from(format!(
+        "#version {}{}0\n",
+        gl_version.major, gl_version.minor
+    ));
+    for data in shader_source.data() {
+        source.push_str(&data.source());
+    }
+    source.push_str(&shader_source.source());
+    shader.set_source(&shader_source.source());
+    shader.compile();
+    assert!(shader.compile_success());
+    shader
 }
