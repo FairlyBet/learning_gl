@@ -1,7 +1,8 @@
 use crate::{
     asset_loader::StorageName,
     entity_system::Entity,
-    serializable::{CameraComponent, MeshComponent, Transform},
+    lighting::LightType,
+    serializable::{CameraComponent, LightComponent, MeshComponent, Transform, Vec3},
 };
 use serde::Deserialize;
 use std::{
@@ -16,6 +17,7 @@ const ENTITIES_FILENAME: &str = "entities.json";
 const TRANSFORMS_FILENAME: &str = "transforms.json";
 const MESHES_FILENAME: &str = "meshes.json";
 const CAMERAS_FILENAME: &str = "cameras.json";
+const LIGHTS_FILENAME: &str = "lights.json";
 
 pub fn get_scenes() -> Vec<Scene> {
     fs::create_dir_all(Scene::storage_name());
@@ -85,6 +87,12 @@ impl StorageName for CameraComponent {
     }
 }
 
+impl StorageName for LightComponent {
+    fn storage_name() -> &'static Path {
+        Path::new(LIGHTS_FILENAME)
+    }
+}
+
 pub fn generate_sample() {
     let scene_name = "sample_scene";
     let entities = vec![
@@ -97,16 +105,45 @@ pub fn generate_sample() {
             id: 1,
         },
     ];
-    let transforms = vec![Transform::default(), Transform::default()];
+    let mut camera_transform = Transform::default();
+    camera_transform.position = Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 5.0,
+    };
+    let transforms = vec![Transform::default(), camera_transform];
     let meshes = vec![MeshComponent {
         owner_id: 0,
-        mesh_path: "assets\\meshes\\sample.fbx".to_owned(),
+        mesh_path: "assets\\meshes\\cube.fbx".to_string(),
     }];
     let camera = vec![CameraComponent {
         projection: Default::default(),
         owner_id: 1,
     }];
-
+    let light = vec![LightComponent {
+        color: Vec3 {
+            x: 0.8,
+            y: 0.8,
+            z: 0.8,
+        },
+        type_: LightType::Spot,
+        position: Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        constant: 1.0,
+        direction: Vec3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        linear: 0.01,
+        quadratic: 0.001,
+        inner_cutoff: 1.0,
+        outer_cutoff: 2.0,
+        owner_id: 1,
+    }];
     let mut path_buf = Scene::storage_name().to_path_buf();
     path_buf.push(scene_name);
     fs::create_dir_all(path_buf.as_path());
@@ -115,6 +152,7 @@ pub fn generate_sample() {
     let tr_str = serde_json::to_string(&transforms).unwrap();
     let m_str = serde_json::to_string(&meshes).unwrap();
     let cam_str = serde_json::to_string(&camera).unwrap();
+    let l_str = serde_json::to_string(&light).unwrap();
 
     path_buf.push(Entity::storage_name());
     fs::write(path_buf.as_path(), en_str);
@@ -126,5 +164,8 @@ pub fn generate_sample() {
     fs::write(path_buf.as_path(), m_str);
     path_buf.pop();
     path_buf.push(CameraComponent::storage_name());
-    fs::write(path_buf, cam_str);
+    fs::write(path_buf.as_path(), cam_str);
+    path_buf.pop();
+    path_buf.push(LightComponent::storage_name());
+    fs::write(path_buf.as_path(), l_str);
 }

@@ -12,7 +12,6 @@ use std::{
 const ASSETS_DIR: &str = "assets";
 const MESHES_FOLDER: &str = "meshes";
 const TEXTURE_FOLDER: &str = "textures";
-
 const MESH_EXT: &str = "fbx";
 
 pub fn get_paths<T>(target_ext: Option<&str>) -> Vec<String>
@@ -45,7 +44,7 @@ where
 }
 
 pub fn load_all_models() -> ModelContainer {
-    let mut result = ModelContainer::new();
+    let mut container = ModelContainer::new();
     let mesh_paths = get_paths::<ModelContainer>(Some(MESH_EXT));
     for mesh_path in mesh_paths {
         let meshes = load_model(
@@ -56,9 +55,9 @@ pub fn load_all_models() -> ModelContainer {
                 PostProcess::OptimizeGraph,
             ],
         );
-        result.push(mesh_path, meshes);
+        container.push(mesh_path, meshes);
     }
-    result
+    container
 }
 
 pub fn load_model(path: &String, post_pocess: Vec<PostProcess>) -> Vec<Mesh> {

@@ -1,1 +1,6 @@
-[{"owner_id":0,"mesh_path":"assets\\meshes\\sample.fbx"}]
+[
+    {
+        "owner_id": 0,
+        "mesh_path": "assets\\meshes\\cube.fbx"
+    }
+]

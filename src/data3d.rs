@@ -21,8 +21,12 @@ pub const CUBE_VERTICES_NORMALS: [f32; 216] = [
 ];
 
 pub const QUAD_VERTICES_TEX_COORDS: [f32; 30] = [
-    -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 0.0, 0.0, 1.0, -1.0, -1.0, 0.0,
-    0.0, 0.0, 1.0, -1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
+    -1.0, -1.0, 0.0, 0.0, 0.0, 
+     1.0,  1.0, 0.0, 1.0, 1.0, 
+    -1.0,  1.0, 0.0, 0.0, 1.0, 
+    -1.0, -1.0, 0.0, 0.0, 0.0, 
+     1.0, -1.0, 0.0, 1.0, 0.0, 
+     1.0,  1.0, 0.0, 1.0, 1.0,
 ];
 
 #[repr(C)]
@@ -43,38 +47,38 @@ pub struct Mesh {
     vao: VertexArrayObject,
     vbo: BufferObject,
     ebo: BufferObject,
-    pub triangle_count: i32,
+    pub vertex_count: i32,
     pub index_count: i32,
 }
 
 impl Mesh {
     pub fn new(
-        size: usize,
+        vertex_count: i32,
+        vertex_data_size: usize,
         vertex_data: *const c_void,
-        index_data: *const c_void,
-        attributes: Vec<VertexAttribute>,
-        usage: GLenum,
-        triangle_count: i32,
+        vertex_attributes: Vec<VertexAttribute>,
         index_count: i32,
+        index_data: *const c_void,
+        usage: GLenum,
     ) -> Self {
         let vao = VertexArrayObject::new().unwrap();
         vao.bind();
 
         let vertex_buffer = BufferObject::new(gl::ARRAY_BUFFER).unwrap();
         vertex_buffer.bind();
-        vertex_buffer.buffer_data(size, vertex_data, usage);
+        vertex_buffer.buffer_data(vertex_data_size, vertex_data, usage);
 
         let element_buffer = BufferObject::new(gl::ELEMENT_ARRAY_BUFFER).unwrap();
         element_buffer.bind();
         element_buffer.buffer_data(index_count as usize * size_of::<u32>(), index_data, usage);
 
-        Mesh::configure_vertex_attributes(attributes);
+        Mesh::configure_vertex_attributes(vertex_attributes);
         
         Mesh {
             vao,
             vbo: vertex_buffer,
             ebo: element_buffer,
-            triangle_count,
+            vertex_count,
             index_count,
         }
     }
@@ -89,16 +93,16 @@ impl Mesh {
             VertexAttribute::Normal,
             VertexAttribute::TexCoord,
         ];
-        let triangle_count = vertex_data.len() as i32 / 3;
+        let vertex_count = vertex_data.len() as i32;
         let index_count = index_data.len() as i32;
         Mesh::new(
+            vertex_count,
             vertex_data.len() * size_of::<VertexData>(),
             vertex_data.as_ptr().cast(),
-            index_data.as_ptr().cast(),
             attributes,
-            usage,
-            triangle_count,
             index_count,
+            index_data.as_ptr().cast(),
+            usage,
         )
     }
 

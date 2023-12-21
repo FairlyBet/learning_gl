@@ -1,8 +1,9 @@
 use crate::linear::{self, Projection, Transform};
 use nalgebra_glm::{Mat4, Vec3};
+use serde::{Deserialize, Serialize};
 use std::default;
 
-#[derive(Clone, Copy, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, Default)]
 #[repr(i32)]
 pub enum LightType {
     #[default]
@@ -72,10 +73,10 @@ pub struct LightSource {
 impl LightSource {
     const SHADOW_DISTANCE: f32 = 100.0;
 
-    pub fn new(light_source: LightData) -> Self {
+    pub fn new(light_data: LightData) -> Self {
         Self {
-            projection: Self::light_projection(&light_source),
-            light_data: light_source,
+            projection: Self::light_projection(&light_data),
+            light_data,
         }
     }
 

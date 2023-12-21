@@ -5,7 +5,7 @@ use glfw::{
 };
 use std::sync::mpsc::Receiver;
 
-const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 2);
+const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 4);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;
@@ -29,8 +29,8 @@ impl Application {
         let (mut window, receiver) = glfw
             .create_window(DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_TITLE, DEFAULT_MODE)
             .unwrap();
-        Self::enable_polling(&mut window);
         window.make_current();
+        Self::enable_polling(&mut window);
         glfw.set_swap_interval(SwapInterval::Sync(VSYNC.into()));
 
         let gl = Gl::load();

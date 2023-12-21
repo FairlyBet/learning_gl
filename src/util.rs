@@ -8,8 +8,8 @@ pub struct ByteArray {
 }
 
 impl ByteArray {
-    pub fn init<T>(n: usize) -> Self {
-        let (buf, layout) = Self::alloc_buf::<T>(n * size_of::<T>());
+    pub fn init<T>(capacity: usize) -> Self {
+        let (buf, layout) = Self::alloc_buf::<T>(capacity * size_of::<T>());
         Self {
             buf,
             layout,
@@ -25,7 +25,7 @@ impl ByteArray {
         }
     }
 
-    pub fn write<T>(&mut self, value: T) -> Reallocated {
+    pub fn push<T>(&mut self, value: T) -> Reallocated {
         let mut realloc = Default::default();
         if self.len + size_of::<T>() > self.layout.size() {
             let n = self.layout.size() / size_of::<T>() * 2

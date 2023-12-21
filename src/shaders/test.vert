@@ -1,4 +1,4 @@
-#version 440
+#version 440 core
 
 layout (std140, binding = 0) uniform MatrixData {
     mat4 mvp;
@@ -23,5 +23,6 @@ void main() {
     vertex.tex_coord = tex_coord;
     vec4 light_space_position = (light_space * model * vec4(position, 1));
     vertex.light_space_position = light_space_position.xyz / light_space_position.w;
-    gl_Position = mvp * vec4(position, 1);
+    gl_Position = model * vec4(position, 1);
+    gl_Position = vec4(position * 0.5, 1);
 }

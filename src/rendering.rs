@@ -1,17 +1,25 @@
 use crate::{
-    data3d::{Mesh, ModelContainer},
+    data3d::{self, Mesh, ModelContainer, VertexAttribute},
     entity_system::{CameraComponent, EntitySystem, LightComponent, MeshComponent},
     gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
     lighting::LightData,
-    shader::{self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader},
+    shader::{
+        self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
+        ScreenShaderFrag, ScreenShaderVert,
+    },
 };
 use gl::types::GLenum;
 use glfw::Version;
 use memoffset::offset_of;
 use nalgebra_glm::{Mat4, Vec3};
-use std::{mem::size_of, ptr};
+use std::{
+    mem::{size_of, size_of_val},
+    ptr,
+};
 
-enum BufferBindingPoint {
+// Добавить сущности ShadowMapping / CascadingShadowMapping ?
+
+pub enum BindingPoints {
     MatrixData = 0,
     LightingData = 1,
 }
@@ -34,7 +42,7 @@ fn matrix_data_buffer() -> BufferObject {
     let buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
     buffer.bind();
     buffer.buffer_data(size_of::<MatrixData>(), ptr::null(), gl::DYNAMIC_DRAW);
-    buffer.bind_buffer_base(BufferBindingPoint::MatrixData as u32);
+    buffer.bind_buffer_base(BindingPoints::MatrixData as u32);
     buffer
 }
 
@@ -42,12 +50,12 @@ fn lighting_data_buffer() -> BufferObject {
     let buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
     buffer.bind();
     buffer.buffer_data(size_of::<LightingData>(), ptr::null(), gl::DYNAMIC_DRAW);
-    buffer.bind_buffer_base(BufferBindingPoint::MatrixData as u32);
+    buffer.bind_buffer_base(BindingPoints::LightingData as u32);
     buffer
 }
 
 pub trait Renderer {
-    fn render(&self, entity_system: &EntitySystem, models: &ModelContainer);
+    fn render(&self, entity_system: &EntitySystem, models: &ModelContainer, buffer: &Framebuffer);
 }
 
 pub struct DefaultRenderer {
@@ -83,26 +91,38 @@ impl DefaultRenderer {
             lighting_buffer,
         }
     }
+
+    fn gl_config() {
+        unsafe {
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::Enable(gl::DEPTH_TEST);
+            gl::Enable(gl::CULL_FACE);
+        }
+    }
 }
 
 impl Renderer for DefaultRenderer {
-    fn render(&self, entity_system: &EntitySystem, model_container: &ModelContainer) {
-        let camera = match entity_system.component_slice::<CameraComponent>().first() {
+    fn render(
+        &self,
+        entity_system: &EntitySystem,
+        model_container: &ModelContainer,
+        buffer: &Framebuffer,
+    ) {
+        let camera_comp = match entity_system.component_slice::<CameraComponent>().first() {
             Some(camera) => camera,
             None => return,
         };
-        let light = match entity_system.component_slice::<LightComponent>().first() {
+        let light_comp = match entity_system.component_slice::<LightComponent>().first() {
             Some(light) => light,
             None => return,
         };
-        let meshes = entity_system.component_slice::<MeshComponent>();
+        let mesh_components = entity_system.component_slice::<MeshComponent>();
 
-        self.shader_program.use_();
-        let camera_transform = entity_system.get_transfom(camera.owner_id);
-        let light_transform = entity_system.get_transfom(light.owner_id);
+        let camera_transform = entity_system.get_transfom(camera_comp.owner_id);
+        let light_transform = entity_system.get_transfom(light_comp.owner_id);
 
         let lighting_data = LightingData {
-            light_data: light.light_source.get_data(light_transform),
+            light_data: light_comp.light_source.get_data(light_transform),
             viewer_position: Vec3::zeros(),
         };
         self.lighting_buffer.bind();
@@ -112,13 +132,18 @@ impl Renderer for DefaultRenderer {
             0,
         );
 
-        for mesh in meshes {
-            let transform = entity_system.get_transfom(mesh.owner_id);
+        // gl_wrappers::Framebuffer::bind_default();
+        buffer.bind();
+        self.shader_program.use_();
+        Self::gl_config();
+        gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        for mesh_comp in mesh_components {
+            let transform = entity_system.get_transfom(mesh_comp.owner_id);
             let matrix_data = MatrixData {
-                mvp: camera.camera.projection_view(camera_transform) * transform.model(),
+                mvp: camera_comp.camera.projection_view(camera_transform) * transform.model(),
                 model: transform.model(),
                 orientation: glm::quat_to_mat4(&transform.orientation),
-                light_space: light.light_source.lightspace(light_transform),
+                light_space: light_comp.light_source.lightspace(light_transform),
             };
 
             self.matrix_buffer.bind();
@@ -128,13 +153,13 @@ impl Renderer for DefaultRenderer {
                 0,
             );
             self.lighting_buffer.bind();
-            self.matrix_buffer.buffer_subdata(
+            self.lighting_buffer.buffer_subdata(
                 size_of::<Vec3>(),
                 (&transform.position as *const Vec3).cast(),
                 offset_of!(LightingData, viewer_position) as u32,
             );
 
-            render_meshes(model_container.get_meshes(mesh.model_index));
+            render_meshes(model_container.get_meshes(mesh_comp.model_index));
         }
     }
 }
@@ -176,6 +201,8 @@ impl Framebuffer {
         framebuffer.bind();
         framebuffer.attach_texture2d(&sampler_buffer, gl::COLOR_ATTACHMENT0);
         framebuffer.attach_renderbuffer(&depth_stencil_buffer, gl::DEPTH_STENCIL_ATTACHMENT);
+        assert!(gl_wrappers::Framebuffer::is_complete());
+
         gl_wrappers::Framebuffer::bind_default();
 
         Self {
@@ -206,6 +233,8 @@ impl Framebuffer {
             gl::DrawBuffer(gl::NONE);
             gl::ReadBuffer(gl::NONE);
         }
+        assert!(gl_wrappers::Framebuffer::is_complete());
+
         gl_wrappers::Framebuffer::bind_default();
 
         Self {
@@ -229,179 +258,74 @@ impl Framebuffer {
     }
 }
 
-// pub struct ScreenQuad {
-//     pub render_quad: Mesh,
-// }
+pub struct Screen {
+    resolution: (i32, i32),
+    offscreen_buffer: Framebuffer,
+    quad: Mesh,
+    program: ShaderProgram,
+    gamma_correction: f32,
+}
 
-// impl ScreenQuad {
-//     pub fn new() -> Self {
-//         let quad = Mesh::new(
-//             data3d::QUAD_VERTICES_TEX_COORDS.len() * size_of::<f32>(),
-//             data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
-//             ptr::null(),
-//             vec![VertexAttribute::Position, VertexAttribute::TexCoord],
-//             gl::STATIC_DRAW,
-//             6,
-//             0,
-//         );
-//         Self { render_quad: quad }
-//     }
-//     pub fn bind(&self) {
-//         self.render_quad.bind();
-//     }
-// }
+impl Screen {
+    pub fn new(resolution: (i32, i32), gl_version: Version) -> Self {
+        let buf = Framebuffer::new(resolution, gl::LINEAR, gl::LINEAR);
+        let vert = shader::build_shader(&ScreenShaderVert::new(), gl_version);
+        let frag = shader::build_shader(&ScreenShaderFrag::new(), gl_version);
+        let program = ShaderProgram::new().unwrap();
+        program.attach_shader(&vert);
+        program.attach_shader(&frag);
+        program.link();
+        assert!(program.link_success());
+        program.use_();
+        let gamma = 2.2f32;
+        unsafe {
+            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
+        }
+        let quad = Mesh::new(
+            6,
+            size_of_val(&data3d::QUAD_VERTICES_TEX_COORDS),
+            data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
+            vec![VertexAttribute::Position, VertexAttribute::TexCoord],
+            0,
+            ptr::null(),
+            gl::STATIC_DRAW,
+        );
 
-// impl RenderProgram {
-//     pub fn new(shader_program: ShaderProgram) -> Self {
-//         let matrix_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
-//         matrix_data_buffer.bind();
-//         matrix_data_buffer.buffer_data(
-//             size_of::<MatrixData>(),
-//             ptr::null() as *const c_void,
-//             gl::DYNAMIC_DRAW, // or static?
-//         );
-//         let lighting_data_buffer = BufferObject::new(gl::UNIFORM_BUFFER).unwrap();
-//         lighting_data_buffer.bind();
-//         lighting_data_buffer.buffer_data(
-//             size_of::<LightingData>(),
-//             ptr::null() as *const c_void,
-//             gl::DYNAMIC_DRAW,
-//         );
-//         matrix_data_buffer.bind_buffer_base(UniformBufferBinding::MatrixData as u32);
-//         lighting_data_buffer.bind_buffer_base(UniformBufferBinding::LightingData as u32);
-//         Self {
-//             shader_program,
-//             matrix_data_buffer,
-//             lighting_data_buffer,
-//         }
-//     }
+        Self {
+            resolution,
+            offscreen_buffer: buf,
+            program,
+            quad,
+            gamma_correction: gamma,
+        }
+    }
 
-// pub fn draw(
-//     &self,
-//     camera: &Camera,
-//     transform: &Transform,
-//     model: &ModelIndex,
-//     light: &mut LightSource,
-// ) {
-//     self.shader_program.use_();
-//     self.fill_buffers(camera, transform, light);
-//     for mesh in model.get_meshes() {
-//         mesh.bind();
-//         unsafe {
-//             gl::DrawElements(
-//                 gl::TRIANGLES,
-//                 mesh.index_count,
-//                 gl::UNSIGNED_INT,
-//                 0 as *const _,
-//             );
-//         }
-//     }
-// }
-// fn fill_buffers(&self, camera: &Camera, transform: &Transform, light: &mut LightSource) {
-//     let matrix_data = MatrixData::new(
-//         camera.projection_view() * transform.model(), // change
-//         transform.model(),
-//         glm::quat_to_mat4(&transform.orientation),
-//         light.lightspace(),
-//     );
-//     self.matrix_data_buffer.bind();
-//     self.matrix_data_buffer.buffer_subdata(
-//         size_of::<MatrixData>(),
-//         (&matrix_data as *const MatrixData).cast(),
-//         0,
-//     );
-//     let lighting_data =
-//         LightingData::new(light.get_data(), unsafe { (*camera.transform).position });
-//     self.lighting_data_buffer.bind();
-//     self.lighting_data_buffer.buffer_subdata(
-//         size_of::<LightingData>(),
-//         (&lighting_data as *const LightingData).cast(),
-//         0,
-//     );
-// }
+    pub fn offscreen_buffer(&self) -> &Framebuffer {
+        &self.offscreen_buffer
+    }
 
-// pub struct ScreenQuadRenderer {
-//     shader_program: ShaderProgram,
-//     gamma_correction_uniform: i32,
-//     pub gamma: f32,
-// }
+    pub fn render_offscreen(&self) {
+        Framebuffer::bind_default(self.resolution);
+        gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
+        self.program.use_();
+        self.quad.bind();
+        self.offscreen_buffer.sampler_buffer.bind();
+        unsafe {
+            gl::Disable(gl::DEPTH_TEST);
+            gl::DrawArrays(gl::TRIANGLES, 0, self.quad.vertex_count);
+        }
+    }
 
-// impl ScreenQuadRenderer {
-//     const DEFAULT_GAMMA: f32 = 2.2;
-//     const GAMMA_CORRECTION_NAME: &str = "gamma_correction";
-//     pub fn new() -> Self {
-//         let shader_program = ShaderProgram::from_vert_frag_file(
-//             "src\\shaders\\screen.vert",
-//             "src\\shaders\\screen.frag",
-//         )
-//         .unwrap();
-//         shader_program.use_();
-//         let uniform = shader_program.get_uniform(Self::GAMMA_CORRECTION_NAME);
-//         Self {
-//             shader_program,
-//             gamma: Self::DEFAULT_GAMMA,
-//             gamma_correction_uniform: uniform,
-//         }
-//     }
-//     pub fn draw_texture(&self, quad: &ScreenQuad, texture: &Texture) {
-//         texture.bind();
-//         quad.bind();
-//         self.shader_program.use_();
-//         unsafe {
-//             gl::Uniform1f(self.gamma_correction_uniform, 1.0 / self.gamma);
-//             gl::DrawArrays(gl::TRIANGLES, 0, quad.render_quad.triangle_count);
-//         }
-//     }
-// }
-// pub struct RenderPipeline {
-//     offscreen_buffer: Framebuffer,
-//     render_program: RenderProgram,
-//     screen_quad: ScreenQuad,
-//     screen_quad_renderer: ScreenQuadRenderer,
-//     match_window_size: bool,
-//     main_framebuffer_size: (i32, i32),
-// }
-// impl RenderPipeline {
-//     pub fn new(framebuffer_size: (i32, i32)) -> Self {
-//         let offscreen_buffer = Framebuffer::new(framebuffer_size, gl::LINEAR, gl::LINEAR);
-//         let render_program = Default::default();
-//         let screen_quad = ScreenQuad::new();
-//         let screen_quad_renderer = ScreenQuadRenderer::new();
-//         Self::setup();
-//         Self {
-//             offscreen_buffer,
-//             render_program,
-//             screen_quad,
-//             screen_quad_renderer,
-//             match_window_size: true,
-//             main_framebuffer_size: framebuffer_size,
-//         }
-//     }
-//     fn setup() {
-//         unsafe {
-//             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-//             gl::Enable(gl::DEPTH_TEST);
-//             gl::Enable(gl::CULL_FACE);
-//         }
-//     }
-//     pub fn draw_cycle(&self) {
-//         self.offscreen_buffer.bind();
-//         unsafe {
-//             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-//         }
-//         // draw
-//         Framebuffer::bind_default(self.main_framebuffer_size);
-//         self.screen_quad.bind();
-//         unsafe {
-//             gl::Clear(gl::COLOR_BUFFER_BIT);
-//         }
-//         self.screen_quad_renderer
-//             .draw_texture(&self.screen_quad, &self.offscreen_buffer.sampler_buffer);
-//     }
-//     pub fn on_framebuffer_size(&mut self, size: (i32, i32)) {
-//         self.main_framebuffer_size = size;
-//         if self.match_window_size {
-//             self.offscreen_buffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
-//         }
-//     }
-// }
+    pub fn set_gamma(&mut self, gamma: f32) {
+        self.gamma_correction = gamma;
+        self.program.use_();
+        unsafe {
+            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
+        }
+    }
+
+    pub fn set_resolution(&mut self, resolution: (i32, i32)) {
+        self.resolution = resolution;
+        self.offscreen_buffer = Framebuffer::new(resolution, gl::LINEAR, gl::LINEAR);
+    }
+}

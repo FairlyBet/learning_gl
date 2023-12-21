@@ -1,11 +1,11 @@
-#version 420 core
+#version 440 core
 
 in VertexData {
     vec2 tex_coord;
 } vertex_data;
 
 uniform sampler2D screen_texture;
-uniform float gamma_correction;
+layout(location = 3) uniform float gamma_correction;
 
 void main() {
     vec4 color = texture(screen_texture, vertex_data.tex_coord);

@@ -1,1 +1,16 @@
-[{"name":"","children":[],"components":[],"parent":null,"id":0},{"name":"camera","children":[],"components":[],"parent":null,"id":1}]
+[
+    {
+        "id": 0,
+        "name": "",
+        "components": [],
+        "children": [],
+        "parent": null
+    },
+    {
+        "id": 1,
+        "name": "camera",
+        "components": [],
+        "children": [],
+        "parent": null
+    }
+]

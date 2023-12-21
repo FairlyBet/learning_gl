@@ -1,0 +1,26 @@
+[
+    {
+        "color": {
+            "x": 0.8,
+            "y": 0.8,
+            "z": 0.8
+        },
+        "type_": "Spot",
+        "position": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "constant": 1.0,
+        "direction": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "linear": 0.1,
+        "quadratic": 0.01,
+        "inner_cutoff": 10.0,
+        "outer_cutoff": 15.0,
+        "owner_id": 1
+    }
+]

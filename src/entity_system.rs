@@ -43,10 +43,10 @@ impl EntitySystem {
                 i, entity.id as usize,
                 "Integrity of entities array is not satisfied"
             );
-            entity.components.push(ComponentRecord {
-                array_index: i,
-                type_: ComponentType::Transform,
-            });
+            // entity.components.push(ComponentRecord { // удалить
+            //     array_index: i,
+            //     type_: ComponentType::Transform,
+            // });
             res.entities.insert(entity.id, entity);
             i += 1;
         }
@@ -55,12 +55,13 @@ impl EntitySystem {
             ByteArray::init::<linear::Transform>(transforms.len());
         for transform in transforms {
             let transform: linear::Transform = transform.into();
-            res.component_arrays[ComponentType::Transform as usize].write(transform);
+            res.component_arrays[ComponentType::Transform as usize].push(transform);
         }
-        res.id_counter = match res.entities.keys().max() {
-            Some(max) => *max + 1,
-            None => 0,
-        };
+        res.id_counter = i as EntityId;
+        //  match res.entities.keys().max() {
+        //     Some(max) => *max + 1,
+        //     None => 0,
+        // };
 
         res
     }
@@ -86,7 +87,7 @@ impl EntitySystem {
         entity.components.push(transform_component);
 
         let transform = linear::Transform::new();
-        let re = self.component_arrays[ComponentType::Transform as usize].write(transform);
+        let re = self.component_arrays[ComponentType::Transform as usize].push(transform);
         if let Reallocated::Yes = re {
             // noooooo...
             // update pointers
@@ -135,7 +136,7 @@ impl EntitySystem {
         };
         let owner = self.entities.get_mut(&component.owner_id()).unwrap();
         owner.components.push(comp);
-        self.component_arrays[T::component_type() as usize].write(component);
+        self.component_arrays[T::component_type() as usize].push(component);
     }
 
     pub fn attach_components(&mut self, components: Vec<impl Component>) {
@@ -173,7 +174,7 @@ impl EntitySystem {
         self.component_array::<T>().slice::<T>()
     }
 
-    /// This optomization requires entitis ids to be a consequtive progression (0, 1, 2...)
+    /// This optimization requires entities ids to be a consequtive progression (0, 1, 2...)
     pub fn get_transfom(&self, entity_id: EntityId) -> &linear::Transform {
         self.component_arrays[ComponentType::Transform as usize].get(entity_id as usize)
     }

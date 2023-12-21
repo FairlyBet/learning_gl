@@ -2,7 +2,8 @@ use crate::{
     application::Application,
     asset_loader,
     data3d::ModelContainer,
-    entity_system::{CameraComponent, EntitySystem, MeshComponent},
+    entity_system::{self, EntitySystem},
+    rendering::{DefaultRenderer, Renderer, Screen},
     scene::{self, Scene},
     serializable,
 };
@@ -33,9 +34,20 @@ impl Runtime {
 
     fn update_input() {}
 
-    fn script_cycle() {}
+    fn script_iteration() {}
 
-    fn render_cycle(app: &mut Application) {
+    fn render_iteration(
+        app: &mut Application,
+        screen: &Screen,
+        context: &Context,
+        renderer: &impl Renderer,
+    ) {
+        renderer.render(
+            &context.entity_system,
+            &context.model_container,
+            screen.offscreen_buffer(),
+        );
+        screen.render_offscreen();
         app.window.swap_buffers();
     }
 
@@ -44,15 +56,20 @@ impl Runtime {
     }
 
     pub fn run(self, mut app: Application) {
-        app.window.focus();
         let context = Context::init().expect("Scene integrity is violated");
+        let renderer = DefaultRenderer::new(app.window.get_context_version());
+        let screen = Screen::new(
+            app.window.get_framebuffer_size(),
+            app.window.get_context_version(),
+        );
+        app.window.focus();
         let mut frame_time = 0.0;
         while Self::handle_closing(&app) {
             app.glfw.set_time(0.0);
             Self::process_window_events(&mut app);
             Self::update_input();
-            Self::script_cycle();
-            Self::render_cycle(&mut app);
+            Self::script_iteration();
+            Self::render_iteration(&mut app, &screen, &context, &renderer);
             frame_time = app.glfw.get_time();
         }
 
@@ -141,20 +158,35 @@ impl Context {
         let mut entity_system = EntitySystem::from_scene(scene);
         let mesh_components = Self::mesh_components(scene, &model_container);
         entity_system.attach_components(mesh_components);
+
         let cameras = scene.read_vec::<serializable::CameraComponent>();
-        let mut camera_components = Vec::<CameraComponent>::with_capacity(cameras.len());
+        let mut camera_components =
+            Vec::<entity_system::CameraComponent>::with_capacity(cameras.len());
         for camera in cameras {
             camera_components.push(camera.into());
         }
+
+        let lights = scene.read_vec::<serializable::LightComponent>();
+        let mut light_components =
+            Vec::<entity_system::LightComponent>::with_capacity(lights.len());
+        for light in lights {
+            light_components.push(light.into());
+        }
+
         entity_system.attach_components(camera_components);
+        entity_system.attach_components(light_components);
+        
         entity_system
     }
 
-    fn mesh_components(scene: &Scene, model_container: &ModelContainer) -> Vec<MeshComponent> {
+    fn mesh_components(
+        scene: &Scene,
+        model_container: &ModelContainer,
+    ) -> Vec<entity_system::MeshComponent> {
         let meshes = scene.read_vec::<serializable::MeshComponent>();
         let mut mesh_components = Vec::with_capacity(meshes.capacity());
         for mesh in meshes {
-            let mesh_component = MeshComponent {
+            let mesh_component = entity_system::MeshComponent {
                 model_index: model_container.get_model_index(&mesh.mesh_path),
                 owner_id: mesh.owner_id,
             };

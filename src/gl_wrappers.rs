@@ -25,6 +25,12 @@ pub fn enable_attribute(index: GLuint) {
     }
 }
 
+pub fn clear(mask: GLuint) {
+    unsafe {
+        gl::Clear(mask);
+    }
+}
+
 pub struct Gl;
 
 impl Gl {
@@ -476,6 +482,10 @@ impl Framebuffer {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
         }
+    }
+
+    pub fn is_complete() -> bool {
+        unsafe { gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE }
     }
 }
 

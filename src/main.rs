@@ -1,5 +1,5 @@
 #![deny(rust_2018_compatibility)]
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 #![allow(unused)]
 
 extern crate nalgebra_glm as glm;
@@ -22,6 +22,7 @@ mod util;
 use application::Application;
 
 fn main() {
+    // scene::generate_sample();
     let app = Application::new();
     app.run();
 }
