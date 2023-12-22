@@ -55,7 +55,12 @@ fn lighting_data_buffer() -> BufferObject {
 }
 
 pub trait Renderer {
-    fn render(&self, entity_system: &EntitySystem, models: &ModelContainer, buffer: &Framebuffer);
+    fn render(
+        &self,
+        entity_system: &EntitySystem,
+        model_container: &ModelContainer,
+        buffer: &Framebuffer,
+    );
 }
 
 pub struct DefaultRenderer {
@@ -106,7 +111,7 @@ impl Renderer for DefaultRenderer {
         &self,
         entity_system: &EntitySystem,
         model_container: &ModelContainer,
-        buffer: &Framebuffer,
+        framebuffer: &Framebuffer,
     ) {
         let camera_comp = match entity_system.component_slice::<CameraComponent>().first() {
             Some(camera) => camera,
@@ -132,17 +137,18 @@ impl Renderer for DefaultRenderer {
             0,
         );
 
-        // gl_wrappers::Framebuffer::bind_default();
-        buffer.bind();
+        framebuffer.bind();
         self.shader_program.use_();
         Self::gl_config();
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-        for mesh_comp in mesh_components {
-            let transform = entity_system.get_transfom(mesh_comp.owner_id);
+
+        for mesh in mesh_components {
+            let mesh_transform = entity_system.get_transfom(mesh.owner_id);
+
             let matrix_data = MatrixData {
-                mvp: camera_comp.camera.projection_view(camera_transform) * transform.model(),
-                model: transform.model(),
-                orientation: glm::quat_to_mat4(&transform.orientation),
+                mvp: camera_comp.camera.projection_view(camera_transform) * mesh_transform.model(),
+                model: mesh_transform.model(),
+                orientation: glm::quat_to_mat4(&mesh_transform.orientation),
                 light_space: light_comp.light_source.lightspace(light_transform),
             };
 
@@ -155,11 +161,11 @@ impl Renderer for DefaultRenderer {
             self.lighting_buffer.bind();
             self.lighting_buffer.buffer_subdata(
                 size_of::<Vec3>(),
-                (&transform.position as *const Vec3).cast(),
+                (&mesh_transform.position as *const Vec3).cast(),
                 offset_of!(LightingData, viewer_position) as u32,
             );
 
-            render_meshes(model_container.get_meshes(mesh_comp.model_index));
+            render_meshes(model_container.get_model(mesh.model_index));
         }
     }
 }

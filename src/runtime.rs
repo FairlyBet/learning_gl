@@ -2,7 +2,7 @@ use crate::{
     application::Application,
     asset_loader,
     data3d::ModelContainer,
-    entity_system::{self, EntitySystem},
+    entity_system::{self, CameraComponent, EntitySystem},
     rendering::{DefaultRenderer, Renderer, Screen},
     scene::{self, Scene},
     serializable,
@@ -16,7 +16,7 @@ impl Runtime {
         Self {}
     }
 
-    fn process_window_events(app: &mut Application) {
+    fn process_window_events(app: &mut Application, context: &mut Context, screen: &mut Screen) {
         app.glfw.poll_events();
         for (_, event) in glfw::flush_messages(&app.receiver) {
             match event {
@@ -24,7 +24,17 @@ impl Runtime {
                 }
                 WindowEvent::Char(char_) => {}
                 WindowEvent::CursorPos(x, y) => {}
-                WindowEvent::FramebufferSize(w, h) => {}
+                WindowEvent::FramebufferSize(w, h) => {
+                    screen.set_resolution((w, h));
+                    match context
+                        .entity_system
+                        .component_slice_mut::<CameraComponent>()
+                        .first_mut()
+                    {
+                        Some(camera_component) => camera_component.camera.update_aspect((w, h)),
+                        None => {}
+                    }
+                }
                 WindowEvent::Focus(focused) => {}
                 WindowEvent::FileDrop(paths) => {}
                 _ => {}
@@ -56,9 +66,9 @@ impl Runtime {
     }
 
     pub fn run(self, mut app: Application) {
-        let context = Context::init().expect("Scene integrity is violated");
+        let mut context = Context::init().expect("Scene integrity is violated");
         let renderer = DefaultRenderer::new(app.window.get_context_version());
-        let screen = Screen::new(
+        let mut screen = Screen::new(
             app.window.get_framebuffer_size(),
             app.window.get_context_version(),
         );
@@ -66,7 +76,7 @@ impl Runtime {
         let mut frame_time = 0.0;
         while Self::handle_closing(&app) {
             app.glfw.set_time(0.0);
-            Self::process_window_events(&mut app);
+            Self::process_window_events(&mut app, &mut context, &mut screen);
             Self::update_input();
             Self::script_iteration();
             Self::render_iteration(&mut app, &screen, &context, &renderer);
@@ -142,10 +152,10 @@ struct Context {
 
 impl Context {
     pub fn init() -> Result<Self, ()> {
-        let model_container = asset_loader::load_all_models();
         let scenes = scene::get_scenes();
         let initial = scenes.get(0).ok_or(())?;
-        let entity_system = Self::load_scene(initial, &model_container);
+        let mut model_container = ModelContainer::new();
+        let entity_system = Self::load_scene(initial, &mut model_container);
 
         Ok(Self {
             entity_system,
@@ -154,9 +164,9 @@ impl Context {
         })
     }
 
-    fn load_scene(scene: &Scene, model_container: &ModelContainer) -> EntitySystem {
+    fn load_scene(scene: &Scene, model_container: &mut ModelContainer) -> EntitySystem {
         let mut entity_system = EntitySystem::from_scene(scene);
-        let mesh_components = Self::mesh_components(scene, &model_container);
+        let mesh_components = Self::mesh_components(scene, model_container);
         entity_system.attach_components(mesh_components);
 
         let cameras = scene.read_vec::<serializable::CameraComponent>();
@@ -175,13 +185,13 @@ impl Context {
 
         entity_system.attach_components(camera_components);
         entity_system.attach_components(light_components);
-        
+
         entity_system
     }
 
     fn mesh_components(
         scene: &Scene,
-        model_container: &ModelContainer,
+        model_container: &mut ModelContainer,
     ) -> Vec<entity_system::MeshComponent> {
         let meshes = scene.read_vec::<serializable::MeshComponent>();
         let mut mesh_components = Vec::with_capacity(meshes.capacity());

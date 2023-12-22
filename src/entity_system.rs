@@ -100,30 +100,31 @@ impl EntitySystem {
     /// Takes O(n), n - amount of entities.
     /// Only updates parent transform pointers
     fn update_transform_pointers_on_reallocation(&mut self) {
-        for entity in self.entities.values() {
-            if let Some(parent_id) = entity.parent {
-                let parent = self.entities.get(&parent_id).unwrap();
-                let parent_transform_component = parent
-                    .components
-                    .iter()
-                    .find(|x| x.type_ == ComponentType::Transform)
-                    .unwrap();
-                let parent_transform: &linear::Transform = self.component_arrays
-                    [ComponentType::Transform as usize]
-                    .get(parent_transform_component.array_index);
+        todo!()
+        // for entity in self.entities.values() {
+        //     if let Some(parent_id) = entity.parent {
+        //         let parent = self.entities.get(&parent_id).unwrap();
+        //         let parent_transform_component = parent
+        //             .components
+        //             .iter()
+        //             .find(|x| x.type_ == ComponentType::Transform)
+        //             .unwrap();
+        //         let parent_transform: &linear::Transform = self.component_arrays
+        //             [ComponentType::Transform as usize]
+        //             .get(parent_transform_component.array_index);
 
-                let transform_component = entity
-                    .components
-                    .iter()
-                    .find(|x| x.type_ == ComponentType::Transform)
-                    .unwrap();
-                let transform: &mut linear::Transform = self.component_arrays
-                    [ComponentType::Transform as usize]
-                    .get_mut(transform_component.array_index);
-                // finally
-                transform.parent = Some(parent_transform);
-            }
-        }
+        //         let transform_component = entity
+        //             .components
+        //             .iter()
+        //             .find(|x| x.type_ == ComponentType::Transform)
+        //             .unwrap();
+        //         let transform: &mut linear::Transform = self.component_arrays
+        //             [ComponentType::Transform as usize]
+        //             .get_mut(transform_component.array_index);
+        //         // finally
+        //         transform.parent = Some(parent_transform);
+        //     }
+        // }
     }
 
     pub fn attach_component<T>(&mut self, component: T)
@@ -160,18 +161,18 @@ impl EntitySystem {
         }
     }
 
-    pub fn component_array<T>(&self) -> &ByteArray
-    where
-        T: Component,
-    {
-        &self.component_arrays[T::component_type() as usize]
-    }
-
     pub fn component_slice<T>(&self) -> &[T]
     where
         T: Component,
     {
-        self.component_array::<T>().slice::<T>()
+        self.component_arrays[T::component_type() as usize].slice::<T>()
+    }
+
+    pub fn component_slice_mut<T>(&mut self) -> &mut [T]
+    where
+        T: Component,
+    {
+        self.component_arrays[T::component_type() as usize].slice_mut::<T>()
     }
 
     /// This optimization requires entities ids to be a consequtive progression (0, 1, 2...)

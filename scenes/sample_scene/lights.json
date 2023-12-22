@@ -19,7 +19,7 @@
         },
         "linear": 0.1,
         "quadratic": 0.01,
-        "inner_cutoff": 10.0,
+        "inner_cutoff": 2.0,
         "outer_cutoff": 15.0,
         "owner_id": 1
     }

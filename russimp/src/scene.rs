@@ -22,6 +22,7 @@ pub struct Scene {
 }
 
 #[derive(Derivative)]
+#[derive(Clone, Copy)]
 #[derivative(Debug)]
 #[repr(u32)]
 pub enum PostProcess {

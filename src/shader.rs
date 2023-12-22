@@ -73,9 +73,6 @@ pub trait ShaderSource {
 }
 
 pub trait SubShaderSource: ShaderSource {
-    // fn type_(&self) -> ShaderType;
-    // fn source(&self) -> String;
-    // fn data(&self) -> Vec<ShaderDataSource>;
     fn signature(&self) -> String;
     fn call_symbol(&self) -> String;
 }
@@ -90,7 +87,7 @@ pub struct MainShader<T> {
 }
 
 impl<T> MainShader<T> {
-    const MAIN_VERT: &str = "
+    const MAIN_VERT: &'static str = "
     layout (location = 0) in vec3 position;
     layout (location = 1) in vec3 normal;
     layout (location = 2) in vec2 tex_coord;
@@ -110,7 +107,7 @@ impl<T> MainShader<T> {
         vertex.light_space_position = light_space_position.xyz / light_space_position.w;
         gl_Position = mvp * vec4(position, 1);";
 
-    const MAIN_FRAG: &str = "void main() {";
+    const MAIN_FRAG: &'static str = "void main() {";
 
     pub fn new() -> Self {
         Self {

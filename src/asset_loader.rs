@@ -1,9 +1,10 @@
-use crate::data3d::{Mesh, ModelContainer, VertexData};
+use crate::data3d::{Mesh, Model, ModelContainer, VertexData};
 use russimp::{
-    scene::{PostProcess, Scene},
+    scene::{PostProcess, PostProcessSteps, Scene},
     Vector2D,
 };
 use std::{
+    cell::RefCell,
     fs,
     path::{Path, PathBuf},
     str::FromStr as _,
@@ -14,55 +15,31 @@ const MESHES_FOLDER: &str = "meshes";
 const TEXTURE_FOLDER: &str = "textures";
 const MESH_EXT: &str = "fbx";
 
-pub fn get_paths<T>(target_ext: Option<&str>) -> Vec<String>
-where
-    T: StorageName,
-{
-    let result = fs::create_dir_all(ASSETS_DIR);
-    result.unwrap();
-    let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
-    path.push(T::storage_name());
-
-    let mut result = vec![];
-    let entries = fs::read_dir(path).unwrap();
-    for entry in entries {
-        let entry = entry.unwrap();
-        let extension;
-        if entry.file_type().unwrap().is_file() {
-            match entry.path().extension() {
-                Some(ext) => extension = ext.to_owned().into_string().unwrap_or_default(),
-                None => extension = Default::default(),
-            }
-            if let Some(target) = target_ext {
-                if extension == target {
-                    result.push(entry.path().into_os_string().into_string().unwrap());
-                }
-            }
-        }
-    }
-    result
+pub trait StorageName {
+    fn storage_name() -> &'static Path;
 }
 
-pub fn load_all_models() -> ModelContainer {
-    let mut container = ModelContainer::new();
-    let mesh_paths = get_paths::<ModelContainer>(Some(MESH_EXT));
-    for mesh_path in mesh_paths {
-        let meshes = load_model(
-            &mesh_path,
-            vec![
-                PostProcess::Triangulate,
-                PostProcess::OptimizeMeshes,
-                PostProcess::OptimizeGraph,
-            ],
-        );
-        container.push(mesh_path, meshes);
+impl StorageName for ModelContainer {
+    fn storage_name() -> &'static Path {
+        Path::new(MESHES_FOLDER)
     }
-    container
 }
 
-pub fn load_model(path: &String, post_pocess: Vec<PostProcess>) -> Vec<Mesh> {
+thread_local! {
+pub static DEFAULT_POSTPROCESS : RefCell<PostProcessSteps> = RefCell::new(
+    vec![
+        PostProcess::Triangulate,
+        PostProcess::OptimizeMeshes,
+        PostProcess::OptimizeGraph,
+        PostProcess::JoinIdenticalVertices,
+        PostProcess::ImproveCacheLocality,
+    ]
+);
+}
+
+pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
     let model = Scene::from_file(path, post_pocess).unwrap();
-    let mut meshes = Vec::<Mesh>::with_capacity(model.meshes.len());
+    let mut meshes = Model::with_capacity(model.meshes.len());
     for mesh in &model.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
@@ -98,12 +75,31 @@ pub fn load_model(path: &String, post_pocess: Vec<PostProcess>) -> Vec<Mesh> {
     meshes
 }
 
-pub trait StorageName {
-    fn storage_name() -> &'static Path;
-}
+pub fn get_paths<T>(target_ext: Option<&str>) -> Vec<String>
+where
+    T: StorageName,
+{
+    let result = fs::create_dir_all(ASSETS_DIR);
+    result.unwrap();
+    let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
+    path.push(T::storage_name());
 
-impl StorageName for ModelContainer {
-    fn storage_name() -> &'static Path {
-        Path::new(MESHES_FOLDER)
+    let mut result = vec![];
+    let entries = fs::read_dir(path).unwrap();
+    for entry in entries {
+        let entry = entry.unwrap();
+        let extension;
+        if entry.file_type().unwrap().is_file() {
+            match entry.path().extension() {
+                Some(ext) => extension = ext.to_owned().into_string().unwrap_or_default(),
+                None => extension = Default::default(),
+            }
+            if let Some(target) = target_ext {
+                if extension == target {
+                    result.push(entry.path().into_os_string().into_string().unwrap());
+                }
+            }
+        }
     }
+    result
 }

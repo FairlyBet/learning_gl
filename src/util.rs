@@ -69,7 +69,7 @@ impl ByteArray {
         self.len / size_of::<T>()
     }
 
-    pub fn get_mut<T>(&self, index: usize) -> &mut T {
+    pub fn get_mut<T>(&mut self, index: usize) -> &mut T {
         assert!(index < self.len::<T>(), "Index out of bound");
         unsafe {
             let value_ptr = self.buf.add(index * size_of::<T>()) as *mut T;
@@ -78,7 +78,11 @@ impl ByteArray {
     }
 
     pub fn get<T>(&self, index: usize) -> &T {
-        self.get_mut(index)
+        assert!(index < self.len::<T>(), "Index out of bound");
+        unsafe {
+            let value_ptr = self.buf.add(index * size_of::<T>()) as *const T;
+            &(*value_ptr)
+        }
     }
 
     pub fn iter<T>(&self) -> Iter<'_, T> {
@@ -91,6 +95,10 @@ impl ByteArray {
 
     pub fn slice<T>(&self) -> &[T] {
         unsafe { std::slice::from_raw_parts(self.buf as *const T, self.len::<T>()) }
+    }
+
+    pub fn slice_mut<T>(&mut self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.buf as *mut T, self.len::<T>()) }
     }
 }
 

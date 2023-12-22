@@ -1,32 +1,15 @@
-use crate::gl_wrappers::{self, BufferObject, VertexArrayObject};
+use crate::{
+    asset_loader,
+    gl_wrappers::{self, BufferObject, VertexArrayObject},
+};
 use fxhash::FxHashMap;
 use gl::types::GLenum;
-use russimp::{Vector2D, Vector3D};
+use russimp::{scene::PostProcessSteps, Vector2D, Vector3D};
 use std::{ffi::c_void, mem::size_of};
 
-pub const CUBE_VERTICES_NORMALS: [f32; 216] = [
-    -0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, -0.5, -0.5, 0.0, 0.0, -1.0, 0.5, 0.5, -0.5, 0.0, 0.0,
-    -1.0, 0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, 0.5, -0.5, 0.0, 0.0, -1.0, -0.5, -0.5, -0.5, 0.0,
-    0.0, -1.0, -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.5, 0.0,
-    0.0, 1.0, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, -0.5, -0.5, 0.5, 0.0,
-    0.0, 1.0, -0.5, 0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, -0.5,
-    -1.0, 0.0, 0.0, -0.5, -0.5, -0.5, -1.0, 0.0, 0.0, -0.5, -0.5, 0.5, -1.0, 0.0, 0.0, -0.5, 0.5,
-    0.5, -1.0, 0.0, 0.0, 0.5, 0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5,
-    -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, -0.5, 1.0, 0.0, 0.0, 0.5, -0.5, 0.5, 1.0, 0.0, 0.0, 0.5, 0.5,
-    0.5, 1.0, 0.0, 0.0, -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.5,
-    -0.5, 0.5, 0.0, -1.0, 0.0, 0.5, -0.5, 0.5, 0.0, -1.0, 0.0, -0.5, -0.5, 0.5, 0.0, -1.0, 0.0,
-    -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.5, 0.5, -0.5, 0.0, 1.0,
-    0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, 0.5, 0.5, 0.5, 0.0, 1.0, 0.0, -0.5, 0.5, 0.5, 0.0, 1.0, 0.0,
-    -0.5, 0.5, -0.5, 0.0, 1.0, 0.0,
-];
-
 pub const QUAD_VERTICES_TEX_COORDS: [f32; 30] = [
-    -1.0, -1.0, 0.0, 0.0, 0.0, 
-     1.0,  1.0, 0.0, 1.0, 1.0, 
-    -1.0,  1.0, 0.0, 0.0, 1.0, 
-    -1.0, -1.0, 0.0, 0.0, 0.0, 
-     1.0, -1.0, 0.0, 1.0, 0.0, 
-     1.0,  1.0, 0.0, 1.0, 1.0,
+    -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 0.0, 0.0, 1.0, -1.0, -1.0, 0.0,
+    0.0, 0.0, 1.0, -1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
 ];
 
 #[repr(C)]
@@ -73,7 +56,7 @@ impl Mesh {
         element_buffer.buffer_data(index_count as usize * size_of::<u32>(), index_data, usage);
 
         Mesh::configure_vertex_attributes(vertex_attributes);
-        
+
         Mesh {
             vao,
             vbo: vertex_buffer,
@@ -174,6 +157,8 @@ impl Mesh {
     }
 }
 
+pub type Model = Vec<Mesh>;
+
 #[derive(Clone, Copy)]
 pub struct ModelIndex {
     pub start: usize,
@@ -191,25 +176,35 @@ impl ModelContainer {
         Default::default()
     }
 
-    pub fn push(&mut self, name: String, mut meshes: Vec<Mesh>) -> ModelIndex {
-        let model = ModelIndex {
+    fn push(&mut self, name: &String, mut model: Model) -> ModelIndex {
+        let model_index = ModelIndex {
             start: self.meshes.len(),
-            len: meshes.len(),
+            len: model.len(),
         };
-        if self.table.contains_key(&name) {
-            panic!("Container already has this mesh")
-        }
-        self.table.insert(name, model);
-        self.meshes.append(&mut meshes);
-        model
+        assert!(
+            !self.table.contains_key(name),
+            "Container already contains this model"
+        );
+        self.table.insert(name.clone(), model_index);
+        self.meshes.append(&mut model);
+        model_index
     }
 
-    pub fn get_meshes(&self, model_idx: ModelIndex) -> &[Mesh] {
+    pub fn get_model(&self, model_idx: ModelIndex) -> &[Mesh] {
         &self.meshes[model_idx.start..model_idx.len]
     }
 
-    pub fn get_model_index(&self, path: &String) -> ModelIndex {
-        *self.table.get(path).unwrap()
+    pub fn get_model_index(&mut self, path: &String) -> ModelIndex {
+        match self.table.get(path) {
+            Some(index) => *index,
+            None => {
+                let model = asset_loader::load_model(
+                    path,
+                    asset_loader::DEFAULT_POSTPROCESS.with(|x| x.borrow().clone()),
+                );
+                self.push(path, model)
+            }
+        }
     }
 
     pub fn unload(&mut self) {
