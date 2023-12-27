@@ -5,7 +5,7 @@ use glfw::{
 };
 use std::sync::mpsc::Receiver;
 
-const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 4);
+const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 3);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
 const DEFAULT_WIDTH: u32 = 800;
 const DEFAULT_HEIGHT: u32 = 600;

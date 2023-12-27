@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct Transform {
     pub position: Vec3,
-    pub orientation: Quat,
+    pub orientation: Vec3,
     pub scale: Vec3,
 }
 
@@ -33,11 +33,7 @@ impl Into<linear::Transform> for Transform {
 
         result.position = self.position.into();
         result.scale = self.scale.into();
-
-        result.orientation.coords.x = self.orientation.x;
-        result.orientation.coords.y = self.orientation.y;
-        result.orientation.coords.z = self.orientation.z;
-        result.orientation.coords.w = self.orientation.w;
+        result.set_rotation(&self.orientation.into());
 
         result
     }
@@ -53,25 +49,6 @@ pub struct Vec3 {
 impl Into<glm::Vec3> for Vec3 {
     fn into(self) -> glm::Vec3 {
         glm::vec3(self.x, self.y, self.z)
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Quat {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub w: f32,
-}
-
-impl Default for Quat {
-    fn default() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 1.0,
-        }
     }
 }
 

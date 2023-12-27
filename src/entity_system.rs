@@ -9,7 +9,10 @@ use crate::{
 };
 use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, hash::BuildHasherDefault};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::BuildHasherDefault,
+};
 use strum::EnumCount;
 
 pub type EntityId = u32;
@@ -19,15 +22,11 @@ type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 pub struct EntitySystem {
     entities: FxHashMap<EntityId, Entity>,
     component_arrays: [ByteArray; ComponentType::COUNT],
-    free_ids: Vec<EntityId>,
+    free_ids: VecDeque<EntityId>,
     id_counter: EntityId,
 }
 
 impl EntitySystem {
-    pub fn empty() -> Self {
-        todo!();
-    }
-
     pub fn init(entities: Vec<Entity>, transforms: Vec<serializable::Transform>) -> Self {
         assert_eq!(
             entities.len(),
@@ -43,10 +42,6 @@ impl EntitySystem {
                 i, entity.id as usize,
                 "Integrity of entities array is not satisfied"
             );
-            // entity.components.push(ComponentRecord { // удалить
-            //     array_index: i,
-            //     type_: ComponentType::Transform,
-            // });
             res.entities.insert(entity.id, entity);
             i += 1;
         }
@@ -58,10 +53,6 @@ impl EntitySystem {
             res.component_arrays[ComponentType::Transform as usize].push(transform);
         }
         res.id_counter = i as EntityId;
-        //  match res.entities.keys().max() {
-        //     Some(max) => *max + 1,
-        //     None => 0,
-        // };
 
         res
     }
@@ -75,26 +66,29 @@ impl EntitySystem {
 
     pub fn create_entity(&mut self) -> EntityId {
         let mut entity: Entity = Default::default();
-        entity.id = self.id_counter;
-        let result = entity.id;
-        self.id_counter += 1;
-
-        let transform_component = ComponentRecord {
-            array_index: self.component_arrays[ComponentType::Transform as usize]
-                .len::<linear::Transform>(),
-            type_: ComponentType::Transform,
-        };
-        entity.components.push(transform_component);
+        entity.id = self.free_ids.pop_front().unwrap_or_else(|| {
+            let res = self.id_counter;
+            self.id_counter += 1;
+            res
+        });
 
         let transform = linear::Transform::new();
-        let re = self.component_arrays[ComponentType::Transform as usize].push(transform);
-        if let Reallocated::Yes = re {
-            // noooooo...
-            // update pointers
-            self.update_transform_pointers_on_reallocation();
+        if (entity.id as usize)
+            < self.component_arrays[ComponentType::Transform as usize].len::<linear::Transform>()
+        {
+            self.component_arrays[ComponentType::Transform as usize]
+                .overwrite(transform, entity.id as usize);
+        } else {
+            let re = self.component_arrays[ComponentType::Transform as usize].push(transform);
+            if let Reallocated::Yes = re {
+                // update pointers
+                self.update_transform_pointers_on_reallocation();
+            }
         }
 
-        result
+        let res = entity.id;
+        assert!(self.entities.insert(entity.id, entity).is_none());
+        res
     }
 
     /// Takes O(n), n - amount of entities.

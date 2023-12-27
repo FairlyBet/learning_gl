@@ -50,20 +50,20 @@ impl Transform {
     }
 
     pub fn move_local(&mut self, delta: &Vec3) {
-        let (local_right, local_upward, local_forward) = self.get_local_axises();
+        let (local_right, local_upward, local_forward) = self.get_local_axes();
         self.position += local_right * delta.x + local_upward * delta.y + local_forward * delta.z;
     }
 
     pub fn rotate(&mut self, euler: &Vec3) {
-        self.rotate_around_axises(euler, &(*Vec3::x_axis(), *Vec3::y_axis(), *Vec3::z_axis()));
+        self.rotate_around_axes(euler, &(*Vec3::x_axis(), *Vec3::y_axis(), *Vec3::z_axis()));
     }
 
     pub fn rotate_local(&mut self, euler: &Vec3) {
-        let local_axises = self.get_local_axises();
-        self.rotate_around_axises(euler, &local_axises);
+        let local_axes = self.get_local_axes();
+        self.rotate_around_axes(euler, &local_axes);
     }
 
-    pub fn get_local_axises(&self) -> (Vec3, Vec3, Vec3) {
+    pub fn get_local_axes(&self) -> (Vec3, Vec3, Vec3) {
         let local_right = glm::quat_rotate_vec3(&self.orientation, &Vec3::x_axis());
         let local_upward = glm::quat_rotate_vec3(&self.orientation, &Vec3::y_axis());
         let local_forward = glm::quat_rotate_vec3(&self.orientation, &Vec3::z_axis());
@@ -71,12 +71,12 @@ impl Transform {
         (local_right, local_upward, local_forward)
     }
 
-    fn rotate_around_axises(&mut self, euler: &Vec3, axises: &(Vec3, Vec3, Vec3)) {
+    fn rotate_around_axes(&mut self, euler: &Vec3, axes: &(Vec3, Vec3, Vec3)) {
         let radians = glm::radians(euler);
         let identity = glm::quat_identity();
-        let x_rotation = glm::quat_rotate_normalized_axis(&identity, radians.x, &axises.0);
-        let y_rotation = glm::quat_rotate_normalized_axis(&identity, radians.y, &axises.1);
-        let z_rotation = glm::quat_rotate_normalized_axis(&identity, radians.z, &axises.2);
+        let x_rotation = glm::quat_rotate_normalized_axis(&identity, radians.x, &axes.0);
+        let y_rotation = glm::quat_rotate_normalized_axis(&identity, radians.y, &axes.1);
+        let z_rotation = glm::quat_rotate_normalized_axis(&identity, radians.z, &axes.2);
 
         self.orientation = z_rotation * y_rotation * x_rotation * self.orientation;
     }

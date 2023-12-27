@@ -6,6 +6,7 @@ use crate::{
 };
 use serde::Deserialize;
 use std::{
+    collections::HashSet,
     fs,
     hash::BuildHasher,
     path::{Path, PathBuf},
@@ -61,11 +62,19 @@ impl StorageName for Scene {
     fn storage_name() -> &'static Path {
         Path::new(SCENES_DIR)
     }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        todo!()
+    }
 }
 
 impl StorageName for Entity {
     fn storage_name() -> &'static Path {
         Path::new(ENTITIES_FILENAME)
+    }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        todo!()
     }
 }
 
@@ -73,11 +82,19 @@ impl StorageName for Transform {
     fn storage_name() -> &'static Path {
         Path::new(TRANSFORMS_FILENAME)
     }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        todo!()
+    }
 }
 
 impl StorageName for MeshComponent {
     fn storage_name() -> &'static Path {
         Path::new(MESHES_FILENAME)
+    }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        todo!()
     }
 }
 
@@ -85,11 +102,19 @@ impl StorageName for CameraComponent {
     fn storage_name() -> &'static Path {
         Path::new(CAMERAS_FILENAME)
     }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        todo!()
+    }
 }
 
 impl StorageName for LightComponent {
     fn storage_name() -> &'static Path {
         Path::new(LIGHTS_FILENAME)
+    }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        todo!()
     }
 }
 
@@ -141,7 +166,7 @@ pub fn generate_sample() {
         linear: 0.01,
         quadratic: 0.001,
         inner_cutoff: 1.0,
-        outer_cutoff: 2.0,
+        outer_cutoff: 20.0,
         owner_id: 1,
     }];
     let mut path_buf = Scene::storage_name().to_path_buf();

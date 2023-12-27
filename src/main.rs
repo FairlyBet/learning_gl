@@ -1,5 +1,5 @@
-#![deny(rust_2018_compatibility)]
 // #![windows_subsystem = "windows"]
+#![deny(rust_2018_compatibility)]
 #![allow(unused)]
 
 extern crate nalgebra_glm as glm;
@@ -15,29 +15,16 @@ mod linear;
 mod rendering;
 mod runtime;
 mod scene;
+mod scripting;
 mod serializable;
 mod shader;
 mod util;
 
-use application::Application;
+use scripting::Scripting;
+use std::path::Path;
 
 fn main() {
     // scene::generate_sample();
-    let app = Application::new();
+    let app = application::Application::new();
     app.run();
 }
-
-// let lua = Lua::new();
-// let src = fs::read_to_string("src\\scripts\\load-scene.lua").unwrap();
-// let result = lua.context(|context| {
-//     let chunk = context.load(&src);
-//     chunk.exec()
-// });
-// match result {
-//     Ok(_) => {
-//         println!("Lua script executed successfully.");
-//     }
-//     Err(err) => {
-//         eprintln!("Error: {:?}", err);
-//     }
-// }

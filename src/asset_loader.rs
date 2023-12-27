@@ -1,11 +1,15 @@
-use crate::data3d::{Mesh, Model, ModelContainer, VertexData};
+use crate::{
+    data3d::{Mesh, Model, ModelContainer, VertexData},
+    scripting::Scripting,
+};
 use russimp::{
     scene::{PostProcess, PostProcessSteps, Scene},
     Vector2D,
 };
 use std::{
     cell::RefCell,
-    fs,
+    collections::{hash_set, HashSet},
+    fs::{self, FileType},
     path::{Path, PathBuf},
     str::FromStr as _,
 };
@@ -13,29 +17,74 @@ use std::{
 const ASSETS_DIR: &str = "assets";
 const MESHES_FOLDER: &str = "meshes";
 const TEXTURE_FOLDER: &str = "textures";
-const MESH_EXT: &str = "fbx";
+const SCRIPT_FOLDER: &str = "scripts";
+const FBX_EXT: &str = "fbx";
+const LUA_EXT: &str = "lua";
 
 pub trait StorageName {
     fn storage_name() -> &'static Path;
+    fn acceptable_extensions() -> HashSet<String>;
+}
+
+pub fn get_paths<T>() -> Vec<String>
+where
+    T: StorageName,
+{
+    let result = fs::create_dir_all(ASSETS_DIR);
+    result.unwrap();
+    let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
+    path.push(T::storage_name());
+
+    fn search<T>(path: &Path) -> Vec<String>
+    where
+        T: StorageName,
+    {
+        let mut result = vec![];
+        let entries = fs::read_dir(path).unwrap();
+
+        for entry in entries {
+            let entry = entry.unwrap();
+            if let Some(extension) = entry.path().extension() {
+                if T::acceptable_extensions().contains(extension.to_str().unwrap()) {
+                    result.push(entry.path().into_os_string().into_string().unwrap());
+                } else if entry.file_type().unwrap().is_dir() {
+                    result.append(&mut search::<T>(&path));
+                }
+            }
+        }
+        result
+    }
+    
+    search::<T>(&path)
 }
 
 impl StorageName for ModelContainer {
     fn storage_name() -> &'static Path {
         Path::new(MESHES_FOLDER)
     }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        HashSet::<String>::from([FBX_EXT.to_string()])
+    }
 }
 
-thread_local! {
-pub static DEFAULT_POSTPROCESS : RefCell<PostProcessSteps> = RefCell::new(
-    vec![
-        PostProcess::Triangulate,
-        PostProcess::OptimizeMeshes,
-        PostProcess::OptimizeGraph,
-        PostProcess::JoinIdenticalVertices,
-        PostProcess::ImproveCacheLocality,
-    ]
-);
+impl StorageName for Scripting {
+    fn storage_name() -> &'static Path {
+        Path::new(SCRIPT_FOLDER)
+    }
+
+    fn acceptable_extensions() -> HashSet<String> {
+        HashSet::<String>::from([LUA_EXT.to_string()])
+    }
 }
+
+pub const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
+    PostProcess::Triangulate,
+    PostProcess::OptimizeMeshes,
+    PostProcess::OptimizeGraph,
+    PostProcess::JoinIdenticalVertices,
+    PostProcess::ImproveCacheLocality,
+];
 
 pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
     let model = Scene::from_file(path, post_pocess).unwrap();
@@ -73,33 +122,4 @@ pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
         meshes.push(mesh);
     }
     meshes
-}
-
-pub fn get_paths<T>(target_ext: Option<&str>) -> Vec<String>
-where
-    T: StorageName,
-{
-    let result = fs::create_dir_all(ASSETS_DIR);
-    result.unwrap();
-    let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
-    path.push(T::storage_name());
-
-    let mut result = vec![];
-    let entries = fs::read_dir(path).unwrap();
-    for entry in entries {
-        let entry = entry.unwrap();
-        let extension;
-        if entry.file_type().unwrap().is_file() {
-            match entry.path().extension() {
-                Some(ext) => extension = ext.to_owned().into_string().unwrap_or_default(),
-                None => extension = Default::default(),
-            }
-            if let Some(target) = target_ext {
-                if extension == target {
-                    result.push(entry.path().into_os_string().into_string().unwrap());
-                }
-            }
-        }
-    }
-    result
 }

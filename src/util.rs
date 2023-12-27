@@ -25,12 +25,21 @@ impl ByteArray {
         }
     }
 
+    pub fn overwrite<T>(&mut self, value: T, index: usize) {
+        assert!(index < self.len::<T>(), "Index is out of bound");
+        unsafe {
+            self.buf
+                .add(index * size_of::<T>())
+                .copy_from_nonoverlapping(&value as *const T as *const u8, size_of::<T>());
+        }
+    }
+
     pub fn push<T>(&mut self, value: T) -> Reallocated {
         let mut realloc = Default::default();
         if self.len + size_of::<T>() > self.layout.size() {
-            let n = self.layout.size() / size_of::<T>() * 2
+            let new_capacity = self.layout.size() / size_of::<T>() * 2
                 + (self.layout.size() / size_of::<T>() == 0) as usize;
-            self.resize::<T>(n);
+            self.resize::<T>(new_capacity);
             realloc = Reallocated::Yes;
         }
         unsafe {
@@ -42,8 +51,8 @@ impl ByteArray {
         realloc
     }
 
-    fn resize<T>(&mut self, n: usize) {
-        let (buf, layout) = Self::alloc_buf::<T>(n);
+    fn resize<T>(&mut self, new_capacity: usize) {
+        let (buf, layout) = Self::alloc_buf::<T>(new_capacity);
         unsafe {
             buf.copy_from_nonoverlapping(self.buf, self.len);
         }

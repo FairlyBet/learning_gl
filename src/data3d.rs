@@ -198,10 +198,8 @@ impl ModelContainer {
         match self.table.get(path) {
             Some(index) => *index,
             None => {
-                let model = asset_loader::load_model(
-                    path,
-                    asset_loader::DEFAULT_POSTPROCESS.with(|x| x.borrow().clone()),
-                );
+                let model =
+                    asset_loader::load_model(path, asset_loader::DEFAULT_POSTPROCESS.into());
                 self.push(path, model)
             }
         }

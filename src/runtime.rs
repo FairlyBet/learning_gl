@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::{
     application::Application,
     asset_loader,
@@ -5,7 +7,8 @@ use crate::{
     entity_system::{self, CameraComponent, EntitySystem},
     rendering::{DefaultRenderer, Renderer, Screen},
     scene::{self, Scene},
-    serializable,
+    scripting::Scripting,
+    serializable, linear::Transform,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
 
@@ -26,13 +29,11 @@ impl Runtime {
                 WindowEvent::CursorPos(x, y) => {}
                 WindowEvent::FramebufferSize(w, h) => {
                     screen.set_resolution((w, h));
-                    match context
+                    for camera_component in context
                         .entity_system
                         .component_slice_mut::<CameraComponent>()
-                        .first_mut()
                     {
-                        Some(camera_component) => camera_component.camera.update_aspect((w, h)),
-                        None => {}
+                        camera_component.camera.update_aspect((w, h));
                     }
                 }
                 WindowEvent::Focus(focused) => {}
@@ -44,7 +45,13 @@ impl Runtime {
 
     fn update_input() {}
 
-    fn script_iteration() {}
+    fn script_iteration(context: &mut Context) {
+        let scripting = Scripting::new();
+        let script_files = asset_loader::get_paths::<Scripting>();
+        script_files
+            .iter()
+            .for_each(|item| _ = scripting.execute_file(Path::new(&item)));
+    }
 
     fn render_iteration(
         app: &mut Application,
@@ -78,7 +85,7 @@ impl Runtime {
             app.glfw.set_time(0.0);
             Self::process_window_events(&mut app, &mut context, &mut screen);
             Self::update_input();
-            Self::script_iteration();
+            Self::script_iteration(&mut context);
             Self::render_iteration(&mut app, &screen, &context, &renderer);
             frame_time = app.glfw.get_time();
         }

@@ -337,17 +337,6 @@ pub struct Texture {
 }
 
 impl Texture {
-    // pub fn from_bytes2d(size: (u32, u32), data: *const u8, format: GLenum) -> Option<Self> {
-    //     Self::new(
-    //         gl::TEXTURE_2D,
-    //         size,
-    //         data.cast(),
-    //         gl::UNSIGNED_BYTE,
-    //         format,
-    //         format as i32,
-    //     )
-    // }
-
     pub fn new(target: GLenum) -> Option<Self> {
         let mut id = 0;
         unsafe {
