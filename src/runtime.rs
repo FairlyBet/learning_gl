@@ -1,14 +1,10 @@
-use std::path::Path;
-
 use crate::{
     application::Application,
-    asset_loader,
     data3d::ModelContainer,
     entity_system::{self, CameraComponent, EntitySystem},
     rendering::{DefaultRenderer, Renderer, Screen},
     scene::{self, Scene},
-    scripting::Scripting,
-    serializable, linear::Transform,
+    serializable,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
 
@@ -46,11 +42,15 @@ impl Runtime {
     fn update_input() {}
 
     fn script_iteration(context: &mut Context) {
-        let scripting = Scripting::new();
-        let script_files = asset_loader::get_paths::<Scripting>();
-        script_files
-            .iter()
-            .for_each(|item| _ = scripting.execute_file(Path::new(&item)));
+        // let scripting = Scripting::new();
+        // scripting.lua.context(|state| {
+        //     let chunk = state.load("source");
+        //     chunk.call(args)
+        // });
+        // let script_files = asset_loader::get_paths::<Scripting>();
+        // script_files
+        //     .iter()
+        //     .for_each(|item| _ = scripting.execute_file(Path::new(&item)));
     }
 
     fn render_iteration(

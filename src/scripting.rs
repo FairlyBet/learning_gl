@@ -40,10 +40,7 @@ impl Scripting {
             Err(err) => return Err(err.to_string()),
         };
 
-        let res = self.lua.context(|context| {
-            let chunk = context.load(&src);
-            chunk.exec()
-        });
+        let res = self.lua.context(|context| context.load(&src).exec());
 
         Ok(res)
     }
