@@ -4,7 +4,7 @@ function CameraController()
 
     local function move(self)
         print('move')
-        local input = Input { "w", "a", "s", "d" }
+        local input = Input { 'w', 'a', 's', 'd' }
         local z = input.w.hold * speed - input.s.hold * speed
         local x = input.d.hold * speed - input.a.hold * speed
     end
@@ -18,7 +18,7 @@ function CameraController()
         print(speed)
     end
 
-    return { update = update, onCollision = onCollision }
+    return { update = update, onCollision = onCollision, speed = speed }
 end
 
 return CameraController
