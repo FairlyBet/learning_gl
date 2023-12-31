@@ -21,4 +21,4 @@ function CameraController()
     return { update = update, onCollision = onCollision }
 end
 
--- return CameraController
+return CameraController
