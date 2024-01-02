@@ -18,7 +18,12 @@ function CameraController()
         print(speed)
     end
 
-    return { update = update, onCollision = onCollision, speed = speed }
+    ---@param value number
+    local function setSpeed(value)
+        speed = value
+    end
+
+    return { update = update, onCollision = onCollision, setSpeed = setSpeed }
 end
 
 return CameraController
