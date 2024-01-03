@@ -15,30 +15,6 @@ impl Runtime {
         Self {}
     }
 
-    fn process_window_events(app: &mut Application, context: &mut Context, screen: &mut Screen) {
-        app.glfw.poll_events();
-        for (_, event) in glfw::flush_messages(&app.receiver) {
-            match event {
-                WindowEvent::Key(key, _, action @ (Action::Press | Action::Release), modifiers) => {
-                }
-                WindowEvent::Char(char_) => {}
-                WindowEvent::CursorPos(x, y) => {}
-                WindowEvent::FramebufferSize(w, h) => {
-                    screen.set_resolution((w, h));
-                    for camera_component in context
-                        .entity_system
-                        .component_slice_mut::<CameraComponent>()
-                    {
-                        camera_component.camera.update_aspect((w, h));
-                    }
-                }
-                WindowEvent::Focus(focused) => {}
-                WindowEvent::FileDrop(paths) => {}
-                _ => {}
-            }
-        }
-    }
-
     fn update_input() {}
 
     fn script_iteration(context: &mut Context) {
@@ -83,7 +59,7 @@ impl Runtime {
         let mut frame_time = 0.0;
         while Self::handle_closing(&app) {
             app.glfw.set_time(0.0);
-            Self::process_window_events(&mut app, &mut context, &mut screen);
+            process_window_events(&mut app, &mut context, &mut screen);
             Self::update_input();
             Self::script_iteration(&mut context);
             Self::render_iteration(&mut app, &screen, &context, &renderer);
@@ -119,6 +95,30 @@ impl Runtime {
         //     // std::thread::sleep(std::time::Duration::from_millis(100));
         //     frame_time = app.glfw.get_time();
         // }
+    }
+}
+
+fn process_window_events(app: &mut Application, context: &mut Context, screen: &mut Screen) {
+    app.glfw.poll_events();
+    for (_, event) in glfw::flush_messages(&app.receiver) {
+        match event {
+            WindowEvent::Key(key, _, action @ (Action::Press | Action::Release), modifiers) => {
+            }
+            WindowEvent::Char(char_) => {}
+            WindowEvent::CursorPos(x, y) => {}
+            WindowEvent::FramebufferSize(w, h) => {
+                screen.set_resolution((w, h));
+                for camera_component in context
+                    .entity_system
+                    .component_slice_mut::<CameraComponent>()
+                {
+                    camera_component.camera.update_aspect((w, h));
+                }
+            }
+            WindowEvent::Focus(focused) => {}
+            WindowEvent::FileDrop(paths) => {}
+            _ => {}
+        }
     }
 }
 

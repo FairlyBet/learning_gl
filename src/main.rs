@@ -27,13 +27,13 @@ use scripting::Scripting;
 use std::{collections::HashMap, fs, io, path::Path};
 
 fn main() {
-    let s = Scripting::new();
-    loop {
-        _ = s.execute_file(Path::new(r#"assets\scripts\sample.lua"#));
-        _ = io::stdin().read_line(&mut String::new());
-    }
+    // let s = Scripting::new();
+    // loop {
+    //     _ = s.execute_file(Path::new(r#"assets\scripts\sample.lua"#));
+    //     _ = io::stdin().read_line(&mut String::new());
+    // }
 
     // scene::generate_sample();
-    // let app = application::Application::new();
-    // app.run();
+    let app = application::Application::new();
+    app.run();
 }

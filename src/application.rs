@@ -1,7 +1,7 @@
 use crate::{gl_wrappers::Gl, runtime::Runtime};
 use glfw::{
-    Action, Context as _, Glfw, Key, Modifiers, MouseButton, OpenGlProfileHint, SwapInterval, Window,
-    WindowEvent, WindowHint, WindowMode,
+    Action, Context as _, Glfw, Key, Modifiers, MouseButton, OpenGlProfileHint, SwapInterval,
+    Window, WindowEvent, WindowHint, WindowMode,
 };
 use std::sync::mpsc::Receiver;
 
@@ -14,10 +14,10 @@ const DEFAULT_MODE: WindowMode<'_> = WindowMode::Windowed;
 const VSYNC: bool = true;
 
 pub struct Application {
-    gl: Gl,
-    pub glfw: Glfw,
-    pub window: Window,
     pub receiver: Receiver<(f64, WindowEvent)>,
+    pub window: Window,
+    pub glfw: Glfw,
+    gl: Gl,
 }
 
 impl Application {
@@ -36,10 +36,10 @@ impl Application {
         let gl = Gl::load();
 
         Self {
-            gl,
-            glfw,
-            window,
             receiver,
+            window,
+            glfw,
+            gl,
         }
     }
 

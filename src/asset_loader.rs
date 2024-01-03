@@ -2,6 +2,7 @@ use crate::{
     data3d::{Mesh, Model, ModelContainer, VertexData},
     scripting::Scripting,
 };
+use fxhash::FxHashMap;
 use russimp::{
     scene::{PostProcess, PostProcessSteps, Scene},
     Vector2D,
@@ -54,7 +55,7 @@ where
         }
         result
     }
-    
+
     search::<T>(&path)
 }
 
@@ -122,4 +123,51 @@ pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
         meshes.push(mesh);
     }
     meshes
+}
+
+type AssetPath = String;
+
+#[derive(Default)]
+pub struct AssetContainer<Asset, AssetReference> {
+    table: FxHashMap<AssetPath, AssetReference>,
+    vec: Vec<Asset>,
+}
+
+impl<Asset, AssetReference> AssetContainer<Asset, AssetReference> {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn push(&mut self, name: &AssetPath, mut asset: Asset, push_: FnMut(&mut Vec<Asset>)) -> AssetReference {
+        let model_index = ModelIndex {
+            start: self.meshes.len(),
+            len: asset.len(),
+        };
+        assert!(
+            !self.table.contains_key(name),
+            "Container already contains this model"
+        );
+        self.table.insert(name.clone(), model_index);
+        self.meshes.append(&mut asset);
+        model_index
+    }
+
+    pub fn get_model(&self, model_idx: ModelIndex) -> &[Mesh] {
+        &self.meshes[model_idx.start..model_idx.len]
+    }
+
+    pub fn get_model_index(&mut self, path: &String) -> ModelIndex {
+        match self.table.get(path) {
+            Some(index) => *index,
+            None => {
+                let model =
+                    asset_loader::load_model(path, asset_loader::DEFAULT_POSTPROCESS.into());
+                self.push(path, model)
+            }
+        }
+    }
+
+    pub fn unload(&mut self) {
+        self.meshes.clear();
+    }
 }
