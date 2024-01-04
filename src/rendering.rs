@@ -1,12 +1,12 @@
 use crate::{
-    data3d::{self, Mesh, ModelContainer, VertexAttribute},
-    entity_system::{CameraComponent, EntitySystem, LightComponent, MeshComponent},
+    data3d::{self, Mesh, VertexAttribute},
+    entity_system::{CameraComponent, SceneChunk, LightComponent, MeshComponent},
     gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
     lighting::LightData,
     shader::{
         self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
         ScreenShaderFrag, ScreenShaderVert,
-    },
+    }, asset_manager::RangeContainer,
 };
 use gl::types::GLenum;
 use glfw::Version;
@@ -55,22 +55,20 @@ fn lighting_data_buffer() -> BufferObject {
 }
 
 pub trait Renderer {
-    fn render(
-        &self,
-        entity_system: &EntitySystem,
-        model_container: &ModelContainer,
-        buffer: &Framebuffer,
-    );
+    fn render(&self, entity_system: &SceneChunk, model_container: &RangeContainer<Mesh>);
 }
 
 pub struct DefaultRenderer {
+    framebuffer: Framebuffer,
     shader_program: ShaderProgram,
     matrix_buffer: BufferObject,
     lighting_buffer: BufferObject,
 }
 
 impl DefaultRenderer {
-    pub fn new(version: Version) -> Self {
+    pub fn new(size: (i32, i32), version: Version) -> Self {
+        let framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
+
         let main_vert_src = MainShader::<MainVertexShader>::new();
         let main_vert = shader::build_shader(&main_vert_src, version);
 
@@ -91,6 +89,7 @@ impl DefaultRenderer {
         let lighting_buffer = lighting_data_buffer();
 
         Self {
+            framebuffer,
             shader_program: program,
             matrix_buffer,
             lighting_buffer,
@@ -107,12 +106,7 @@ impl DefaultRenderer {
 }
 
 impl Renderer for DefaultRenderer {
-    fn render(
-        &self,
-        entity_system: &EntitySystem,
-        model_container: &ModelContainer,
-        framebuffer: &Framebuffer,
-    ) {
+    fn render(&self, entity_system: &SceneChunk, model_container: &RangeContainer<Mesh>) {
         let camera_comp = match entity_system.component_slice::<CameraComponent>().first() {
             Some(camera) => camera,
             None => return,
@@ -137,7 +131,7 @@ impl Renderer for DefaultRenderer {
             0,
         );
 
-        framebuffer.bind();
+        self.framebuffer.bind();
         self.shader_program.use_();
         Self::gl_config();
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -165,7 +159,7 @@ impl Renderer for DefaultRenderer {
                 offset_of!(LightingData, viewer_position) as u32,
             );
 
-            render_meshes(model_container.get_model(mesh.model_index));
+            // render_meshes(model_container.get_model(mesh.model_index));
         }
     }
 }
@@ -266,15 +260,13 @@ impl Framebuffer {
 
 pub struct Screen {
     resolution: (i32, i32),
-    offscreen_buffer: Framebuffer,
-    quad: Mesh,
     program: ShaderProgram,
+    quad: Mesh,
     gamma_correction: f32,
 }
 
 impl Screen {
     pub fn new(resolution: (i32, i32), gl_version: Version) -> Self {
-        let buf = Framebuffer::new(resolution, gl::LINEAR, gl::LINEAR);
         let vert = shader::build_shader(&ScreenShaderVert::new(), gl_version);
         let frag = shader::build_shader(&ScreenShaderFrag::new(), gl_version);
         let program = ShaderProgram::new().unwrap();
@@ -289,7 +281,7 @@ impl Screen {
         }
         let quad = Mesh::new(
             6,
-            size_of_val(&data3d::QUAD_VERTICES_TEX_COORDS),
+            size_of_val(data3d::QUAD_VERTICES_TEX_COORDS),
             data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
             vec![VertexAttribute::Position, VertexAttribute::TexCoord],
             0,
@@ -299,25 +291,24 @@ impl Screen {
 
         Self {
             resolution,
-            offscreen_buffer: buf,
             program,
             quad,
             gamma_correction: gamma,
         }
     }
 
-    pub fn offscreen_buffer(&self) -> &Framebuffer {
-        &self.offscreen_buffer
-    }
+    // pub fn offscreen_buffer(&self) -> &Framebuffer {
+    //     &self.offscreen_buffer
+    // }
 
-    pub fn render_offscreen(&self) {
+    pub fn render_offscreen(&self, offscreen: &Framebuffer) {
         Framebuffer::bind_default(self.resolution);
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
         self.program.use_();
         self.quad.bind();
-        self.offscreen_buffer.sampler_buffer.bind();
+        offscreen.sampler_buffer.bind();
         unsafe {
-            gl::Disable(gl::DEPTH_TEST);
+            gl::Disable(gl::DEPTH_TEST | gl::STENCIL_TEST);
             gl::DrawArrays(gl::TRIANGLES, 0, self.quad.vertex_count);
         }
     }
@@ -332,6 +323,5 @@ impl Screen {
 
     pub fn set_resolution(&mut self, resolution: (i32, i32)) {
         self.resolution = resolution;
-        self.offscreen_buffer = Framebuffer::new(resolution, gl::LINEAR, gl::LINEAR);
     }
 }

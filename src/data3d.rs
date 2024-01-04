@@ -1,5 +1,5 @@
 use crate::{
-    asset_loader,
+    asset_manager,
     gl_wrappers::{self, BufferObject, VertexArrayObject},
 };
 use fxhash::FxHashMap;
@@ -7,7 +7,7 @@ use gl::types::GLenum;
 use russimp::{scene::PostProcessSteps, Vector2D, Vector3D};
 use std::{ffi::c_void, mem::size_of};
 
-pub const QUAD_VERTICES_TEX_COORDS: [f32; 30] = [
+pub const QUAD_VERTICES_TEX_COORDS: &[f32] = &[
     -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0, -1.0, 1.0, 0.0, 0.0, 1.0, -1.0, -1.0, 0.0,
     0.0, 0.0, 1.0, -1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
 ];
@@ -158,54 +158,3 @@ impl Mesh {
 }
 
 pub type Model = Vec<Mesh>;
-
-#[derive(Clone, Copy)]
-pub struct ModelIndex {
-    pub start: usize,
-    pub len: usize,
-}
-
-#[derive(Default)]
-pub struct ModelContainer {
-    table: FxHashMap<String, ModelIndex>,
-    meshes: Vec<Mesh>,
-}
-
-impl ModelContainer {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    fn push(&mut self, name: &String, mut model: Model) -> ModelIndex {
-        let model_index = ModelIndex {
-            start: self.meshes.len(),
-            len: model.len(),
-        };
-        assert!(
-            !self.table.contains_key(name),
-            "Container already contains this model"
-        );
-        self.table.insert(name.clone(), model_index);
-        self.meshes.append(&mut model);
-        model_index
-    }
-
-    pub fn get_model(&self, model_idx: ModelIndex) -> &[Mesh] {
-        &self.meshes[model_idx.start..model_idx.len]
-    }
-
-    pub fn get_model_index(&mut self, path: &String) -> ModelIndex {
-        match self.table.get(path) {
-            Some(index) => *index,
-            None => {
-                let model =
-                    asset_loader::load_model(path, asset_loader::DEFAULT_POSTPROCESS.into());
-                self.push(path, model)
-            }
-        }
-    }
-
-    pub fn unload(&mut self) {
-        self.meshes.clear();
-    }
-}

@@ -1,32 +1,34 @@
 use crate::{
+    asset_manager::AssetManager,
     camera,
-    data3d::ModelIndex,
     lighting::LightSource,
     linear,
     scene::Scene,
     serializable,
-    util::{ByteArray, Reallocated},
+    util::{self, ByteArray, Reallocated},
 };
 use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, VecDeque},
     hash::BuildHasherDefault,
+    ops::Range,
 };
 use strum::EnumCount;
 
-pub type EntityId = u32;
 type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
+pub type EntityId = u32;
+
 #[derive(Default)]
-pub struct EntitySystem {
+pub struct SceneChunk {
     entities: FxHashMap<EntityId, Entity>,
     component_arrays: [ByteArray; ComponentType::COUNT],
     free_ids: VecDeque<EntityId>,
     id_counter: EntityId,
 }
 
-impl EntitySystem {
+impl SceneChunk {
     pub fn init(entities: Vec<Entity>, transforms: Vec<serializable::Transform>) -> Self {
         assert_eq!(
             entities.len(),
@@ -57,11 +59,30 @@ impl EntitySystem {
         res
     }
 
-    pub fn from_scene(scene: &Scene) -> Self {
+    pub fn from_scene(scene: &Scene, asset_manager: &AssetManager) -> Self {
         let entities = scene.read_vec::<Entity>();
         let transforms = scene.read_vec::<serializable::Transform>();
 
-        Self::init(entities, transforms)
+        let mut self_ = Self::init(entities, transforms);
+        
+        let mesh_components: Vec<MeshComponent> = scene
+            .read_vec::<serializable::MeshComponent>()
+            .iter()
+            .map(|x| MeshComponent {
+                model_index: asset_manager.get_meshes().get_index(&x.mesh_path),
+                owner_id: x.owner_id,
+            })
+            .collect();
+        let camera_components: Vec<CameraComponent> =
+            util::into_vec(scene.read_vec::<serializable::CameraComponent>());
+        let light_components: Vec<LightComponent> =
+            util::into_vec(scene.read_vec::<serializable::LightComponent>());
+        
+        self_.attach_components(mesh_components);
+        self_.attach_components(camera_components);
+        self_.attach_components(light_components);
+
+        self_
     }
 
     pub fn create_entity(&mut self) -> EntityId {
@@ -205,7 +226,7 @@ pub trait Component {
 }
 
 pub struct MeshComponent {
-    pub model_index: ModelIndex,
+    pub model_index: Range<usize>,
     pub owner_id: EntityId,
 }
 

@@ -149,3 +149,14 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
         }
     }
 }
+
+pub fn into_vec<F, T>(mut vec: Vec<F>) -> Vec<T>
+where
+    F: Into<T>,
+{
+    let mut res: Vec<T> = Vec::with_capacity(vec.len());
+    for item in vec {
+        res.push(item.into());
+    }
+    res
+}

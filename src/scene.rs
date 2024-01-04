@@ -1,5 +1,5 @@
 use crate::{
-    asset_loader::StorageName,
+    asset_manager::StorageName,
     entity_system::Entity,
     lighting::LightType,
     serializable::{CameraComponent, LightComponent, MeshComponent, Transform, Vec3},

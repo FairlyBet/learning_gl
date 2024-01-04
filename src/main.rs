@@ -5,7 +5,7 @@
 extern crate nalgebra_glm as glm;
 
 mod application;
-mod asset_loader;
+mod asset_manager;
 mod camera;
 mod data3d;
 mod entity_system;
@@ -27,6 +27,8 @@ use scripting::Scripting;
 use std::{collections::HashMap, fs, io, path::Path};
 
 fn main() {
+    let path = Path::new(r#"src\shaders"#);
+    println!("{}", path.extension().unwrap().to_str().unwrap());
     // let s = Scripting::new();
     // loop {
     //     _ = s.execute_file(Path::new(r#"assets\scripts\sample.lua"#));
@@ -34,11 +36,6 @@ fn main() {
     // }
 
     // scene::generate_sample();
-    let a = vec![1, 2, 3];
-    let r = 0..1;
-    for i in &a[r] {
-        println!("{}", i)
-    }
     // let app = application::Application::new();
     // app.run();
 }
