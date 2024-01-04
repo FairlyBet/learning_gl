@@ -34,6 +34,11 @@ fn main() {
     // }
 
     // scene::generate_sample();
-    let app = application::Application::new();
-    app.run();
+    let a = vec![1, 2, 3];
+    let r = 0..1;
+    for i in &a[r] {
+        println!("{}", i)
+    }
+    // let app = application::Application::new();
+    // app.run();
 }

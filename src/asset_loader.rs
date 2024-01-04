@@ -2,7 +2,7 @@ use crate::{
     data3d::{Mesh, Model, ModelContainer, VertexData},
     scripting::Scripting,
 };
-use fxhash::FxHashMap;
+use fxhash::{FxBuildHasher, FxHashMap};
 use russimp::{
     scene::{PostProcess, PostProcessSteps, Scene},
     Vector2D,
@@ -11,6 +11,7 @@ use std::{
     cell::RefCell,
     collections::{hash_set, HashSet},
     fs::{self, FileType},
+    ops::Index,
     path::{Path, PathBuf},
     str::FromStr as _,
 };
@@ -127,47 +128,54 @@ pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
 
 type AssetPath = String;
 
-#[derive(Default)]
-pub struct AssetContainer<Asset, AssetReference> {
-    table: FxHashMap<AssetPath, AssetReference>,
+pub struct AssetContainer<Asset, AssetIndex: Copy> {
+    table: FxHashMap<AssetPath, AssetIndex>,
     vec: Vec<Asset>,
 }
 
-impl<Asset, AssetReference> AssetContainer<Asset, AssetReference> {
+impl<'a, Asset, AssetIndex: Copy> AssetContainer<Asset, AssetIndex> {
     pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn push(&mut self, name: &AssetPath, mut asset: Asset, push_: FnMut(&mut Vec<Asset>)) -> AssetReference {
-        let model_index = ModelIndex {
-            start: self.meshes.len(),
-            len: asset.len(),
-        };
-        assert!(
-            !self.table.contains_key(name),
-            "Container already contains this model"
-        );
-        self.table.insert(name.clone(), model_index);
-        self.meshes.append(&mut asset);
-        model_index
-    }
-
-    pub fn get_model(&self, model_idx: ModelIndex) -> &[Mesh] {
-        &self.meshes[model_idx.start..model_idx.len]
-    }
-
-    pub fn get_model_index(&mut self, path: &String) -> ModelIndex {
-        match self.table.get(path) {
-            Some(index) => *index,
-            None => {
-                let model =
-                    asset_loader::load_model(path, asset_loader::DEFAULT_POSTPROCESS.into());
-                self.push(path, model)
-            }
+        Self {
+            table: Default::default(),
+            vec: Vec::new(),
         }
     }
 
-    pub fn unload(&mut self) {
-        self.meshes.clear();
+    pub fn push_many(
+        &mut self,
+        name: &AssetPath,
+        mut asset: Vec<Asset>,
+        pusher: impl Fn(&mut Vec<Asset>, Vec<Asset>) -> AssetIndex,
+    ) -> AssetIndex {
+        assert!(
+            !self.table.contains_key(name),
+            "Container already has this asset"
+        );
+        pusher(&mut self.vec, asset)
+    }
+
+    pub fn get_many(
+        &'a self,
+        index: AssetIndex,
+        getter: impl Fn(&'a Vec<Asset>, &AssetIndex) -> &'a [Asset],
+    ) -> &[Asset] {
+        getter(&self.vec, &index)
+    }
+
+    pub fn get(
+        &'a self,
+        index: AssetIndex,
+        getter: impl Fn(&'a Vec<Asset>, &AssetIndex) -> &'a Asset,
+    ) -> &Asset {
+        getter(&self.vec, &index)
+    }
+
+    pub fn get_asset_index(&mut self, name: &AssetPath) -> AssetIndex {
+        self.table[name]
+    }
+
+    pub fn unload_all(&mut self) {
+        self.table.clear();
+        self.vec.clear();
     }
 }
