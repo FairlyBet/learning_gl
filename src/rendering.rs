@@ -225,10 +225,6 @@ impl Screen {
         }
     }
 
-    // pub fn offscreen_buffer(&self) -> &Framebuffer {
-    //     &self.offscreen_buffer
-    // }
-
     pub fn render_offscreen(&self, offscreen: &Framebuffer) {
         Framebuffer::bind_default(self.resolution);
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT);

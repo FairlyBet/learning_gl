@@ -1,7 +1,7 @@
 use crate::{gl_wrappers::Gl, runtime::Runtime};
 use glfw::{
-    Action, Context as _, Glfw, Key, Modifiers, MouseButton, OpenGlProfileHint, SwapInterval,
-    Window, WindowEvent, WindowHint, WindowMode,
+    Context as _, Glfw, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
+    WindowMode,
 };
 use std::sync::mpsc::Receiver;
 

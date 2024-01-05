@@ -10,10 +10,9 @@ use russimp::{
     Vector2D,
 };
 use std::{
-    cell::RefCell,
-    collections::{hash_set, HashSet},
-    fs::{self, FileType},
-    ops::{Index, Range},
+    collections::HashSet,
+    fs,
+    ops::Range,
     path::{Path, PathBuf},
     str::FromStr as _,
 };

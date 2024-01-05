@@ -1,13 +1,12 @@
 use crate::{
     application::Application,
     asset_manager::AssetManager,
-    entity_system::{self, CameraComponent, SceneChunk},
-    rendering::{DefaultRenderer, Renderer, Screen},
-    scene::{self, Scene},
-    serializable,
+    entity_system::SceneChunk,
+    rendering::{DefaultRenderer, Screen},
+    scene,
 };
-use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
-use std::char;
+use glfw::{Action, Key, Modifiers, MouseButton, WindowEvent};
+use std::{thread, time::Duration};
 
 pub struct Runtime;
 
@@ -95,6 +94,7 @@ impl Runtime {
             app.window.get_framebuffer_size(),
             app.window.get_context_version(),
         );
+
         let mut screen = Screen::new(
             app.window.get_framebuffer_size(),
             app.window.get_context_version(),
@@ -109,9 +109,7 @@ impl Runtime {
         while !app.window.should_close() {
             app.glfw.set_time(0.0);
             Self::update_events(&mut app, &mut input, &mut vec![&mut renderer, &mut screen]);
-            for char_ in &input.char_events {
-                print!("{} ", char_);
-            }
+            thread::sleep(Duration::from_millis(20));
             frame_time = app.glfw.get_time();
         }
     }
