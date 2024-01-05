@@ -15,38 +15,38 @@ pub enum ShaderDataSource {
 
 impl ShaderDataSource {
     const VERTEX_DATA: &'static str = "
-    in VertexData {
-        vec3 position;
-        vec3 normal;
-        vec2 tex_coord;
-        vec3 light_space_position;
-    } vertex;";
+in VertexData {
+    vec3 position;
+    vec3 normal;
+    vec2 tex_coord;
+    vec3 light_space_position;
+} vertex;";
 
     thread_local! {
         static MATRIX_DATA: RefCell<String> = RefCell::new(format!("
-        layout (std140, binding = {}) uniform MatrixData {{
-            mat4 mvp;
-            mat4 model;
-            mat4 orientation;
-            mat4 light_space;
-        }};", BindingPoints::MatrixData as u32));
+layout (std140, binding = {}) uniform MatrixData {{
+    mat4 mvp;
+    mat4 model;
+    mat4 orientation;
+    mat4 light_space;
+}};", BindingPoints::MatrixData as u32));
 
         static LIGHTING_DATA: RefCell<String> = RefCell::new(format!("
-        struct LightSource {{
-            vec3 color;
-            int type; // 0 - Directional, 1 - Point, 2 - Spot
-            vec3 position;
-            float constant;
-            vec3 direction;
-            float linear;
-            float quadiratic;
-            float inner_cuttoff;
-            float outer_cuttoff;
-        }};
-        layout (std140, binding = {}) uniform LightingData {{
-            LightSource light_source;
-            vec3 viewer_position;
-        }};", BindingPoints::LightingData as u32));
+struct LightSource {{
+    vec3 color;
+    int type; // 0 - Directional, 1 - Point, 2 - Spot
+    vec3 position;
+    float constant;
+    vec3 direction;
+    float linear;
+    float quadiratic;
+    float inner_cuttoff;
+    float outer_cuttoff;
+}};
+layout (std140, binding = {}) uniform LightingData {{
+    LightSource light_source;
+    vec3 viewer_position;
+}};", BindingPoints::LightingData as u32));
     }
 
     pub fn source(&self) -> String {
@@ -88,24 +88,24 @@ pub struct MainShader<T> {
 
 impl<T> MainShader<T> {
     const MAIN_VERT: &'static str = "
-    layout (location = 0) in vec3 position;
-    layout (location = 1) in vec3 normal;
-    layout (location = 2) in vec2 tex_coord;
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec3 normal;
+layout (location = 2) in vec2 tex_coord;
 
-    out VertexData {
-        vec3 position;
-        vec3 normal;
-        vec2 tex_coord;
-        vec3 light_space_position;
-    } vertex;
+out VertexData {
+    vec3 position;
+    vec3 normal;
+    vec2 tex_coord;
+    vec3 light_space_position;
+} vertex;
 
-    void main() { 
-        vertex.position = (model * vec4(position, 1)).xyz;
-        vertex.normal = (orientation * vec4(normal, 1)).xyz;
-        vertex.tex_coord = tex_coord;
-        vec4 light_space_position = (light_space * model * vec4(position, 1));
-        vertex.light_space_position = light_space_position.xyz / light_space_position.w;
-        gl_Position = mvp * vec4(position, 1);";
+void main() { 
+    vertex.position = (model * vec4(position, 1)).xyz;
+    vertex.normal = (orientation * vec4(normal, 1)).xyz;
+    vertex.tex_coord = tex_coord;
+    vec4 light_space_position = (light_space * model * vec4(position, 1));
+    vertex.light_space_position = light_space_position.xyz / light_space_position.w;
+    gl_Position = mvp * vec4(position, 1);";
 
     const MAIN_FRAG: &'static str = "void main() {";
 
@@ -134,7 +134,7 @@ impl ShaderSource for MainShader<MainVertexShader> {
             calls.push_str(&call);
         }
         source.push_str(Self::MAIN_VERT);
-        source.push_str(&format!("{calls}}}"));
+        source.push_str(&format!("{calls}\n}}\n"));
         source
     }
 
@@ -158,7 +158,7 @@ impl ShaderSource for MainShader<MainFragmentShader> {
             calls.push_str(&call);
         }
         source.push_str(Self::MAIN_FRAG);
-        source.push_str(&format!("{calls}}}"));
+        source.push_str(&format!("{calls}\n}}\n"));
         source
     }
 
@@ -175,72 +175,72 @@ pub struct DefaultLightShader;
 
 impl DefaultLightShader {
     const LIGHT_SHADER_SRC: &'static str = "
-    #define DIRECTIONAL 0
-    #define POINT       1
-    #define SPOT        2
+#define DIRECTIONAL 0
+#define POINT       1
+#define SPOT        2
 
-    const float AMBIENT_INTENSITY = 0.1;
-    const float SHININESS = 8;
+const float AMBIENT_INTENSITY = 0.1;
+const float SHININESS = 8;
 
-    float blinn_specular(vec3 to_ligth_source_direction, float shininess) {
-        vec3 to_viewer_direction = normalize(viewer_position - vertex.position);
-        vec3 halfway_direction = normalize(to_ligth_source_direction + to_viewer_direction);
-        return pow(max(dot(vertex.normal, halfway_direction), 0), shininess);
+float blinn_specular(vec3 to_ligth_source_direction, float shininess) {
+    vec3 to_viewer_direction = normalize(viewer_position - vertex.position);
+    vec3 halfway_direction = normalize(to_ligth_source_direction + to_viewer_direction);
+    return pow(max(dot(vertex.normal, halfway_direction), 0), shininess);
+}
+
+float attenuation() {
+    float distance = length(light_source.position - vertex.position);
+    return 1 / (light_source.constant + light_source.linear * distance
+        + light_source.quadiratic * distance * distance);
+    // return 1 / distance;
+}
+
+float fragment_luminocity() {
+    return 1;
+
+    // vec3 fragment_ndc = vertex.light_space_position * 0.5 + 0.5;
+    // float illuminated_depth = texture(shadow_map, fragment_ndc.xy).r;
+    // return float(fragment_ndc.z <= illuminated_depth);
+}
+
+void directional() {
+    float diffuse_intensity = clamp(dot(vertex.normal, -light_source.direction), 0, 1);
+    float specular_intensity = blinn_specular(-light_source.direction, SHININESS);
+
+    gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity()
+        * (diffuse_intensity + specular_intensity)) * light_source.color, 1);
+}
+
+void point() {
+    vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
+    float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
+    float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
+
+    gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity()
+        * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
+}
+
+void spot() {
+    vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
+    float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
+    float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
+    float theta = dot(to_light_source_direction, -light_source.direction);
+    float epsilon = light_source.inner_cuttoff - light_source.outer_cuttoff;
+    float edge_intensity = clamp((theta - light_source.outer_cuttoff) / epsilon, 0, 1);
+
+    gl_FragColor = vec4((AMBIENT_INTENSITY + edge_intensity * fragment_luminocity()
+        * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
+}
+
+void compute_lighting() {
+    if (light_source.type == DIRECTIONAL) {
+        directional();
+    } else if (light_source.type == POINT) {
+        point();
+    } else if (light_source.type == SPOT) {
+        spot();
     }
-
-    float attenuation() {
-        float distance = length(light_source.position - vertex.position);
-        return 1 / (light_source.constant + light_source.linear * distance
-            + light_source.quadiratic * distance * distance);
-        // return 1 / distance;
-    }
-
-    float fragment_luminocity() {
-        return 1;
-
-        // vec3 fragment_ndc = vertex.light_space_position * 0.5 + 0.5;
-        // float illuminated_depth = texture(shadow_map, fragment_ndc.xy).r;
-        // return float(fragment_ndc.z <= illuminated_depth);
-    }
-
-    void directional() {
-        float diffuse_intensity = clamp(dot(vertex.normal, -light_source.direction), 0, 1);
-        float specular_intensity = blinn_specular(-light_source.direction, SHININESS);
-
-        gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity()
-            * (diffuse_intensity + specular_intensity)) * light_source.color, 1);
-    }
-
-    void point() {
-        vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
-        float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
-        float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
-
-        gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity()
-            * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
-    }
-
-    void spot() {
-        vec3 to_light_source_direction = normalize(light_source.position - vertex.position);
-        float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
-        float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
-        float theta = dot(to_light_source_direction, -light_source.direction);
-        float epsilon = light_source.inner_cuttoff - light_source.outer_cuttoff;
-        float edge_intensity = clamp((theta - light_source.outer_cuttoff) / epsilon, 0, 1);
-
-        gl_FragColor = vec4((AMBIENT_INTENSITY + edge_intensity * fragment_luminocity()
-            * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
-    }
-
-    void compute_lighting() {
-        if (light_source.type == DIRECTIONAL) {
-            directional();
-        } else if (light_source.type == POINT) {
-            point();
-        } else if (light_source.type == SPOT) {
-            spot();
-        }
-    }";
+}\n";
 
     pub fn new() -> Self {
         Self {}
@@ -263,11 +263,11 @@ impl ShaderSource for DefaultLightShader {
 
 impl SubShaderSource for DefaultLightShader {
     fn signature(&self) -> String {
-        "void compute_lighting();".to_string()
+        "\nvoid compute_lighting();\n".to_string()
     }
 
     fn call_symbol(&self) -> String {
-        "compute_lighting();".to_string()
+        "\ncompute_lighting();\n".to_string()
     }
 }
 
@@ -275,15 +275,17 @@ pub struct ScreenShaderVert;
 
 impl ScreenShaderVert {
     const SRC: &'static str = "
-    layout (location = 0) in vec3 position;
-    layout (location = 2) in vec2 tex_coord;
-    out VertexData {
-        vec2 tex_coord;
-    } vertex_data;
-    void main() {
-        vertex_data.tex_coord = tex_coord;
-        gl_Position = vec4(position, 1.0);
-    }";
+layout (location = 0) in vec3 position;
+layout (location = 2) in vec2 tex_coord;
+
+out VertexData {
+    vec2 tex_coord;
+} vertex_data;
+
+void main() {
+    vertex_data.tex_coord = tex_coord;
+    gl_Position = vec4(position, 1.0);
+}\n";
 
     pub fn new() -> Self {
         Self {}
@@ -311,16 +313,16 @@ impl ScreenShaderFrag {
 
     thread_local! {
         static SRC: RefCell<String> = RefCell::new(format!("
-        in VertexData {{
-            vec2 tex_coord;
-        }} vertex_data;
-        uniform sampler2D screen_texture;
-        layout(location = {}) uniform float gamma_correction;
-        void main() {{
-            vec4 color = texture(screen_texture, vertex_data.tex_coord);
-            vec3 correction = pow(color.rgb, vec3(gamma_correction));
-            gl_FragColor = vec4(correction, color.a);
-        }}", ScreenShaderFrag::GAMMA_CORRECTION_LOCATION));
+in VertexData {{
+    vec2 tex_coord;
+}} vertex_data;
+uniform sampler2D screen_texture;
+layout(location = {}) uniform float gamma_correction;
+void main() {{
+    vec4 color = texture(screen_texture, vertex_data.tex_coord);
+    vec3 correction = pow(color.rgb, vec3(gamma_correction));
+    gl_FragColor = vec4(correction, color.a);
+}}\n", ScreenShaderFrag::GAMMA_CORRECTION_LOCATION));
     }
 
     pub fn new() -> Self {

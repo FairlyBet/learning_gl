@@ -1,12 +1,14 @@
 use crate::{
+    asset_manager::RangeContainer,
     data3d::{self, Mesh, VertexAttribute},
-    entity_system::{CameraComponent, SceneChunk, LightComponent, MeshComponent},
+    entity_system::{CameraComponent, LightComponent, MeshComponent, SceneChunk},
     gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
     lighting::LightData,
+    runtime::FramebufferSizeCallback,
     shader::{
         self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
         ScreenShaderFrag, ScreenShaderVert,
-    }, asset_manager::RangeContainer,
+    },
 };
 use gl::types::GLenum;
 use glfw::Version;
@@ -164,6 +166,12 @@ impl Renderer for DefaultRenderer {
     }
 }
 
+impl FramebufferSizeCallback for DefaultRenderer {
+    fn framebuffer_size(&mut self, size: (i32, i32)) {
+        self.framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
+    }
+}
+
 fn render_meshes(meshes: &[Mesh]) {
     for mesh in meshes {
         mesh.bind();
@@ -175,6 +183,80 @@ fn render_meshes(meshes: &[Mesh]) {
                 0 as *const _,
             );
         }
+    }
+}
+
+pub struct Screen {
+    resolution: (i32, i32),
+    program: ShaderProgram,
+    quad: Mesh,
+    gamma_correction: f32,
+}
+
+impl Screen {
+    pub fn new(resolution: (i32, i32), gl_version: Version) -> Self {
+        let vert = shader::build_shader(&ScreenShaderVert::new(), gl_version);
+        let frag = shader::build_shader(&ScreenShaderFrag::new(), gl_version);
+        let program = ShaderProgram::new().unwrap();
+        program.attach_shader(&vert);
+        program.attach_shader(&frag);
+        program.link();
+        assert!(program.link_success());
+        program.use_();
+        let gamma = 2.2f32;
+        unsafe {
+            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
+        }
+        let quad = Mesh::new(
+            6,
+            size_of_val(data3d::QUAD_VERTICES_TEX_COORDS),
+            data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
+            vec![VertexAttribute::Position, VertexAttribute::TexCoord],
+            0,
+            ptr::null(),
+            gl::STATIC_DRAW,
+        );
+
+        Self {
+            resolution,
+            program,
+            quad,
+            gamma_correction: gamma,
+        }
+    }
+
+    // pub fn offscreen_buffer(&self) -> &Framebuffer {
+    //     &self.offscreen_buffer
+    // }
+
+    pub fn render_offscreen(&self, offscreen: &Framebuffer) {
+        Framebuffer::bind_default(self.resolution);
+        gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
+        self.program.use_();
+        self.quad.bind();
+        offscreen.sampler_buffer.bind();
+        unsafe {
+            gl::Disable(gl::DEPTH_TEST | gl::STENCIL_TEST);
+            gl::DrawArrays(gl::TRIANGLES, 0, self.quad.vertex_count);
+        }
+    }
+
+    pub fn set_gamma(&mut self, gamma: f32) {
+        self.gamma_correction = gamma;
+        self.program.use_();
+        unsafe {
+            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
+        }
+    }
+
+    pub fn set_resolution(&mut self, resolution: (i32, i32)) {
+        self.resolution = resolution;
+    }
+}
+
+impl FramebufferSizeCallback for Screen {
+    fn framebuffer_size(&mut self, size: (i32, i32)) {
+        self.resolution = size;
     }
 }
 
@@ -255,73 +337,5 @@ impl Framebuffer {
         unsafe {
             gl::Viewport(0, 0, size.0, size.1);
         }
-    }
-}
-
-pub struct Screen {
-    resolution: (i32, i32),
-    program: ShaderProgram,
-    quad: Mesh,
-    gamma_correction: f32,
-}
-
-impl Screen {
-    pub fn new(resolution: (i32, i32), gl_version: Version) -> Self {
-        let vert = shader::build_shader(&ScreenShaderVert::new(), gl_version);
-        let frag = shader::build_shader(&ScreenShaderFrag::new(), gl_version);
-        let program = ShaderProgram::new().unwrap();
-        program.attach_shader(&vert);
-        program.attach_shader(&frag);
-        program.link();
-        assert!(program.link_success());
-        program.use_();
-        let gamma = 2.2f32;
-        unsafe {
-            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
-        }
-        let quad = Mesh::new(
-            6,
-            size_of_val(data3d::QUAD_VERTICES_TEX_COORDS),
-            data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
-            vec![VertexAttribute::Position, VertexAttribute::TexCoord],
-            0,
-            ptr::null(),
-            gl::STATIC_DRAW,
-        );
-
-        Self {
-            resolution,
-            program,
-            quad,
-            gamma_correction: gamma,
-        }
-    }
-
-    // pub fn offscreen_buffer(&self) -> &Framebuffer {
-    //     &self.offscreen_buffer
-    // }
-
-    pub fn render_offscreen(&self, offscreen: &Framebuffer) {
-        Framebuffer::bind_default(self.resolution);
-        gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
-        self.program.use_();
-        self.quad.bind();
-        offscreen.sampler_buffer.bind();
-        unsafe {
-            gl::Disable(gl::DEPTH_TEST | gl::STENCIL_TEST);
-            gl::DrawArrays(gl::TRIANGLES, 0, self.quad.vertex_count);
-        }
-    }
-
-    pub fn set_gamma(&mut self, gamma: f32) {
-        self.gamma_correction = gamma;
-        self.program.use_();
-        unsafe {
-            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
-        }
-    }
-
-    pub fn set_resolution(&mut self, resolution: (i32, i32)) {
-        self.resolution = resolution;
     }
 }

@@ -27,8 +27,8 @@ use scripting::Scripting;
 use std::{collections::HashMap, fs, io, path::Path};
 
 fn main() {
-    let path = Path::new(r#"src\shaders"#);
-    println!("{}", path.extension().unwrap().to_str().unwrap());
+    // let path = Path::new(r#"src\shaders"#);
+    // println!("{}", path.extension().unwrap().to_str().unwrap());
     // let s = Scripting::new();
     // loop {
     //     _ = s.execute_file(Path::new(r#"assets\scripts\sample.lua"#));
@@ -36,6 +36,6 @@ fn main() {
     // }
 
     // scene::generate_sample();
-    // let app = application::Application::new();
-    // app.run();
+    let app = application::Application::new();
+    app.run();
 }
