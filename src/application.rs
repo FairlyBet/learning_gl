@@ -48,6 +48,7 @@ impl Application {
         window.set_char_polling(true);
         window.set_cursor_pos_polling(true);
         window.set_mouse_button_polling(true);
+        window.set_scroll_polling(true);
         window.set_framebuffer_size_polling(true);
         window.set_focus_polling(true);
         window.set_drag_and_drop_polling(true);

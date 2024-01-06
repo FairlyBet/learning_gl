@@ -98,7 +98,7 @@ impl SceneChunk {
             < self.component_arrays[ComponentType::Transform as usize].len::<linear::Transform>()
         {
             self.component_arrays[ComponentType::Transform as usize]
-                .overwrite(transform, entity.id as usize);
+                .rewrite(transform, entity.id as usize);
         } else {
             let re = self.component_arrays[ComponentType::Transform as usize].push(transform);
             if let Reallocated::Yes = re {
@@ -187,7 +187,7 @@ impl SceneChunk {
     where
         T: Component,
     {
-        self.component_arrays[T::component_type() as usize].slice_mut::<T>()
+        self.component_arrays[T::component_type() as usize].mut_slice::<T>()
     }
 
     /// This optimization requires entities ids to be a consequtive progression (0, 1, 2...)

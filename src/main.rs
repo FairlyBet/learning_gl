@@ -21,21 +21,37 @@ mod shader;
 mod util;
 
 use fxhash::FxHashMap;
-use glfw::Key;
+use glfw::{Key, Modifiers};
 use rlua::{Chunk, Error, Function, Value};
 use scripting::Scripting;
-use std::{collections::HashMap, fs, io, path::Path};
+use std::{collections::HashMap, fs, io, mem::MaybeUninit, path::Path, rc::Rc};
+use util::StaticVec;
+
+struct S {
+    n: i32,
+}
+
+impl Drop for S {
+    fn drop(&mut self) {
+        println!("{}", self.n);
+    }
+}
 
 fn main() {
-    // let path = Path::new(r#"src\shaders"#);
-    // println!("{}", path.extension().unwrap().to_str().unwrap());
+    let s = S { n: 5 };
+    let s1 = S { n: 10 };
+    let s2 = S { n: 25 };
+    let mut vec = StaticVec::<S, 4>::new();
+    vec.try_push(s);
+    vec.try_push(s1);
+    vec.try_push(s2);
+
     // let s = Scripting::new();
-    // loop {
-    //     _ = s.execute_file(Path::new(r#"assets\scripts\sample.lua"#));
-    //     _ = io::stdin().read_line(&mut String::new());
-    // }
+    // let key = s
+    //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
+    //     .unwrap();
 
     // scene::generate_sample();
-    let app = application::Application::new();
-    app.run();
+    // let app = application::Application::new();
+    // app.run();
 }

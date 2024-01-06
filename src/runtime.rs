@@ -4,9 +4,10 @@ use crate::{
     entity_system::SceneChunk,
     rendering::{DefaultRenderer, Screen},
     scene,
+    scripting::Scripting,
 };
-use glfw::{Action, Key, Modifiers, MouseButton, WindowEvent};
-use std::{thread, time::Duration};
+use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
+use std::{fs::File, io::Write as _};
 
 pub struct Runtime;
 
@@ -24,23 +25,34 @@ impl Runtime {
         events.clear_events();
         for (_, event) in glfw::flush_messages(&app.receiver) {
             match event {
+                WindowEvent::Key(Key::Enter, _, Action::Repeat, _) => {
+                    events.char_input.push('\n');
+                }
                 WindowEvent::Key(key, _, action @ (Action::Press | Action::Release), modifiers) => {
-                    events.key_events.push((key, action, modifiers));
+                    events.key_input.push((key, action, modifiers));
+                    if key == Key::V && action == Action::Press && modifiers == Modifiers::Control {
+                        if let Some(string) = app.window.get_clipboard_string() {
+                            events.char_input.push_str(&string);
+                        }
+                    }
+                    if key == Key::Enter && action == Action::Press {
+                        events.char_input.push('\n');
+                    }
                 }
                 WindowEvent::Char(char_) => {
-                    events.char_events.push(char_);
+                    events.char_input.push(char_);
                 }
                 WindowEvent::CursorPos(x, y) => {
                     events.update_cursor_pos((x, y));
                 }
-                WindowEvent::MouseButton(
-                    button,
-                    action @ (Action::Press | Action::Release),
-                    modifiers,
-                ) => {
-                    events.mouse_button_events.push((button, action, modifiers));
+                WindowEvent::MouseButton(button, action, modifiers) => {
+                    events.mouse_button_input.push((button, action, modifiers));
                 }
+                WindowEvent::Scroll(x, y) => {}
                 WindowEvent::FramebufferSize(w, h) => {
+                    if (w == 0 || h == 0) {
+                        continue;
+                    }
                     for callback in framebuffer_size_callbacks.iter_mut() {
                         callback.framebuffer_size((w, h));
                     }
@@ -63,32 +75,24 @@ impl Runtime {
     //     .iter()
     //     .for_each(|item| _ = scripting.execute_file(Path::new(&item)));
     // }
-    // fn render_iteration(
-    //     app: &mut Application,
-    //     screen: &Screen,
-    //     context: &Context,
-    //     renderer: &impl Renderer,
-    // ) {
-    // renderer.render(
-    //     &context.entity_system,
-    //     &context.model_container,
-    //     screen.offscreen_buffer(),
-    // );
-    // screen.render_offscreen();
-    //     app.window.swap_buffers();
-    // }
+
+    fn render_iteration(app: &mut Application) {
+        app.window.swap_buffers();
+    }
 
     pub fn run(self, mut app: Application) {
         let scenes = scene::get_scenes();
-        let first = match scenes.first() {
+        let start = match scenes.first() {
             Some(scene) => scene,
             None => return,
         };
 
         let mut asset_manager = AssetManager::new();
-        asset_manager.load(&first);
+        asset_manager.load(&start);
 
-        let mut chunk = SceneChunk::from_scene(&first, &asset_manager);
+        let mut chunk = SceneChunk::from_scene(&start, &asset_manager);
+
+        let scripting = Scripting::new();
 
         let mut renderer = DefaultRenderer::new(
             app.window.get_framebuffer_size(),
@@ -103,13 +107,17 @@ impl Runtime {
         let mut input = WindowEvents::default();
 
         app.window.focus();
+        let mut file = File::create("input.txt").unwrap();
 
         let mut frame_time = 0.0;
 
         while !app.window.should_close() {
             app.glfw.set_time(0.0);
+
             Self::update_events(&mut app, &mut input, &mut vec![&mut renderer, &mut screen]);
-            thread::sleep(Duration::from_millis(20));
+            file.write(&input.char_input.as_bytes());
+            Self::render_iteration(&mut app);
+
             frame_time = app.glfw.get_time();
         }
     }
@@ -117,9 +125,9 @@ impl Runtime {
 
 #[derive(Default)]
 pub struct WindowEvents {
-    key_events: Vec<(Key, Action, Modifiers)>,
-    char_events: Vec<char>,
-    mouse_button_events: Vec<(MouseButton, Action, Modifiers)>,
+    key_input: Vec<(Key, Action, Modifiers)>,
+    char_input: String,
+    mouse_button_input: Vec<(MouseButton, Action, Modifiers)>,
     cursor_offset: (f64, f64),
     cursor_pos: (f64, f64),
 }
@@ -132,17 +140,17 @@ impl WindowEvents {
     }
 
     pub fn get_key(&self, key: (Key, Action, Modifiers)) -> bool {
-        self.key_events.contains(&key)
+        self.key_input.contains(&key)
     }
 
     pub fn get_mouse_button(&self, button: (MouseButton, Action, Modifiers)) -> bool {
-        self.mouse_button_events.contains(&button)
+        self.mouse_button_input.contains(&button)
     }
 
     pub fn clear_events(&mut self) {
-        self.key_events.clear();
-        self.mouse_button_events.clear();
-        self.char_events.clear();
+        self.key_input.clear();
+        self.char_input.clear();
+        self.mouse_button_input.clear();
     }
 }
 

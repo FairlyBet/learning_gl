@@ -1,4 +1,10 @@
-use std::{alloc, alloc::Layout, default, marker::PhantomData, mem::size_of, ptr};
+use std::{
+    alloc,
+    alloc::Layout,
+    marker::PhantomData,
+    mem::{self, size_of, ManuallyDrop, MaybeUninit},
+    ptr, slice,
+};
 
 /// Do not store impl Drop types there!!!
 pub struct ByteArray {
@@ -25,7 +31,7 @@ impl ByteArray {
         }
     }
 
-    pub fn overwrite<T>(&mut self, value: T, index: usize) {
+    pub fn rewrite<T>(&mut self, value: T, index: usize) {
         assert!(index < self.len::<T>(), "Index is out of bound");
         unsafe {
             self.buf
@@ -103,11 +109,11 @@ impl ByteArray {
     }
 
     pub fn slice<T>(&self) -> &[T] {
-        unsafe { std::slice::from_raw_parts(self.buf as *const T, self.len::<T>()) }
+        unsafe { slice::from_raw_parts(self.buf as *const T, self.len::<T>()) }
     }
 
-    pub fn slice_mut<T>(&mut self) -> &mut [T] {
-        unsafe { std::slice::from_raw_parts_mut(self.buf as *mut T, self.len::<T>()) }
+    pub fn mut_slice<T>(&mut self) -> &mut [T] {
+        unsafe { slice::from_raw_parts_mut(self.buf as *mut T, self.len::<T>()) }
     }
 }
 
@@ -150,13 +156,74 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     }
 }
 
-pub fn into_vec<F, T>(mut vec: Vec<F>) -> Vec<T>
+pub fn into_vec<From, To>(mut vec: Vec<From>) -> Vec<To>
 where
-    F: Into<T>,
+    From: Into<To>,
 {
-    let mut res: Vec<T> = Vec::with_capacity(vec.len());
+    let mut res: Vec<To> = Vec::with_capacity(vec.len());
     for item in vec {
         res.push(item.into());
     }
     res
+}
+
+pub struct StaticVec<T, const SIZE: usize> {
+    buf: MaybeUninit<[T; SIZE]>,
+    len: usize,
+}
+
+impl<T, const SIZE: usize> StaticVec<T, SIZE> {
+    pub fn new() -> Self {
+        Self {
+            buf: MaybeUninit::zeroed(),
+            len: 0,
+        }
+    }
+
+    pub fn try_push(&mut self, value: T) -> Result<(), T> {
+        if self.len < SIZE {
+            unsafe {
+                let zeroed = mem::replace(&mut self.buf.assume_init_mut()[self.len], value);
+                ManuallyDrop::new(zeroed);
+            }
+            self.len += 1;
+            Ok(())
+        } else {
+            Err(value)
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn get(&self, index: usize) -> &T {
+        assert!(index < self.len, "Index is out of bounds");
+        unsafe { &self.buf.assume_init_ref()[index] }
+    }
+
+    pub fn get_mut(&mut self, index: usize) -> &mut T {
+        assert!(index < self.len, "Index is out of bounds");
+        unsafe { &mut self.buf.assume_init_mut()[index] }
+    }
+
+    pub fn slice(&self) -> &[T] {
+        unsafe { slice::from_raw_parts(self.buf.assume_init_ref().as_ptr(), self.len) }
+    }
+
+    pub fn slice_mut(&mut self) -> &mut [T] {
+        unsafe { slice::from_raw_parts_mut(self.buf.assume_init_mut().as_mut_ptr(), self.len) }
+    }
+}
+
+impl<T, const SIZE: usize> Drop for StaticVec<T, SIZE> {
+    fn drop(&mut self) {
+        println!("Dropping {} elements", self.len);
+        for i in 0..self.len {
+            unsafe {
+                let mut zeroed = MaybeUninit::<T>::zeroed();
+                let actual = mem::replace(&mut self.buf.assume_init_mut()[i], zeroed.assume_init());
+            }
+        }
+    }
 }

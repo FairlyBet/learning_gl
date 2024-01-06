@@ -1,4 +1,6 @@
-use rlua::{Error, Lua, StdLib};
+use bitflags::bitflags;
+use fxhash::FxHashMap;
+use rlua::{Error, Function, Lua, RegistryKey, StdLib, Table};
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -7,10 +9,8 @@ use std::{
 
 pub type CompiledChunk = Vec<u8>;
 
-pub struct Script;
-
 pub struct Scripting {
-    pub lua: Lua,
+    lua: Lua,
 }
 
 impl Scripting {
@@ -39,9 +39,39 @@ impl Scripting {
             Ok(value) => value,
             Err(err) => return Err(err.to_string()),
         };
-
         let res = self.lua.context(|context| context.load(&src).exec());
-
         Ok(res)
+    }
+
+    pub fn create_object(&self, src: &str) -> Result<RegistryKey, Error> {
+        self.lua.context(|context| {
+            let chunk = context.load(src);
+            let res = chunk.eval::<Table>();
+            match res {
+                Ok(table) => context.create_registry_value(table),
+                Err(error) => Err(error),
+            }
+        })
+    }
+}
+
+pub struct Script {
+    key: RegistryKey,
+    callbacks: Callbacks,
+}
+
+const CALLBACK_NAMES: &[&str] = &["start", "update"];
+
+bitflags! {
+    pub struct Callbacks: u8 {
+        const START = 0;
+        const UPDATE = 1;
+    }
+}
+
+impl Callbacks {
+    pub fn callback_name(&self) -> &'static str {
+        assert!(self.bits().is_power_of_two());
+        CALLBACK_NAMES[self.bits() as usize]
     }
 }
