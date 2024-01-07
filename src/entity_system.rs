@@ -5,7 +5,7 @@ use crate::{
     linear,
     scene::Scene,
     serializable,
-    util::{self, ByteArray, Reallocated},
+    util::{self, ByteVec, Reallocated},
 };
 use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,7 @@ pub type EntityId = u32;
 #[derive(Default)]
 pub struct SceneChunk {
     entities: FxHashMap<EntityId, Entity>,
-    component_arrays: [ByteArray; ComponentType::COUNT],
+    component_arrays: [ByteVec; ComponentType::COUNT],
     free_ids: VecDeque<EntityId>,
     id_counter: EntityId,
 }
@@ -49,7 +49,7 @@ impl SceneChunk {
         }
 
         res.component_arrays[ComponentType::Transform as usize] =
-            ByteArray::init::<linear::Transform>(transforms.len());
+            ByteVec::init::<linear::Transform>(transforms.len());
         for transform in transforms {
             let transform: linear::Transform = transform.into();
             res.component_arrays[ComponentType::Transform as usize].push(transform);

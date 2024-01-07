@@ -1,22 +1,24 @@
-use bitflags::bitflags;
-use fxhash::FxHashMap;
-use rlua::{Error, Function, Lua, RegistryKey, StdLib, Table};
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    path::Path,
-};
+use fxhash::FxHasher32;
+use rlua::{Error, Lua, RegistryKey, StdLib, Table};
+use std::{collections::HashSet, fs, hash::BuildHasherDefault, path::Path};
+use strum::EnumCount;
 
 pub type CompiledChunk = Vec<u8>;
 
+type FxHashSet32<T> = HashSet<T, BuildHasherDefault<FxHasher32>>;
+
 pub struct Scripting {
     lua: Lua,
+    updates: FxHashSet32<u32>,
+    update_index: u32,
 }
 
 impl Scripting {
     pub fn new() -> Self {
         Self {
             lua: Lua::new_with(StdLib::ALL_NO_DEBUG),
+            updates: Default::default(),
+            update_index: 0,
         }
     }
 
@@ -43,12 +45,20 @@ impl Scripting {
         Ok(res)
     }
 
-    pub fn create_object(&self, src: &str) -> Result<RegistryKey, Error> {
+    pub fn create_object(&mut self, src: &str) -> Result<Script, Error> {
         self.lua.context(|context| {
             let chunk = context.load(src);
             let res = chunk.eval::<Table>();
             match res {
-                Ok(table) => context.create_registry_value(table),
+                Ok(table) => {
+                    let res = Ok(Script {
+                        index: self.update_index,
+                        key: context.create_registry_value(table).unwrap(),
+                    });
+                    self.updates.insert(self.update_index);
+                    self.update_index += 1;
+                    res
+                }
                 Err(error) => Err(error),
             }
         })
@@ -56,22 +66,20 @@ impl Scripting {
 }
 
 pub struct Script {
+    index: u32,
     key: RegistryKey,
-    callbacks: Callbacks,
 }
 
-const CALLBACK_NAMES: &[&str] = &["start", "update"];
-
-bitflags! {
-    pub struct Callbacks: u8 {
-        const START = 0;
-        const UPDATE = 1;
-    }
+#[derive(Clone, Copy, EnumCount)]
+pub enum Callbacks {
+    Start,
+    Update,
 }
 
 impl Callbacks {
+    const CALLBACK_NAMES: &'static [&'static str] = &["start", "update"];
+
     pub fn callback_name(&self) -> &'static str {
-        assert!(self.bits().is_power_of_two());
-        CALLBACK_NAMES[self.bits() as usize]
+        Self::CALLBACK_NAMES[*self as usize]
     }
 }

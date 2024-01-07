@@ -38,14 +38,6 @@ impl Drop for S {
 }
 
 fn main() {
-    let s = S { n: 5 };
-    let s1 = S { n: 10 };
-    let s2 = S { n: 25 };
-    let mut vec = StaticVec::<S, 4>::new();
-    vec.try_push(s);
-    vec.try_push(s1);
-    vec.try_push(s2);
-
     // let s = Scripting::new();
     // let key = s
     //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())

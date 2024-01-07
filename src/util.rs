@@ -1,19 +1,18 @@
 use std::{
-    alloc,
-    alloc::Layout,
+    alloc::{self, Layout},
     marker::PhantomData,
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ptr, slice,
 };
 
 /// Do not store impl Drop types there!!!
-pub struct ByteArray {
+pub struct ByteVec {
     buf: *mut u8,
     layout: Layout,
     len: usize,
 }
 
-impl ByteArray {
+impl ByteVec {
     pub fn init<T>(capacity: usize) -> Self {
         let (buf, layout) = Self::alloc_buf::<T>(capacity * size_of::<T>());
         Self {
@@ -23,7 +22,7 @@ impl ByteArray {
         }
     }
 
-    fn uninited() -> Self {
+    fn empty() -> Self {
         Self {
             buf: ptr::null_mut::<u8>(),
             layout: Layout::new::<()>(),
@@ -117,15 +116,15 @@ impl ByteArray {
     }
 }
 
-impl Drop for ByteArray {
+impl Drop for ByteVec {
     fn drop(&mut self) {
         self.dealloc();
     }
 }
 
-impl Default for ByteArray {
+impl Default for ByteVec {
     fn default() -> Self {
-        ByteArray::uninited()
+        ByteVec::empty()
     }
 }
 
@@ -137,7 +136,7 @@ pub enum Reallocated {
 }
 
 pub struct Iter<'a, T> {
-    data: &'a ByteArray,
+    data: &'a ByteVec,
     index: usize,
     phantom: PhantomData<T>,
 }
@@ -156,7 +155,7 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     }
 }
 
-pub fn into_vec<From, To>(mut vec: Vec<From>) -> Vec<To>
+pub fn into_vec<From, To>(vec: Vec<From>) -> Vec<To>
 where
     From: Into<To>,
 {
