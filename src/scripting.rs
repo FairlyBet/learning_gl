@@ -3,70 +3,63 @@ use rlua::{Error, Lua, RegistryKey, StdLib, Table};
 use std::{collections::HashSet, fs, hash::BuildHasherDefault, path::Path};
 use strum::EnumCount;
 
-pub type CompiledChunk = Vec<u8>;
-
-type FxHashSet32<T> = HashSet<T, BuildHasherDefault<FxHasher32>>;
+pub struct CompiledChunk(Vec<u8>);
 
 pub struct Scripting {
     lua: Lua,
-    updates: FxHashSet32<u32>,
-    update_index: u32,
+    start_callbacks: RegistryKey,
+    update_callbacks: RegistryKey,
 }
 
 impl Scripting {
-    pub fn new() -> Self {
-        Self {
-            lua: Lua::new_with(StdLib::ALL_NO_DEBUG),
-            updates: Default::default(),
-            update_index: 0,
-        }
-    }
+    pub fn new() -> Result<Self, Error> {
+        let lua = Lua::new_with(StdLib::ALL_NO_DEBUG);
 
-    pub fn compile_file(&self, path: &Path) -> CompiledChunk {
-        let src = fs::read_to_string(path).unwrap();
-        self.lua.context(|context| {
-            context
-                .load(&src)
-                .set_name(path.to_str().unwrap())
-                .unwrap()
-                .into_function()
-                .unwrap()
-                .dump()
-                .unwrap()
+        let (start_callbacks, update_callbacks) = lua.context(|context| {
+            let table = context.create_table()?;
+            let start_callbacks = context.create_registry_value(table)?;
+            let table = context.create_table()?;
+            let update_callbacks = context.create_registry_value(table)?;
+            Ok((start_callbacks, update_callbacks))
+        })?;
+
+        Ok(Self {
+            lua,
+            start_callbacks,
+            update_callbacks,
         })
     }
 
-    pub fn execute_file(&self, path: &Path) -> Result<Result<(), Error>, String> {
-        let src = match fs::read_to_string(path) {
-            Ok(value) => value,
-            Err(err) => return Err(err.to_string()),
-        };
-        let res = self.lua.context(|context| context.load(&src).exec());
-        Ok(res)
-    }
-
-    pub fn create_object(&mut self, src: &str) -> Result<Script, Error> {
+    pub fn compile_chunk(&self, src: &str, chunk_name: &str) -> Result<CompiledChunk, Error> {
         self.lua.context(|context| {
             let chunk = context.load(src);
-            let res = chunk.eval::<Table>();
-            match res {
-                Ok(table) => {
-                    let res = Ok(Script {
-                        index: self.update_index,
-                        key: context.create_registry_value(table).unwrap(),
-                    });
-                    self.updates.insert(self.update_index);
-                    self.update_index += 1;
-                    res
-                }
-                Err(error) => Err(error),
+            let chunk = chunk.set_name(chunk_name)?;
+            let fucntion = chunk.into_function()?;
+            let dumped = fucntion.dump()?;
+            Ok(CompiledChunk(dumped))
+        })
+    }
+
+    pub fn create_object(&mut self, chunk: &CompiledChunk) -> Result<ScriptObject, Error> {
+        self.lua.context(|context| {
+            let chunk = context.load(&chunk.0);
+            unsafe {
+                let function = chunk.into_function_allow_binary()?;
+                let object: Table = function.call(())?;
+                let has_start = object.contains_key(Callbacks::Start.name())?;
+                if has_start {}
+                let has_update = object.contains_key(Callbacks::Update.name())?;
+                todo!()
             }
         })
     }
+
+    pub fn execute_updates() {
+
+    }
 }
 
-pub struct Script {
-    index: u32,
+pub struct ScriptObject {
     key: RegistryKey,
 }
 
@@ -79,7 +72,7 @@ pub enum Callbacks {
 impl Callbacks {
     const CALLBACK_NAMES: &'static [&'static str] = &["start", "update"];
 
-    pub fn callback_name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         Self::CALLBACK_NAMES[*self as usize]
     }
 }

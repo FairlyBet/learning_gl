@@ -20,23 +20,6 @@ mod serializable;
 mod shader;
 mod util;
 
-use fxhash::FxHashMap;
-use glfw::{Key, Modifiers};
-use rlua::{Chunk, Error, Function, Value};
-use scripting::Scripting;
-use std::{collections::HashMap, fs, io, mem::MaybeUninit, path::Path, rc::Rc};
-use util::StaticVec;
-
-struct S {
-    n: i32,
-}
-
-impl Drop for S {
-    fn drop(&mut self) {
-        println!("{}", self.n);
-    }
-}
-
 fn main() {
     // let s = Scripting::new();
     // let key = s

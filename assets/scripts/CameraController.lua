@@ -1,7 +1,8 @@
-local speed = 10
+local speed
 
 local function move(self)
     print('move')
+    print(speed)
     -- local input = Input { 'w', 'a', 's', 'd' }
     -- local z = input.w.hold * speed - input.s.hold * speed
     -- local x = input.d.hold * speed - input.a.hold * speed
@@ -12,13 +13,8 @@ local function update(self)
     move(self)
 end
 
-local function onCollision(self, other)
-    print(speed)
+local function start()
+    speed = 10
 end
 
----@param value number
-local function setSpeed(value)
-    speed = value
-end
-
-return { update = update, onCollision = onCollision, setSpeed = setSpeed }
+return { update = update, start = start }
