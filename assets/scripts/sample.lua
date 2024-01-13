@@ -1,10 +1,11 @@
----@param arg table
----@return table
-function Input(arg)
-    return {}
+local object = {}
+object.mt = {}
+
+function object.getTransform()
+
 end
--- local ccFile = loadfile("assets/scripts/CameraController.lua")
--- ccFile()
--- require("assets.scripts.CameraController")
--- local cameraController = CameraController()
--- cameraController.update()
+
+local object1 = {}
+
+setmetatable(object1, object)
+print(getmetatable(object1))
