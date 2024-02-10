@@ -127,14 +127,14 @@ pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
     meshes
 }
 
-pub type AssetPath = String;
+pub type ResourcePath = String;
 
-pub struct AssetContainer<Asset, AssetIndex: Clone> {
-    table: FxHashMap<AssetPath, AssetIndex>,
-    vec: Vec<Asset>,
+pub struct ResourceContainer<Resource, ResourceIndex: Clone> {
+    table: FxHashMap<ResourcePath, ResourceIndex>,
+    vec: Vec<Resource>,
 }
 
-impl<Asset, AssetIndex: Clone> AssetContainer<Asset, AssetIndex> {
+impl<Resource, ResourceIndex: Clone> ResourceContainer<Resource, ResourceIndex> {
     pub fn new() -> Self {
         Self {
             table: Default::default(),
@@ -142,11 +142,11 @@ impl<Asset, AssetIndex: Clone> AssetContainer<Asset, AssetIndex> {
         }
     }
 
-    pub fn get_index(&self, name: &AssetPath) -> AssetIndex {
+    pub fn get_index(&self, name: &ResourcePath) -> ResourceIndex {
         self.table[name].clone()
     }
 
-    pub fn contains_asset(&self, name: &AssetPath) -> bool {
+    pub fn contains_resource(&self, name: &ResourcePath) -> bool {
         self.table.contains_key(name)
     }
 
@@ -156,51 +156,51 @@ impl<Asset, AssetIndex: Clone> AssetContainer<Asset, AssetIndex> {
     }
 }
 
-pub type RangeContainer<Asset> = AssetContainer<Asset, Range<usize>>;
+pub type RangeContainer<Resource> = ResourceContainer<Resource, Range<usize>>;
 
-impl<Asset> RangeContainer<Asset> {
-    pub fn push_asset(&mut self, name: &AssetPath, mut assets: Vec<Asset>) -> Range<usize> {
+impl<Resource> RangeContainer<Resource> {
+    pub fn push_resource(&mut self, name: &ResourcePath, mut resources: Vec<Resource>) -> Range<usize> {
         assert!(
             !self.table.contains_key(name),
-            "Container already has this asset"
+            "Container already has this resource"
         );
         let idx = Range {
             start: self.vec.len(),
-            end: self.vec.len() + assets.len(),
+            end: self.vec.len() + resources.len(),
         };
         _ = self.table.insert(name.clone(), idx.clone());
-        self.vec.append(&mut assets);
+        self.vec.append(&mut resources);
         idx
     }
 
-    pub fn soft_push(&mut self, name: &AssetPath, mut assets: Vec<Asset>) -> Range<usize> {
+    pub fn soft_push(&mut self, name: &ResourcePath, mut resources: Vec<Resource>) -> Range<usize> {
         if self.table.contains_key(name) {
             self.table[name].clone()
         } else {
-            self.push_asset(name, assets)
+            self.push_resource(name, resources)
         }
     }
 
-    pub fn get_asset(&self, idx: Range<usize>) -> &[Asset] {
+    pub fn get_resource(&self, idx: Range<usize>) -> &[Resource] {
         &self.vec[idx]
     }
 }
 
-pub type IndexContainer<Asset> = AssetContainer<Asset, usize>;
+pub type IndexContainer<Resource> = ResourceContainer<Resource, usize>;
 
-impl<Asset> IndexContainer<Asset> {
-    pub fn push_asset(&mut self, name: &AssetPath, asset: Asset) -> usize {
+impl<Resource> IndexContainer<Resource> {
+    pub fn push_resource(&mut self, name: &ResourcePath, resource: Resource) -> usize {
         assert!(
             !self.table.contains_key(name),
-            "Container already has this asset"
+            "Container already has this resource"
         );
         let idx = self.vec.len();
         _ = self.table.insert(name.clone(), idx);
-        self.vec.push(asset);
+        self.vec.push(resource);
         idx
     }
 
-    pub fn get_asset(&self, idx: usize) -> &Asset {
+    pub fn get_resource(&self, idx: usize) -> &Resource {
         &self.vec[idx]
     }
 }
@@ -227,9 +227,9 @@ impl ResourceManager {
     pub fn load(&mut self, scene: &Scene) {
         let mesh_components = scene.read_vec::<serializable::MeshComponent>();
         for mesh_component in &mesh_components {
-            if !self.meshes.contains_asset(&mesh_component.mesh_path) {
+            if !self.meshes.contains_resource(&mesh_component.mesh_path) {
                 let model = load_model(&mesh_component.mesh_path, DEFAULT_POSTPROCESS.into());
-                self.meshes.push_asset(&mesh_component.mesh_path, model);
+                self.meshes.push_resource(&mesh_component.mesh_path, model);
             }
         }
     }
