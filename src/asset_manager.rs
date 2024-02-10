@@ -205,11 +205,11 @@ impl<Asset> IndexContainer<Asset> {
     }
 }
 
-pub struct AssetManager {
+pub struct ResourceManager {
     meshes: RangeContainer<Mesh>,
 }
 
-impl AssetManager {
+impl ResourceManager {
     pub fn new() -> Self {
         Self {
             meshes: RangeContainer::<Mesh>::new(),

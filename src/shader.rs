@@ -1,19 +1,19 @@
 use crate::{gl_wrappers::Shader, rendering::BindingPoints};
 use glfw::Version;
-use std::{
-    cell::RefCell,
-    marker::{self, PhantomData},
-};
+use std::{cell::RefCell, marker::PhantomData};
 
 pub enum ShaderDataSource {
     VertexData,
     MatrixData,
     LightingData,
+    FragColor,
     Custom(String),
     // VertexAttributes?
 }
 
 impl ShaderDataSource {
+    const FRAG_COLOR: &'static str = "\nlayout (location = 0) out vec4 frag_color;";
+
     const VERTEX_DATA: &'static str = "
 in VertexData {
     vec3 position;
@@ -55,6 +55,7 @@ layout (std140, binding = {}) uniform LightingData {{
             ShaderDataSource::VertexData => Self::VERTEX_DATA.to_string(),
             ShaderDataSource::MatrixData => Self::MATRIX_DATA.with(|x| x.borrow().clone()),
             ShaderDataSource::LightingData => Self::LIGHTING_DATA.with(|x| x.borrow().clone()),
+            ShaderDataSource::FragColor => Self::FRAG_COLOR.to_string(),
             ShaderDataSource::Custom(src) => src.clone(),
         }
     }
@@ -207,7 +208,7 @@ void directional() {
     float diffuse_intensity = clamp(dot(vertex.normal, -light_source.direction), 0, 1);
     float specular_intensity = blinn_specular(-light_source.direction, SHININESS);
 
-    gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity()
+    frag_color = vec4((AMBIENT_INTENSITY + fragment_luminocity()
         * (diffuse_intensity + specular_intensity)) * light_source.color, 1);
 }
 
@@ -216,7 +217,7 @@ void point() {
     float diffuse_intensity = clamp(dot(vertex.normal, to_light_source_direction), 0, 1);
     float specular_intensity = blinn_specular(to_light_source_direction, SHININESS);
 
-    gl_FragColor = vec4((AMBIENT_INTENSITY + fragment_luminocity()
+    frag_color = vec4((AMBIENT_INTENSITY + fragment_luminocity()
         * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
 }
 
@@ -228,7 +229,7 @@ void spot() {
     float epsilon = light_source.inner_cuttoff - light_source.outer_cuttoff;
     float edge_intensity = clamp((theta - light_source.outer_cuttoff) / epsilon, 0, 1);
 
-    gl_FragColor = vec4((AMBIENT_INTENSITY + edge_intensity * fragment_luminocity()
+    frag_color = vec4((AMBIENT_INTENSITY + edge_intensity * fragment_luminocity()
         * (diffuse_intensity + specular_intensity)) * light_source.color * attenuation(), 1);
 }
 
@@ -257,7 +258,11 @@ impl ShaderSource for DefaultLightShader {
     }
 
     fn data(&self) -> Vec<ShaderDataSource> {
-        vec![ShaderDataSource::LightingData, ShaderDataSource::VertexData]
+        vec![
+            ShaderDataSource::LightingData,
+            ShaderDataSource::VertexData,
+            ShaderDataSource::FragColor,
+        ]
     }
 }
 
@@ -321,7 +326,8 @@ layout(location = {}) uniform float gamma_correction;
 void main() {{
     vec4 color = texture(screen_texture, vertex_data.tex_coord);
     vec3 correction = pow(color.rgb, vec3(gamma_correction));
-    gl_FragColor = vec4(correction, color.a);
+    frag_color = vec4(correction, color.a);
+    //frag_color = vec4(1, 1, 1, 1);
 }}\n", ScreenShaderFrag::GAMMA_CORRECTION_LOCATION));
     }
 
@@ -340,7 +346,7 @@ impl ShaderSource for ScreenShaderFrag {
     }
 
     fn data(&self) -> Vec<ShaderDataSource> {
-        vec![]
+        vec![ShaderDataSource::FragColor]
     }
 }
 
@@ -354,7 +360,10 @@ pub fn build_shader(shader_source: &impl ShaderSource, gl_version: Version) -> S
     println!("{source}");
     shader.set_source(&source);
     shader.compile();
-    assert!(shader.compile_success());
+    if !shader.compile_success() {
+        println!("{}", shader.info_log());
+        panic!("Shader compilation error")
+    }
 
     shader
 }

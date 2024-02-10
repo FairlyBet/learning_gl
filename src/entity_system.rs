@@ -1,5 +1,5 @@
 use crate::{
-    asset_manager::AssetManager,
+    asset_manager::ResourceManager,
     camera,
     lighting::LightSource,
     linear,
@@ -59,7 +59,7 @@ impl SceneChunk {
         res
     }
 
-    pub fn from_scene(scene: &Scene, asset_manager: &AssetManager) -> Self {
+    pub fn from_scene(scene: &Scene, asset_manager: &ResourceManager) -> Self {
         let entities = scene.read_vec::<Entity>();
         let transforms = scene.read_vec::<serializable::Transform>();
 

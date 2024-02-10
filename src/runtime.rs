@@ -1,7 +1,8 @@
 use crate::{
     application::Application,
-    asset_manager::AssetManager,
+    asset_manager::ResourceManager,
     entity_system::SceneChunk,
+    gl_wrappers,
     rendering::{DefaultRenderer, Screen},
     scene,
     scripting::Scripting,
@@ -77,6 +78,7 @@ impl Runtime {
     // }
 
     fn render_iteration(app: &mut Application) {
+        gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
         app.window.swap_buffers();
     }
 
@@ -87,10 +89,10 @@ impl Runtime {
             None => return,
         };
 
-        let mut asset_manager = AssetManager::new();
-        asset_manager.load(&start);
+        let mut resource_manager = ResourceManager::new();
+        resource_manager.load(&start);
 
-        let mut chunk = SceneChunk::from_scene(&start, &asset_manager);
+        let mut chunk = SceneChunk::from_scene(&start, &resource_manager);
 
         let scripting = Scripting::new();
 

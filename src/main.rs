@@ -21,7 +21,7 @@ mod shader;
 mod util;
 
 fn main() {
-    // let s = Scripting::new();
+    scripting::execute_file("assets\\scripts\\Entity.lua");
     // let key = s
     //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
     //     .unwrap();

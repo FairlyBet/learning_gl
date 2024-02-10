@@ -1,4 +1,4 @@
-#version 420 core
+#version 430 core
 #define DIRECTIONAL 0
 #define POINT       1
 #define SPOT        2
