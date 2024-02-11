@@ -4,6 +4,7 @@
 
 use std::fs;
 
+use entity_system::SceneChunk;
 use scripting::Scripting;
 
 extern crate nalgebra_glm as glm;
@@ -27,6 +28,8 @@ mod util;
 fn main() {
     // scripting::execute_file("assets\\scripts\\Entity.lua");
     let scripting = Scripting::new();
+    let chnk = SceneChunk::default();
+    scripting.create_wrappers(&chnk);
     // scripting.();
     // let key = s
     //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
