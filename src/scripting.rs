@@ -42,7 +42,7 @@ impl Scripting {
         });
     }
 
-    pub fn create_wrappers(&self, scene_chunk: &SceneChunk) {
+    pub fn create_wrappers(&self, scene_chunk: &mut SceneChunk) {
         self.lua.context(|context| {
             let set_address = "
             return function(address, func)
@@ -52,14 +52,18 @@ impl Scripting {
             end";
             let set_address = context.load(set_address).eval::<Function>().unwrap();
 
-            let address = scene_chunk as *const _ as usize;
+            let address = scene_chunk as *mut _ as usize;
+            assert!(
+                address <= 2usize.pow(60),
+                "Lack of precision of floating point number"
+            );
 
             let transform_move = context.create_function(Wrappers::transform_move).unwrap();
             let transform_move = set_address
-                .call::<_, Function>((address, transform_move))
+                .call::<_, Function>((1usize << 60, transform_move))
                 .unwrap();
             let arg = context.create_table().unwrap();
-            println!("{}", usize::MAX);
+            // println!("{}", 2usize.pow(60));
             transform_move.call::<_, ()>(arg);
 
             // transform_move.call::<_, ()>((10, 20));
@@ -81,20 +85,15 @@ struct Wrappers;
 
 impl Wrappers {
     fn transform_move(_: Context, arg: (usize, Table)) -> Result<()> {
-        // let address = arg.0 as usize; // direct conversion from Lua doesn't work with MAX value for some reason
-        println!("{}", arg.0);
-        // println!("{}", arg.1);
-        // fs::File::create("transform move.txt").unwrap();
+        let address = arg.0;
 
-        // print!("rust transform move {}", address);
+        let id: EntityId = arg.1.get("id").unwrap();
+        let x: f32 = arg.1.get("x").unwrap();
+        let y: f32 = arg.1.get("y").unwrap();
+        let z: f32 = arg.1.get("z").unwrap();
 
-        // let id: EntityId = arg.get("id").unwrap();
-        // let x: f32 = arg.get("x").unwrap();
-        // let y: f32 = arg.get("y").unwrap();
-        // let z: f32 = arg.get("z").unwrap();
-
-        // let scn = unsafe { &mut *(address as *mut SceneChunk) };
-        // scn.get_transfom_mut(id).move_(&glm::vec3(x, y, z));
+        let scn = unsafe { &mut *(address as *mut SceneChunk) };
+        scn.get_transfom_mut(id).move_(&glm::vec3(x, y, z));
 
         Ok(())
     }

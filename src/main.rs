@@ -27,9 +27,11 @@ mod util;
 
 fn main() {
     // scripting::execute_file("assets\\scripts\\Entity.lua");
+    let mut chunk = SceneChunk::default();
+    chunk.create_entity();
+
     let scripting = Scripting::new();
-    let chnk = SceneChunk::default();
-    scripting.create_wrappers(&chnk);
+    scripting.create_wrappers(&mut chunk);
     // scripting.();
     // let key = s
     //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
