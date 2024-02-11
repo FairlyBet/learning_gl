@@ -60,10 +60,15 @@ impl Scripting {
 
             let transform_move = context.create_function(Wrappers::transform_move).unwrap();
             let transform_move = set_address
-                .call::<_, Function>((1usize << 60, transform_move))
+                .call::<_, Function>((address, transform_move))
                 .unwrap();
             let arg = context.create_table().unwrap();
-            // println!("{}", 2usize.pow(60));
+            
+            arg.set("id", 0);
+            arg.set("x", 10);
+            arg.set("y", 10);
+            arg.set("z", 10);
+
             transform_move.call::<_, ()>(arg);
 
             // transform_move.call::<_, ()>((10, 20));
@@ -86,7 +91,7 @@ struct Wrappers;
 impl Wrappers {
     fn transform_move(_: Context, arg: (usize, Table)) -> Result<()> {
         let address = arg.0;
-
+        // check for presence
         let id: EntityId = arg.1.get("id").unwrap();
         let x: f32 = arg.1.get("x").unwrap();
         let y: f32 = arg.1.get("y").unwrap();

@@ -2,10 +2,9 @@
 #![deny(rust_2018_compatibility)]
 #![allow(unused)]
 
-use std::fs;
-
-use entity_system::SceneChunk;
+use entity_system::{Entity, SceneChunk};
 use scripting::Scripting;
+use std::fs;
 
 extern crate nalgebra_glm as glm;
 
@@ -27,11 +26,18 @@ mod util;
 
 fn main() {
     // scripting::execute_file("assets\\scripts\\Entity.lua");
-    let mut chunk = SceneChunk::default();
-    chunk.create_entity();
+    let entity = Entity::default();
+    let transform = serializable::Transform::default();
+    let mut chunk = SceneChunk::init(vec![entity], vec![transform]);
 
     let scripting = Scripting::new();
     scripting.create_wrappers(&mut chunk);
+
+    let transform = chunk.get_transfom(0);
+    println!(
+        "{} {} {}",
+        transform.position.x, transform.position.y, transform.position.z
+    );
     // scripting.();
     // let key = s
     //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
