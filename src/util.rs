@@ -1,9 +1,15 @@
+use fxhash::{FxHasher, FxHasher32};
 use std::{
     alloc::{self, Layout},
+    collections::HashMap,
+    hash::BuildHasherDefault,
     marker::PhantomData,
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ptr, slice,
 };
+
+pub type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
+pub type FxHashMap32<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
 /// Do not store impl Drop types there!!!
 pub struct ByteVec {

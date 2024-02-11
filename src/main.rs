@@ -2,6 +2,10 @@
 #![deny(rust_2018_compatibility)]
 #![allow(unused)]
 
+use std::fs;
+
+use scripting::Scripting;
+
 extern crate nalgebra_glm as glm;
 
 mod application;
@@ -21,7 +25,9 @@ mod shader;
 mod util;
 
 fn main() {
-    scripting::execute_file("assets\\scripts\\Entity.lua");
+    // scripting::execute_file("assets\\scripts\\Entity.lua");
+    let scripting = Scripting::new();
+    // scripting.();
     // let key = s
     //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
     //     .unwrap();

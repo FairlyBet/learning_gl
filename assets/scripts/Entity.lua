@@ -50,12 +50,10 @@
 -- local entity = Entity.new(10)
 
 
-CameraController = {}
+-- CameraController = {}
 
-function CameraController:update()
-    self.transform.move({ 1, 0, 0 })
-end
+-- function CameraController:update()
+--     self.transform.move({ 1, 0, 0 })
+-- end
 
--- print(CameraController)
-
-
+return 18446744073709551615

@@ -1,39 +1,22 @@
 use crate::entity_system::{EntityId, SceneChunk};
-use fxhash::FxHasher32;
-use rlua::{Context, Error, Lua, RegistryKey, StdLib, Table, Variadic};
+use fxhash::{FxHasher, FxHasher32};
+use rlua::{Context, Error, Function, Lua, RegistryKey, Result, StdLib, Table, Variadic};
 use std::{collections::HashMap, fs, hash::BuildHasherDefault, str::FromStr, sync::Arc};
 use strum::EnumCount;
 
 pub struct CompiledChunk(Vec<u8>);
 
-type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
-
 pub struct Scripting {
     lua: Lua,
-    start_callbacks: RegistryKey,
-    update_callbacks: RegistryKey,
 }
 
 impl Scripting {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Self {
         let lua = Lua::new_with(StdLib::ALL_NO_DEBUG);
-
-        let (start_callbacks, update_callbacks) = lua.context(|context| {
-            let table = context.create_table()?;
-            let start_callbacks = context.create_registry_value(table)?;
-            let table = context.create_table()?;
-            let update_callbacks = context.create_registry_value(table)?;
-            Ok((start_callbacks, update_callbacks))
-        })?;
-
-        Ok(Self {
-            lua,
-            start_callbacks,
-            update_callbacks,
-        })
+        Self { lua }
     }
 
-    pub fn compile_chunk(&self, src: &str, chunk_name: &str) -> Result<CompiledChunk, Error> {
+    pub fn compile_chunk(&self, src: &str, chunk_name: &str) -> Result<CompiledChunk> {
         self.lua.context(|context| {
             let chunk = context.load(src);
             let chunk = chunk.set_name(chunk_name)?;
@@ -43,90 +26,60 @@ impl Scripting {
         })
     }
 
-    pub fn create_function(&self) {
+    pub fn create_registry_object(&self, chunk: &CompiledChunk) -> Result<RegistryObject> {
         self.lua.context(|context| {
-            context.create_function(
-                |_, params: FxHashMap<String, usize>| -> rlua::Result<FxHashMap<String, f32>> {
-                    let address = match params.get("address") {
-                        Some(value) => *value,
-                        None => {
-                            return Err(Error::ExternalError(Arc::new(CustomError::new(
-                                "Address parameter is missing",
-                            ))))
-                        }
-                    };
-
-                    todo!()
-                    // Ok(())
-                },
-            );
-        });
-    }
-
-    pub fn create_object(&mut self, chunk: &CompiledChunk) -> Result<ScriptObject, Error> {
-        self.lua.context(|context| {
-            let chunk = context.load(&chunk.0);
-            unsafe {
-                let function = chunk.into_function_allow_binary()?;
-                let object: Table = function.call(())?;
-                let has_start = object.contains_key(Callbacks::Start.name())?;
-                if has_start {}
-                let has_update = object.contains_key(Callbacks::Update.name())?;
-                todo!()
-            }
+            let dumped = context.load(&chunk.0);
+            let function = unsafe { dumped.into_function_allow_binary() }?;
+            let object = function.call::<(), Table>(())?;
+            let key = context.create_registry_value(object)?;
+            Ok(RegistryObject { key })
         })
     }
 
-    pub fn modify_transform(&self, scene_chunk: &mut SceneChunk) {
+    pub fn delete_registry_object(&self, object: RegistryObject) {
         self.lua.context(|context| {
-            
+            context.remove_registry_value(object.key);
         });
     }
 
-    pub fn execute_updates() {}
-}
-
-pub struct ScriptObject {
-    key: RegistryKey,
-}
-
-#[derive(Clone, Copy, EnumCount)]
-pub enum Callbacks {
-    Start,
-    Update,
-}
-
-impl Callbacks {
-    const CALLBACK_NAMES: &'static [&'static str] = &["start", "update"];
-
-    pub fn name(&self) -> &'static str {
-        Self::CALLBACK_NAMES[*self as usize]
+    pub fn create_wrappers(&self, scene_chunk: &SceneChunk) {
+        self.lua.context(|context| {
+            let transform_move = context.create_function(Wrappers::transform_move).unwrap();
+            let wrapper_table = context.create_table().unwrap();
+            // u64::MAX
+        });
     }
+}
+
+struct Wrappers;
+
+impl Wrappers {
+    fn transform_move(_: Context, arg: Table) -> Result<()> {
+        let address = arg.get::<&str, f64>("address").unwrap() as usize; // direct conversion from Lua doesn't work with MAX value for some reason
+        
+        let id: EntityId = arg.get("id").unwrap();
+        let x: f32 = arg.get("x").unwrap();
+        let y: f32 = arg.get("y").unwrap();
+        let z: f32 = arg.get("z").unwrap();
+        
+        let scn = unsafe { &mut *(address as *mut SceneChunk) };
+        scn.get_transfom_mut(id).move_(&glm::vec3(x, y, z));
+        
+        Ok(())
+    }
+}
+
+pub struct RegistryObject {
+    key: RegistryKey,
 }
 
 pub fn execute_file(path: &str) {
     let src = fs::read_to_string(path).unwrap();
-    let scr = Scripting::new().unwrap();
+    let scr = Scripting::new();
     scr.lua.context(|context| {
         let chunk = context.load(&src);
         chunk.exec();
     });
-}
-
-pub fn get_transform(context: Context, address: usize, id: EntityId) {
-    let ptr = address as *const usize as *const SceneChunk;
-    unsafe {
-        let chunk = &(*ptr);
-        chunk.get_transfom(id);
-    }
-}
-
-pub fn chunk_ffi_access(ptr: u64) {
-    let ptr = ptr as *mut u64 as *mut SceneChunk;
-    unsafe {
-        let chunk = &mut (*ptr);
-        let entity = chunk.create_entity();
-    }
 }
 
 pub struct CustomError {

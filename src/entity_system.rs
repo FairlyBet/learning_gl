@@ -15,14 +15,13 @@ use std::{
     ops::Range,
 };
 use strum::EnumCount;
-
-type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
+use util::FxHashMap32;
 
 pub type EntityId = u32;
 
 #[derive(Default)]
 pub struct SceneChunk {
-    entities: FxHashMap<EntityId, Entity>,
+    entities: FxHashMap32<EntityId, Entity>,
     component_arrays: [ByteVec; ComponentType::COUNT],
     free_ids: VecDeque<EntityId>,
     id_counter: EntityId,
@@ -64,7 +63,7 @@ impl SceneChunk {
         let transforms = scene.read_vec::<serializable::Transform>();
 
         let mut self_ = Self::init(entities, transforms);
-        
+
         let mesh_components: Vec<MeshComponent> = scene
             .read_vec::<serializable::MeshComponent>()
             .iter()
@@ -77,7 +76,7 @@ impl SceneChunk {
             util::into_vec(scene.read_vec::<serializable::CameraComponent>());
         let light_components: Vec<LightComponent> =
             util::into_vec(scene.read_vec::<serializable::LightComponent>());
-        
+
         self_.attach_components(mesh_components);
         self_.attach_components(camera_components);
         self_.attach_components(light_components);
@@ -193,6 +192,10 @@ impl SceneChunk {
     /// This optimization requires entities ids to be a consequtive progression (0, 1, 2...)
     pub fn get_transfom(&self, entity_id: EntityId) -> &linear::Transform {
         self.component_arrays[ComponentType::Transform as usize].get(entity_id as usize)
+    }
+
+    pub fn get_transfom_mut(&mut self, entity_id: EntityId) -> &mut linear::Transform {
+        self.component_arrays[ComponentType::Transform as usize].get_mut(entity_id as usize)
     }
 }
 
