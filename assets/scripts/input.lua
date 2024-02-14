@@ -258,36 +258,20 @@ function Keys.Unknown() end
 
 Actions = {}
 
-function Actions.Release()
-    return 0
-end
+function Actions.Release() end
 
-function Actions.Press()
-    return 1
-end
+function Actions.Press() end
 
 Modifiers = {}
 
-function Modifiers.Shift()
-    return 1
-end
+function Modifiers.Shift() return 1 end
 
-function Modifiers.Control()
-    return 2
-end
+function Modifiers.Control() return 2 end
 
-function Modifiers.Alt()
-    return 4
-end
+function Modifiers.Alt() return 4 end
 
-function Modifiers.Super()
-    return 8
-end
+function Modifiers.Super() return 8 end
 
-function Modifiers.CapsLock()
-    return 16
-end
+function Modifiers.CapsLock() return 16 end
 
-function Modifiers.NumLock()
-    return 32
-end
+function Modifiers.NumLock() return 32 end

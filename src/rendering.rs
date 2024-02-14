@@ -1,9 +1,9 @@
 use crate::{
-    asset_manager::RangeContainer,
     data3d::{self, Mesh, VertexAttribute},
     entity_system::{CameraComponent, LightComponent, MeshComponent, SceneChunk},
     gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
     lighting::LightData,
+    resources::RangeContainer,
     runtime::FramebufferSizeCallback,
     shader::{
         self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,

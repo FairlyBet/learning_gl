@@ -1,7 +1,7 @@
 use crate::{
     data3d::{Mesh, Model, VertexData},
     scene::Scene,
-    scripting::Scripting,
+    scripting::{Script, Scripting},
     serializable,
 };
 use fxhash::{FxBuildHasher, FxHashMap};
@@ -71,7 +71,7 @@ impl StorageName for Mesh {
     }
 }
 
-impl StorageName for Scripting {
+impl StorageName for Script {
     fn storage_name() -> &'static Path {
         Path::new(SCRIPT_FOLDER)
     }

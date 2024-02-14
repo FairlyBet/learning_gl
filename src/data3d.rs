@@ -1,6 +1,6 @@
 use crate::{
-    asset_manager,
     gl_wrappers::{self, BufferObject, VertexArrayObject},
+    resources,
 };
 use fxhash::FxHashMap;
 use gl::types::GLenum;

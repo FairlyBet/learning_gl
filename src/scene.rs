@@ -1,7 +1,7 @@
 use crate::{
-    asset_manager::StorageName,
     entity_system::Entity,
     lighting::LightType,
+    resources::StorageName,
     serializable::{CameraComponent, LightComponent, MeshComponent, Transform, Vec3},
 };
 use serde::Deserialize;
@@ -19,6 +19,7 @@ const TRANSFORMS_FILENAME: &str = "transforms.json";
 const MESHES_FILENAME: &str = "meshes.json";
 const CAMERAS_FILENAME: &str = "cameras.json";
 const LIGHTS_FILENAME: &str = "lights.json";
+const SCRIPTS_FILENAME: &str = "scripts.json";
 
 pub fn get_scenes() -> Vec<Scene> {
     fs::create_dir_all(Scene::storage_name());
@@ -117,6 +118,8 @@ impl StorageName for LightComponent {
         todo!()
     }
 }
+
+
 
 pub fn generate_sample() {
     let scene_name = "sample_scene";

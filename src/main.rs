@@ -9,7 +9,7 @@ use std::{fmt::Debug, fs};
 extern crate nalgebra_glm as glm;
 
 mod application;
-mod asset_manager;
+mod resources;
 mod camera;
 mod data3d;
 mod entity_system;

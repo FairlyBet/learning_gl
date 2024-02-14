@@ -1,5 +1,5 @@
 use crate::{
-    asset_manager::ResourceManager,
+    resources::ResourceManager,
     camera,
     lighting::LightSource,
     linear,
