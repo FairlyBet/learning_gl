@@ -1,14 +1,17 @@
 use crate::{
     application::Application,
-    resources::ResourceManager,
     entity_system::SceneChunk,
     gl_wrappers,
     rendering::{DefaultRenderer, Screen},
+    resources::ResourceManager,
     scene,
     scripting::Scripting,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
-use std::{fs::{self, File}, io::Write as _};
+use std::{
+    fs::{self, File},
+    io::Write as _,
+};
 
 pub struct Runtime;
 
@@ -112,8 +115,8 @@ impl Runtime {
         while !app.window.should_close() {
             app.glfw.set_time(0.0);
 
+            // file.write(&events.char_input.as_bytes());
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            file.write(&events.char_input.as_bytes());
             Self::script_iteration(&scripting);
             Self::render_iteration(&mut app);
 
@@ -139,11 +142,23 @@ impl WindowEvents {
     }
 
     pub fn get_key(&self, key: (Key, Action, Modifiers)) -> bool {
-        self.key_input.contains(&key)
+        if key.2.is_empty() {
+            self.key_input
+                .iter()
+                .any(|item| item.0 == key.0 && item.1 == key.1)
+        } else {
+            self.key_input.contains(&key)
+        }
     }
 
     pub fn get_mouse_button(&self, button: (MouseButton, Action, Modifiers)) -> bool {
-        self.mouse_button_input.contains(&button)
+        if button.2.is_empty() {
+            self.mouse_button_input
+                .iter()
+                .any(|item| item.0 == button.0 && item.1 == button.1)
+        } else {
+            self.mouse_button_input.contains(&button)
+        }
     }
 
     pub fn clear_events(&mut self) {

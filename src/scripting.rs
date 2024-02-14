@@ -10,9 +10,9 @@ use std::{ffi::c_void, fs, sync::Arc};
 
 pub struct CompiledChunk(Vec<u8>);
 
-pub struct Script {
-    chunk: CompiledChunk,
-    name: String,
+pub enum Script {
+    Object(RegistryObject),
+    File(RegistryObject)
 }
 
 pub struct Scripting {
@@ -516,6 +516,7 @@ impl InputWrappers {
     fn get_key(_: Context, args: (LightUserData, Function, Function, Value)) -> Result<bool> {
         let key = args.1.call::<_, i32>(())?;
         let action = args.2.call::<_, i32>(())?;
+        
         let modifiers = match args.3 {
             Value::Nil => 0,
             Value::Integer(int) => int as i32,

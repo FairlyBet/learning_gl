@@ -267,3 +267,8 @@ impl Component for LightComponent {
         self.owner_id
     }
 }
+
+pub struct ScriptComponent {
+    pub owner_id: EntityId,
+    
+}
