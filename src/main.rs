@@ -4,7 +4,7 @@
 
 use entity_system::{Entity, SceneChunk};
 use scripting::Scripting;
-use std::fs;
+use std::{fmt::Debug, fs};
 
 extern crate nalgebra_glm as glm;
 
@@ -25,25 +25,21 @@ mod shader;
 mod util;
 
 fn main() {
+
     // scripting::execute_file("assets\\scripts\\Entity.lua");
-    let entity = Entity::default();
-    let transform = serializable::Transform::default();
-    let mut chunk = SceneChunk::init(vec![entity], vec![transform]);
+    // let entity = Entity::default();
+    // let transform = serializable::Transform::default();
+    // let mut chunk = SceneChunk::init(vec![entity], vec![transform]);
 
-    let scripting = Scripting::new();
-    scripting.create_wrappers(&mut chunk);
+    // let scripting = Scripting::new();
+    // scripting.create_wrappers(&mut chunk);
 
-    let transform = chunk.get_transfom(0);
-    println!(
-        "{} {} {}",
-        transform.position.x, transform.position.y, transform.position.z
-    );
     // scripting.();
     // let key = s
     //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
     //     .unwrap();
 
     // scene::generate_sample();
-    // let app = application::Application::new();
-    // app.run();
+    let app = application::Application::new();
+    app.run();
 }

@@ -7,13 +7,8 @@ use crate::{
     serializable,
     util::{self, ByteVec, Reallocated},
 };
-use fxhash::FxHasher32;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, VecDeque},
-    hash::BuildHasherDefault,
-    ops::Range,
-};
+use std::{collections::VecDeque, ops::Range};
 use strum::EnumCount;
 use util::FxHashMap32;
 
