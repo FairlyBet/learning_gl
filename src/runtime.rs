@@ -8,7 +8,7 @@ use crate::{
     scripting::Scripting,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
-use std::{fs::File, io::Write as _};
+use std::{fs::{self, File}, io::Write as _};
 
 pub struct Runtime;
 
@@ -70,6 +70,12 @@ impl Runtime {
         app.window.swap_buffers();
     }
 
+    fn script_iteration(scripting: &Scripting) {
+        let src = fs::read_to_string("assets\\scripts\\sample.lua").unwrap();
+        let chunk = scripting.compile_chunk(&src, "chunk_name").unwrap();
+        scripting.execute_chunk(&chunk);
+    }
+
     pub fn run(self, mut app: Application) {
         let scenes = scene::get_scenes();
 
@@ -108,6 +114,7 @@ impl Runtime {
 
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
             file.write(&events.char_input.as_bytes());
+            Self::script_iteration(&scripting);
             Self::render_iteration(&mut app);
 
             frame_time = app.glfw.get_time();

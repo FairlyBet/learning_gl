@@ -11,7 +11,7 @@ use std::{ffi::c_void, fs, sync::Arc};
 pub struct CompiledChunk(Vec<u8>);
 
 pub struct Script {
-    chunk: CompiledChunk, 
+    chunk: CompiledChunk,
     name: String,
 }
 
@@ -58,15 +58,6 @@ impl Scripting {
         window: &Window,
     ) {
         self.lua.context(|context| {
-            // let bind_ptr = "
-            // return function(ptr, func)
-            //     return function(args)
-            //         func(ptr, args)
-            //     end
-            // end";
-
-            // let set_address = context.load(bind_ptr).eval::<Function>().unwrap();
-
             let scene_chunk = LightUserData(scene_chunk as *const _ as *mut c_void);
             let window_events = LightUserData(events as *const _ as *mut c_void);
             let window = LightUserData(window as *const _ as *mut c_void);
@@ -95,6 +86,16 @@ impl Scripting {
             context.globals().set("Input", input);
 
             InputWrappers::create_keys_table(&context);
+        });
+    }
+
+    pub fn execute_chunk(&self, chunk: &CompiledChunk) {
+        self.lua.context(|context| unsafe {
+            context
+                .load(&chunk.0)
+                .into_function_allow_binary()
+                .unwrap()
+                .call::<_, ()>(());
         });
     }
 }

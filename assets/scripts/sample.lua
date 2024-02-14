@@ -1,2 +1,4 @@
-local spacePressed = Input.getKey(Keys.Space, Actions.Press)
-print("Space Pressed: " .. spacePressed)
+local spaceHolded = Input.getKey(Keys.W, Actions.Release, Modifiers.Shift() | Modifiers.Control())
+if spaceHolded then
+    print "Shift Control W is released"
+end
