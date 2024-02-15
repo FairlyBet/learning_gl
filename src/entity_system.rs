@@ -1,9 +1,10 @@
 use crate::{
-    resources::ResourceManager,
     camera,
     lighting::LightSource,
     linear,
+    resources::ResourceManager,
     scene::Scene,
+    scripting::Script,
     serializable,
     util::{self, ByteVec, Reallocated},
 };
@@ -216,6 +217,7 @@ pub enum ComponentType {
     Camera,
     Light,
     Mesh,
+    Script,
 }
 
 pub trait Component {
@@ -270,5 +272,15 @@ impl Component for LightComponent {
 
 pub struct ScriptComponent {
     pub owner_id: EntityId,
-    
+    pub script: Script,
+}
+
+impl Component for ScriptComponent {
+    fn component_type() -> ComponentType {
+        ComponentType::Script
+    }
+
+    fn owner_id(&self) -> EntityId {
+        self.owner_id
+    }
 }
