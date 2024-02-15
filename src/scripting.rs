@@ -12,7 +12,7 @@ pub struct CompiledChunk(Vec<u8>);
 
 pub enum Script {
     Object(RegistryObject),
-    File(RegistryObject)
+    File(RegistryObject),
 }
 
 pub struct Scripting {
@@ -516,7 +516,7 @@ impl InputWrappers {
     fn get_key(_: Context, args: (LightUserData, Function, Function, Value)) -> Result<bool> {
         let key = args.1.call::<_, i32>(())?;
         let action = args.2.call::<_, i32>(())?;
-        
+
         let modifiers = match args.3 {
             Value::Nil => 0,
             Value::Integer(int) => int as i32,
@@ -573,21 +573,29 @@ impl InputWrappers {
     }
 
     fn create_keys_table(context: &Context) {
-        let mut s = String::from(
+        let mut s = format!(
             "
-Actions = {}
-function Actions.Release() return 0 end
-function Actions.Press() return 1 end
+Actions = {{}}
+function Actions.Release() return {} end
+function Actions.Press() return {} end
 
-Modifiers = {}
-function Modifiers.Shift() return 1 end
-function Modifiers.Control() return 2 end
-function Modifiers.Alt() return 4 end
-function Modifiers.Super() return 8 end
-function Modifiers.CapsLock() return 16 end
-function Modifiers.NumLock() return 32 end
+Modifiers = {{}}
+function Modifiers.Shift() return {} end
+function Modifiers.Control() return {} end
+function Modifiers.Alt() return {} end
+function Modifiers.Super() return {} end
+function Modifiers.CapsLock() return {} end
+function Modifiers.NumLock() return {} end
 
-Keys = {}\n",
+Keys = {{}}\n",
+            Action::Release as i32,
+            Action::Press as i32,
+            Modifiers::Shift.bits(),
+            Modifiers::Control.bits(),
+            Modifiers::Alt.bits(),
+            Modifiers::Super.bits(),
+            Modifiers::CapsLock.bits(),
+            Modifiers::NumLock.bits()
         );
         for key in Self::KEY_VALUES {
             s.push_str(&format!(
