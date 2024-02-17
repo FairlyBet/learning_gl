@@ -1,6 +1,6 @@
 use crate::{
     data3d::{self, Mesh, VertexAttribute},
-    entity_system::{CameraComponent, LightComponent, MeshComponent, SceneChunk},
+    entity_system::{CameraComponent, LightComponent, MeshComponent, SceneManager},
     gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
     lighting::LightData,
     resources::RangeContainer,
@@ -57,7 +57,7 @@ fn lighting_data_buffer() -> BufferObject {
 }
 
 pub trait Renderer {
-    fn render(&self, entity_system: &SceneChunk, model_container: &RangeContainer<Mesh>);
+    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<Mesh>);
 }
 
 pub struct DefaultRenderer {
@@ -108,7 +108,7 @@ impl DefaultRenderer {
 }
 
 impl Renderer for DefaultRenderer {
-    fn render(&self, entity_system: &SceneChunk, model_container: &RangeContainer<Mesh>) {
+    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<Mesh>) {
         let camera_comp = match entity_system.component_slice::<CameraComponent>().first() {
             Some(camera) => camera,
             None => return,

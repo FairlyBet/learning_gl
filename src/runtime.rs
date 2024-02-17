@@ -1,6 +1,6 @@
 use crate::{
     application::Application,
-    entity_system::SceneChunk,
+    entity_system::SceneManager,
     gl_wrappers,
     rendering::{DefaultRenderer, Screen},
     resources::ResourceManager,
@@ -90,7 +90,7 @@ impl Runtime {
         let mut resource_manager = ResourceManager::new();
         resource_manager.load(&start);
 
-        let mut chunk = SceneChunk::from_scene(&start, &resource_manager);
+        let mut chunk = SceneManager::from_scene(&start, &resource_manager);
 
         let mut renderer = DefaultRenderer::new(
             app.window.get_framebuffer_size(),
@@ -104,13 +104,13 @@ impl Runtime {
 
         let mut events = WindowEvents::default();
 
+        let mut frame_time = 0.0;
+
         let scripting = Scripting::new();
-        scripting.create_wrappers(&mut chunk, &events, &app.window);
+        scripting.create_wrappers(&mut chunk, &events, &app.window, &frame_time);
 
         // app.window.focus();
         let mut file = File::create("input.txt").unwrap();
-
-        let mut frame_time = 0.0;
 
         while !app.window.should_close() {
             app.glfw.set_time(0.0);

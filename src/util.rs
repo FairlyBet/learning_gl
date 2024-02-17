@@ -12,13 +12,13 @@ pub type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
 pub type FxHashMap32<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
 /// Do not store impl Drop types there!!!
-pub struct ByteVec {
+pub struct UntypedVec {
     buf: *mut u8,
     layout: Layout,
     len: usize,
 }
 
-impl ByteVec {
+impl UntypedVec {
     pub fn init<T>(capacity: usize) -> Self {
         let (buf, layout) = Self::alloc_buf::<T>(capacity * size_of::<T>());
         Self {
@@ -122,15 +122,15 @@ impl ByteVec {
     }
 }
 
-impl Drop for ByteVec {
+impl Drop for UntypedVec {
     fn drop(&mut self) {
         self.dealloc();
     }
 }
 
-impl Default for ByteVec {
+impl Default for UntypedVec {
     fn default() -> Self {
-        ByteVec::empty()
+        UntypedVec::empty()
     }
 }
 
@@ -142,7 +142,7 @@ pub enum Reallocated {
 }
 
 pub struct Iter<'a, T> {
-    data: &'a ByteVec,
+    data: &'a UntypedVec,
     index: usize,
     phantom: PhantomData<T>,
 }

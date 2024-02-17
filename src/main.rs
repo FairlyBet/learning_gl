@@ -2,7 +2,7 @@
 #![deny(rust_2018_compatibility)]
 #![allow(unused)]
 
-use entity_system::{Entity, SceneChunk};
+use entity_system::{Entity, SceneManager};
 use scripting::Scripting;
 use std::{fmt::Debug, fs};
 

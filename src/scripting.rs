@@ -1,10 +1,12 @@
 use crate::{
-    entity_system::{EntityId, SceneChunk},
+    entity_system::{EntityId, SceneManager},
+    linear::Transform,
     runtime::WindowEvents,
 };
 use glfw::{Action, Key, Modifiers, Window};
+use nalgebra_glm::Vec3;
 use rlua::{
-    Context, Error, Function, LightUserData, Lua, RegistryKey, Result, StdLib, Table, Value,
+    Context, Error, Function, LightUserData, Lua, RegistryKey, Result, StdLib, Table, ToLua, Value,
 };
 use std::{ffi::c_void, fs, sync::Arc};
 
@@ -17,12 +19,18 @@ pub enum Script {
 
 pub struct Scripting {
     lua: Lua,
+    object_table: RegistryKey,
 }
 
 impl Scripting {
     pub fn new() -> Self {
         let lua = Lua::new_with(StdLib::ALL_NO_DEBUG);
-        Self { lua }
+        let object_table = lua.context(|context| {
+            let table = context.create_table().unwrap();
+            let object_table = context.create_registry_value(table).unwrap();
+            object_table
+        });
+        Self { lua, object_table }
     }
 
     pub fn compile_chunk(&self, src: &str, chunk_name: &str) -> Result<CompiledChunk> {
@@ -53,17 +61,22 @@ impl Scripting {
 
     pub fn create_wrappers(
         &self,
-        scene_chunk: &mut SceneChunk,
+        scene_chunk: &mut SceneManager,
         events: &WindowEvents,
         window: &Window,
+        frame_time: &f64,
     ) {
         self.lua.context(|context| {
             let scene_chunk = LightUserData(scene_chunk as *const _ as *mut c_void);
             let window_events = LightUserData(events as *const _ as *mut c_void);
             let window = LightUserData(window as *const _ as *mut c_void);
+            let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
+            let object_table = LightUserData(&self.object_table as *const _ as *mut c_void);
 
             let transform_move = context
                 .create_function(TransformWrappers::transform_move)
+                .unwrap()
+                .bind(object_table)
                 .unwrap()
                 .bind(scene_chunk.clone())
                 .unwrap();
@@ -79,11 +92,18 @@ impl Scripting {
                 .unwrap()
                 .bind(window.clone())
                 .unwrap();
+            let frame_time = context
+                .create_function(ApplicationWrappers::frame_time)
+                .unwrap()
+                .bind(frame_time)
+                .unwrap();
 
             let input = context.create_table().unwrap();
             input.set("getKey", get_key);
             input.set("getKeyHolded", get_key_holded);
+
             context.globals().set("Input", input);
+            context.globals().set("frameTime", frame_time);
 
             InputWrappers::create_keys_table(&context);
         });
@@ -103,25 +123,48 @@ impl Scripting {
 struct TransformWrappers;
 
 impl TransformWrappers {
-    fn transform_move(_: Context, args: (LightUserData, EntityId, Table)) -> Result<()> {
-        let x: f32 = match args.2.get("x") {
-            Ok(value) => value,
-            Err(err) => return Err(err),
+    fn transform_move<'a>(
+        context: Context<'a>,
+        args: (LightUserData, LightUserData, Table<'a>, Table<'a>),
+    ) -> Result<()> {
+        let object_table = unsafe {
+            context
+                .registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
+                .unwrap()
         };
-        let y: f32 = match args.2.get("y") {
-            Ok(value) => value,
-            Err(err) => return Err(err),
-        };
-        let z: f32 = match args.2.get("z") {
-            Ok(value) => value,
-            Err(err) => return Err(err),
-        };
-        let id = args.1;
+        let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
+        let component = args.2;
+        let vector_lua = args.3;
+        let vector = vec_from_lua(&vector_lua)?;
+        let id = object_table.get::<_, EntityId>(component)?;
 
-        let chunk = unsafe { &mut *(args.0 .0 as *mut SceneChunk) }; // seems quite unsafe
-        chunk.get_transfom_mut(id).move_(&glm::vec3(x, y, z));
+        scene_manager.get_transfom_mut(id).move_(&vector);
 
         Ok(())
+    }
+
+    fn transform_move_local<'a>(
+        context: Context<'a>,
+        args: (LightUserData, LightUserData, Table<'a>, Table<'a>),
+    ) -> Result<()> {
+        let object_table = unsafe {
+            context
+                .registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
+                .unwrap()
+        };
+        let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
+        let component = args.2;
+        let vector_lua = args.3;
+        let vector = vec_from_lua(&vector_lua)?;
+        let id = object_table.get::<_, EntityId>(component)?;
+
+        scene_manager.get_transfom_mut(id).move_local(&vector);
+
+        Ok(())
+    }
+
+    fn transform_position(context: Context, args: ()) -> Result<Table> {
+        todo!()
     }
 }
 
@@ -610,6 +653,14 @@ Keys = {{}}\n",
     }
 }
 
+struct ApplicationWrappers;
+
+impl ApplicationWrappers {
+    fn frame_time(_: Context, args: LightUserData) -> Result<f64> {
+        unsafe { Ok(*(args.0 as *const f64)) }
+    }
+}
+
 pub fn execute_file(path: &str) {
     let src = fs::read_to_string(path).unwrap();
     let scr = Scripting::new();
@@ -644,4 +695,23 @@ impl std::fmt::Display for CustomError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+fn vec_to_lua<'lua>(context: &Context<'lua>, vector: &Vec3) -> Table<'lua> {
+    let vector_lua = context.create_table().unwrap();
+    vector_lua.set("x", vector.x);
+    vector_lua.set("y", vector.y);
+    vector_lua.set("z", vector.z);
+    match context.globals().get::<_, Table>("Vector") {
+        Ok(metatable) => vector_lua.set_metatable(Some(metatable)),
+        _ => {}
+    }
+    vector_lua
+}
+
+fn vec_from_lua(vector_lua: &Table) -> Result<Vec3> {
+    let x: f32 = vector_lua.get("x")?;
+    let y: f32 = vector_lua.get("y")?;
+    let z: f32 = vector_lua.get("z")?;
+    Ok(glm::vec3(x, y, z))
 }

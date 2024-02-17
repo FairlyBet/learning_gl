@@ -6,7 +6,7 @@ use crate::{
     scene::Scene,
     scripting::Script,
     serializable,
-    util::{self, ByteVec, Reallocated},
+    util::{self, Reallocated, UntypedVec},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, ops::Range};
@@ -16,14 +16,14 @@ use util::FxHashMap32;
 pub type EntityId = u32;
 
 #[derive(Default)]
-pub struct SceneChunk {
+pub struct SceneManager {
     entities: FxHashMap32<EntityId, Entity>,
-    component_arrays: [ByteVec; ComponentType::COUNT],
+    component_arrays: [UntypedVec; ComponentType::COUNT],
     free_ids: VecDeque<EntityId>,
     id_counter: EntityId,
 }
 
-impl SceneChunk {
+impl SceneManager {
     pub fn init(entities: Vec<Entity>, transforms: Vec<serializable::Transform>) -> Self {
         assert_eq!(
             entities.len(),
@@ -44,7 +44,7 @@ impl SceneChunk {
         }
 
         res.component_arrays[ComponentType::Transform as usize] =
-            ByteVec::init::<linear::Transform>(transforms.len());
+            UntypedVec::init::<linear::Transform>(transforms.len());
         for transform in transforms {
             let transform: linear::Transform = transform.into();
             res.component_arrays[ComponentType::Transform as usize].push(transform);
@@ -93,9 +93,9 @@ impl SceneChunk {
             < self.component_arrays[ComponentType::Transform as usize].len::<linear::Transform>()
         {
             self.component_arrays[ComponentType::Transform as usize]
-                .rewrite(transform, entity.id as usize);
+                .rewrite(transform, entity.id as usize); // rewrite existing item
         } else {
-            let re = self.component_arrays[ComponentType::Transform as usize].push(transform);
+            let re = self.component_arrays[ComponentType::Transform as usize].push(transform); // push new item
             if let Reallocated::Yes = re {
                 // update pointers
                 self.update_transform_pointers_on_reallocation();

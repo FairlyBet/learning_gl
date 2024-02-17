@@ -1,17 +1,20 @@
+---@meta _
+
 Input = {}
 
 ---@param key function
 ---@param action function
 ---@param modifiers? integer
 ---@return boolean
-function Input.getKey(key, action, modifiers) return false end
+function Input.getKey(key, action, modifiers) end
 
 ---@param key function
 ---@return boolean
-function Input.getKeyHolded(key) return false end
+function Input.getKeyHolded(key) end
 
 -- function Input.getMouseButton(button, action) end
 
+---@enum
 Keys = {}
 
 function Keys.Space() end
@@ -256,22 +259,27 @@ function Keys.Menu() end
 
 function Keys.Unknown() end
 
+---@enum
 Actions = {}
 
 function Actions.Release() end
 
 function Actions.Press() end
 
+---Key modifiers
+--[[--
+Usage: local modifiers = Modifiers.Shift() | Modifiers.Control()
+]]
 Modifiers = {}
 
-function Modifiers.Shift() return 1 end
+function Modifiers.Shift() end
 
-function Modifiers.Control() return 2 end
+function Modifiers.Control() end
 
-function Modifiers.Alt() return 4 end
+function Modifiers.Alt() end
 
-function Modifiers.Super() return 8 end
+function Modifiers.Super() end
 
-function Modifiers.CapsLock() return 16 end
+function Modifiers.CapsLock() end
 
-function Modifiers.NumLock() return 32 end
+function Modifiers.NumLock() end
