@@ -8,6 +8,7 @@ use crate::{
     scripting::Scripting,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
+use rlua::{Function, RegistryKey, Table};
 use std::{
     fs::{self, File},
     io::Write as _,
@@ -73,10 +74,12 @@ impl Runtime {
         app.window.swap_buffers();
     }
 
-    fn script_iteration(scripting: &Scripting) {
-        let src = fs::read_to_string("assets\\scripts\\sample.lua").unwrap();
-        let chunk = scripting.compile_chunk(&src, "chunk_name").unwrap();
-        scripting.execute_chunk(&chunk);
+    fn script_iteration(scripting: &Scripting, object_key: &RegistryKey) {
+        scripting.lua.context(|context| {
+            let object = context.registry_value::<Table>(object_key).unwrap();
+            let update = object.get::<_, Function>("update").unwrap();
+            update.call::<_, ()>(object).unwrap();
+        });
     }
 
     pub fn run(self, mut app: Application) {
@@ -90,7 +93,7 @@ impl Runtime {
         let mut resource_manager = ResourceManager::new();
         resource_manager.load(&start);
 
-        let mut chunk = SceneManager::from_scene(&start, &resource_manager);
+        let mut scene_manager = SceneManager::from_scene(&start, &resource_manager);
 
         let mut renderer = DefaultRenderer::new(
             app.window.get_framebuffer_size(),
@@ -106,8 +109,34 @@ impl Runtime {
 
         let mut frame_time = 0.0;
 
+        let test_script = "
+require \"assets.scripts.vector\"
+        
+local object = {}
+
+function object:update()
+    if Input.getKey(Keys.Space, Actions.Press) then
+        print(Transform.getPosition(self))
+    end
+
+    if Input.getKeyHolded(Keys.W) then
+        Transform.move(self, Vector:new(1, 1, 1) * frameTime())
+    end
+end
+
+return object
+        ";
+
         let scripting = Scripting::new();
-        scripting.create_wrappers(&mut chunk, &events, &app.window, &frame_time);
+        scripting.create_wrappers(&mut scene_manager, &events, &app.window, &frame_time);
+        let object_key = scripting.lua.context(|context| {
+            let chunk = context.load(test_script);
+            let object = chunk.eval::<Table>().unwrap();
+            let object_key = context.create_registry_value(object).unwrap();
+            let object = context.registry_value::<Table>(&object_key).unwrap();
+            scripting.register_object_id(&context, object, 1);
+            object_key
+        });
 
         // app.window.focus();
         let mut file = File::create("input.txt").unwrap();
@@ -117,7 +146,7 @@ impl Runtime {
 
             // file.write(&events.char_input.as_bytes());
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            Self::script_iteration(&scripting);
+            Self::script_iteration(&scripting, &object_key);
             Self::render_iteration(&mut app);
 
             frame_time = app.glfw.get_time();
