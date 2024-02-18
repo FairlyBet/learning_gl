@@ -2,7 +2,7 @@ use crate::{
     entity_system::Entity,
     lighting::LightType,
     resources::StorageName,
-    serializable::{CameraComponent, LightComponent, MeshComponent, Transform, Vec3},
+    serializable::{self, CameraComponent, LightComponent, MeshComponent, Transform, Vec3},
 };
 use serde::Deserialize;
 use std::{
@@ -56,6 +56,11 @@ impl Scene {
         let json_str = fs::read_to_string(path).unwrap();
         let values = serde_json::from_str::<Vec<T>>(&json_str).unwrap();
         values
+    }
+
+    pub fn deserialize(&self) {
+        let json_str = fs::read_to_string(&self.path).unwrap();
+        let scene = serde_json::from_str::<Vec<serializable::Entity>>(&json_str).unwrap();
     }
 }
 
@@ -118,8 +123,6 @@ impl StorageName for LightComponent {
         todo!()
     }
 }
-
-
 
 pub fn generate_sample() {
     let scene_name = "sample_scene";

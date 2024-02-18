@@ -116,13 +116,15 @@ local object = {}
 
 function object:update()
     if Input.getKey(Keys.Space, Actions.Press) then
-        print(Transform.getPosition(self))
+        print(self:getPosition())
     end
 
     if Input.getKeyHolded(Keys.W) then
-        Transform.move(self, Vector:new(1, 1, 1) * frameTime())
+        self:move(Vector:new(1, 1, 1) * frameTime())
     end
 end
+
+setmetatable(object, { __index = Transform })
 
 return object
         ";

@@ -7,6 +7,16 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
+pub struct Entity {
+    pub transfom: Transform,
+    pub children: Vec<Entity>,
+    pub mesh_components: Vec<MeshComponent>,
+    pub camera_components: Vec<CameraComponent>,
+    pub light_components: Vec<LightComponent>,
+    pub script_components: Vec<Script>
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Transform {
     pub position: Vec3,
     pub orientation: Vec3,
@@ -111,4 +121,9 @@ impl Into<entity_system::LightComponent> for LightComponent {
             owner_id: self.owner_id,
         }
     }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Script {
+    pub script_path: String
 }

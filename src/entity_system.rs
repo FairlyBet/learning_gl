@@ -24,60 +24,63 @@ pub struct SceneManager {
 }
 
 impl SceneManager {
-    pub fn init(entities: Vec<Entity>, transforms: Vec<serializable::Transform>) -> Self {
-        assert_eq!(
-            entities.len(),
-            transforms.len(),
-            "Amount of entitites and transforms must be equal"
-        );
+    pub fn init() -> Self {
+        // assert_eq!(
+        //     entities.len(),
+        //     transforms.len(),
+        //     "Amount of entitites and transforms must be equal"
+        // );
 
-        let mut res: Self = Default::default();
+        // let mut res: Self = Default::default();
 
-        let mut i = 0;
-        for mut entity in entities {
-            assert_eq!(
-                i, entity.id as usize,
-                "Integrity of entities array is not satisfied"
-            );
-            res.entities.insert(entity.id, entity);
-            i += 1;
-        }
+        // let mut i = 0;
+        // for mut entity in entities {
+        //     assert_eq!(
+        //         i, entity.id as usize,
+        //         "Integrity of entities array is not satisfied"
+        //     );
+        //     res.entities.insert(entity.id, entity);
+        //     i += 1;
+        // }
 
-        res.component_arrays[ComponentType::Transform as usize] =
-            UntypedVec::init::<linear::Transform>(transforms.len());
-        for transform in transforms {
-            let transform: linear::Transform = transform.into();
-            res.component_arrays[ComponentType::Transform as usize].push(transform);
-        }
-        res.id_counter = i as EntityId;
+        // res.component_arrays[ComponentType::Transform as usize] =
+        //     UntypedVec::init::<linear::Transform>(transforms.len());
+        // for transform in transforms {
+        //     let transform: linear::Transform = transform.into();
+        //     res.component_arrays[ComponentType::Transform as usize].push(transform);
+        // }
+        // res.id_counter = i as EntityId;
 
-        res
+        // res
+
+        todo!()
     }
 
     pub fn from_scene(scene: &Scene, asset_manager: &ResourceManager) -> Self {
-        let entities = scene.read_vec::<Entity>();
-        let transforms = scene.read_vec::<serializable::Transform>();
+        todo!()
+        // let entities = scene.read_vec::<Entity>();
+        // let transforms = scene.read_vec::<serializable::Transform>();
 
-        let mut self_ = Self::init(entities, transforms);
+        // let mut self_ = Self::init(entities, transforms);
 
-        let mesh_components: Vec<MeshComponent> = scene
-            .read_vec::<serializable::MeshComponent>()
-            .iter()
-            .map(|x| MeshComponent {
-                model_index: asset_manager.get_meshes().get_index(&x.mesh_path),
-                owner_id: x.owner_id,
-            })
-            .collect();
-        let camera_components: Vec<CameraComponent> =
-            util::into_vec(scene.read_vec::<serializable::CameraComponent>());
-        let light_components: Vec<LightComponent> =
-            util::into_vec(scene.read_vec::<serializable::LightComponent>());
+        // let mesh_components: Vec<MeshComponent> = scene
+        //     .read_vec::<serializable::MeshComponent>()
+        //     .iter()
+        //     .map(|x| MeshComponent {
+        //         model_index: asset_manager.get_meshes().get_index(&x.mesh_path),
+        //         owner_id: x.owner_id,
+        //     })
+        //     .collect();
+        // let camera_components: Vec<CameraComponent> =
+        //     util::into_vec(scene.read_vec::<serializable::CameraComponent>());
+        // let light_components: Vec<LightComponent> =
+        //     util::into_vec(scene.read_vec::<serializable::LightComponent>());
 
-        self_.attach_components(mesh_components);
-        self_.attach_components(camera_components);
-        self_.attach_components(light_components);
+        // self_.attach_components(mesh_components);
+        // self_.attach_components(camera_components);
+        // self_.attach_components(light_components);
 
-        self_
+        // self_
     }
 
     pub fn create_entity(&mut self) -> EntityId {
