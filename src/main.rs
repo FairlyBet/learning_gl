@@ -3,13 +3,13 @@
 #![allow(unused)]
 
 use entity_system::{Entity, SceneManager};
+use runtime::Runtime;
 use scripting::Scripting;
 use std::{fmt::Debug, fs};
 
 extern crate nalgebra_glm as glm;
 
 mod application;
-mod resources;
 mod camera;
 mod data3d;
 mod entity_system;
@@ -17,15 +17,15 @@ mod gl_wrappers;
 mod lighting;
 mod linear;
 mod rendering;
+mod resources;
 mod runtime;
 mod scene;
 mod scripting;
 mod serializable;
 mod shader;
-mod util;
+mod utils;
 
 fn main() {
-
     // scripting::execute_file("assets\\scripts\\Entity.lua");
     // let entity = Entity::default();
     // let transform = serializable::Transform::default();
@@ -40,6 +40,6 @@ fn main() {
     //     .unwrap();
 
     // scene::generate_sample();
-    let app = application::Application::new();
-    app.run();
+    let r = Runtime::new();
+    r.run();
 }

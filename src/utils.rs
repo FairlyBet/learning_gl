@@ -1,4 +1,4 @@
-use fxhash::{FxHasher, FxHasher32};
+use fxhash::FxHasher32;
 use std::{
     alloc::{self, Layout},
     collections::HashMap,
@@ -8,7 +8,6 @@ use std::{
     ptr, slice,
 };
 
-pub type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
 pub type FxHashMap32<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
 /// Do not store impl Drop types there!!!

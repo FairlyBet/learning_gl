@@ -1,19 +1,21 @@
 use crate::{
     camera,
     entity_system::{self, EntityId},
-    lighting::{LightData, LightSource, LightType},
+    lighting::{self, LightData, LightType},
     linear::{self, Projection},
+    resources::ResourcePath,
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Entity {
+    pub name: String,
     pub transfom: Transform,
     pub children: Vec<Entity>,
-    pub mesh_components: Vec<MeshComponent>,
-    pub camera_components: Vec<CameraComponent>,
-    pub light_components: Vec<LightComponent>,
-    pub script_components: Vec<Script>
+    pub meshes: Vec<Mesh>,
+    pub camera_components: Vec<Camera>,
+    pub light_components: Vec<LightSource>,
+    pub script_components: Vec<Script>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -63,28 +65,23 @@ impl Into<glm::Vec3> for Vec3 {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MeshComponent {
-    pub owner_id: EntityId,
-    pub mesh_path: String,
+pub struct Mesh {
+    pub path: ResourcePath,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct CameraComponent {
+pub struct Camera {
     pub projection: Projection,
-    pub owner_id: EntityId,
 }
 
-impl Into<entity_system::CameraComponent> for CameraComponent {
-    fn into(self) -> entity_system::CameraComponent {
-        entity_system::CameraComponent {
-            camera: camera::Camera::new(self.projection),
-            owner_id: self.owner_id,
-        }
+impl Into<camera::Camera> for Camera {
+    fn into(self) -> camera::Camera {
+        camera::Camera::new(self.projection)
     }
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct LightComponent {
+pub struct LightSource {
     pub color: Vec3,
     pub type_: LightType,
     pub position: Vec3,
@@ -97,8 +94,8 @@ pub struct LightComponent {
     pub owner_id: EntityId,
 }
 
-impl Into<entity_system::LightComponent> for LightComponent {
-    fn into(self) -> entity_system::LightComponent {
+impl Into<lighting::LightSource> for LightSource {
+    fn into(self) -> lighting::LightSource {
         let light_data = match self.type_ {
             LightType::Directional => LightData::new_directional(self.color.into()),
             LightType::Point => LightData::new_point(
@@ -116,14 +113,11 @@ impl Into<entity_system::LightComponent> for LightComponent {
                 self.outer_cutoff,
             ),
         };
-        entity_system::LightComponent {
-            light_source: LightSource::new(light_data),
-            owner_id: self.owner_id,
-        }
+        lighting::LightSource::new(light_data)
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Script {
-    pub script_path: String
+    pub script_path: String,
 }

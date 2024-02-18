@@ -6,12 +6,12 @@ use crate::{
     scene::Scene,
     scripting::Script,
     serializable,
-    util::{self, Reallocated, UntypedVec},
+    utils::{self, Reallocated, UntypedVec},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, ops::Range};
 use strum::EnumCount;
-use util::FxHashMap32;
+use utils::FxHashMap32;
 
 pub type EntityId = u32;
 
@@ -56,7 +56,7 @@ impl SceneManager {
         todo!()
     }
 
-    pub fn from_scene(scene: &Scene, asset_manager: &ResourceManager) -> Self {
+    pub fn from_scene(resource_manager: &ResourceManager) -> Self {
         todo!()
         // let entities = scene.read_vec::<Entity>();
         // let transforms = scene.read_vec::<serializable::Transform>();

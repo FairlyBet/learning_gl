@@ -3,16 +3,13 @@ use crate::{
     entity_system::SceneManager,
     gl_wrappers,
     rendering::{DefaultRenderer, Screen},
-    resources::ResourceManager,
-    scene,
+    resources::{self, ResourceManager},
+    scene::{self, Scene},
     scripting::Scripting,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
 use rlua::{Function, RegistryKey, Table};
-use std::{
-    fs::{self, File},
-    io::Write as _,
-};
+use std::fs::File;
 
 pub struct Runtime;
 
@@ -82,73 +79,45 @@ impl Runtime {
         });
     }
 
-    pub fn run(self, mut app: Application) {
-        let scenes = scene::get_scenes();
-
-        let start = match scenes.first() {
-            Some(scene) => scene,
-            None => return,
-        };
-
+    pub fn run(self) {
+        let mut app = Application::new();
+        let mut scene_manager = SceneManager::default();
         let mut resource_manager = ResourceManager::new();
-        resource_manager.load(&start);
-
-        let mut scene_manager = SceneManager::from_scene(&start, &resource_manager);
-
         let mut renderer = DefaultRenderer::new(
             app.window.get_framebuffer_size(),
             app.window.get_context_version(),
         );
-
         let mut screen = Screen::new(
             app.window.get_framebuffer_size(),
             app.window.get_context_version(),
         );
-
         let mut events = WindowEvents::default();
-
         let mut frame_time = 0.0;
-
-        let test_script = "
-require \"assets.scripts.vector\"
-        
-local object = {}
-
-function object:update()
-    if Input.getKey(Keys.Space, Actions.Press) then
-        print(self:getPosition())
-    end
-
-    if Input.getKeyHolded(Keys.W) then
-        self:move(Vector:new(1, 1, 1) * frameTime())
-    end
-end
-
-setmetatable(object, { __index = Transform })
-
-return object
-        ";
-
         let scripting = Scripting::new();
-        scripting.create_wrappers(&mut scene_manager, &events, &app.window, &frame_time);
-        let object_key = scripting.lua.context(|context| {
-            let chunk = context.load(test_script);
-            let object = chunk.eval::<Table>().unwrap();
-            let object_key = context.create_registry_value(object).unwrap();
-            let object = context.registry_value::<Table>(&object_key).unwrap();
-            scripting.register_object_id(&context, object, 1);
-            object_key
-        });
+
+        scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
+        resource_manager.load_scene(0).unwrap();
+
+
+        // scripting.create_wrappers(&mut scene_manager, &events, &app.window, &frame_time);
+        // let object_key = scripting.lua.context(|context| {
+        //     let chunk = context.load(test_script);
+        //     let object = chunk.eval::<Table>().unwrap();
+        //     let object_key = context.create_registry_value(object).unwrap();
+        //     let object = context.registry_value::<Table>(&object_key).unwrap();
+        //     scripting.register_object_id(&context, object, 1);
+        //     object_key
+        // });
 
         // app.window.focus();
-        let mut file = File::create("input.txt").unwrap();
+        // let mut file = File::create("input.txt").unwrap();
 
         while !app.window.should_close() {
             app.glfw.set_time(0.0);
 
             // file.write(&events.char_input.as_bytes());
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            Self::script_iteration(&scripting, &object_key);
+            // Self::script_iteration(&scripting, &object_key);
             Self::render_iteration(&mut app);
 
             frame_time = app.glfw.get_time();

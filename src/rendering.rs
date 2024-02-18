@@ -68,17 +68,17 @@ pub struct DefaultRenderer {
 }
 
 impl DefaultRenderer {
-    pub fn new(size: (i32, i32), version: Version) -> Self {
+    pub fn new(size: (i32, i32), gl_version: Version) -> Self {
         let framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
 
         let main_vert_src = MainShader::<MainVertexShader>::new();
-        let main_vert = shader::build_shader(&main_vert_src, version);
+        let main_vert = shader::build_shader(&main_vert_src, gl_version);
 
         let mut main_frag_src = MainShader::<MainFragmentShader>::new();
         let light_shader_src = DefaultLightShader::new();
         main_frag_src.attach_shader(&light_shader_src);
-        let light_shader = shader::build_shader(&light_shader_src, version);
-        let main_frag = shader::build_shader(&main_frag_src, version);
+        let light_shader = shader::build_shader(&light_shader_src, gl_version);
+        let main_frag = shader::build_shader(&main_frag_src, gl_version);
 
         let program = ShaderProgram::new().unwrap();
         program.attach_shader(&main_vert);

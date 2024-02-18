@@ -1,16 +1,16 @@
 use crate::{
     data3d::{Mesh, Model, VertexData},
+    entity_system::SceneManager,
     scene::Scene,
-    scripting::{Script, Scripting},
-    serializable,
+    scripting::{CompiledChunk, Script, Scripting},
+    serializable::{self, Entity},
 };
-use fxhash::{FxBuildHasher, FxHashMap};
+use fxhash::FxHashMap;
 use russimp::{
     scene::{PostProcess, PostProcessSteps},
     Vector2D,
 };
 use std::{
-    collections::HashSet,
     fs,
     ops::Range,
     path::{Path, PathBuf},
@@ -18,34 +18,33 @@ use std::{
 };
 
 const ASSETS_DIR: &str = "assets";
-const MESHES_FOLDER: &str = "meshes";
-const TEXTURE_FOLDER: &str = "textures";
-const SCRIPT_FOLDER: &str = "scripts";
-const FBX_EXT: &str = "fbx";
-const LUA_EXT: &str = "lua";
 
 pub fn get_paths<T>() -> Vec<String>
 where
-    T: StorageName,
+    T: Resource,
 {
     let result = fs::create_dir_all(ASSETS_DIR);
     result.unwrap();
     let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
-    path.push(T::storage_name());
+    path.push(T::folder_name());
 
-    fn search<T>(path: &Path) -> Vec<String>
+    fn search<T>(path: &Path) -> Vec<ResourcePath>
     where
-        T: StorageName,
+        T: Resource,
     {
         let mut result = vec![];
         let entries = fs::read_dir(path).unwrap();
 
         for entry in entries {
             let entry = entry.unwrap();
+
             if let Some(extension) = entry.path().extension() {
-                if T::acceptable_extensions().contains(extension.to_str().unwrap()) {
+                if T::acceptable_extensions().contains(&extension.to_str().unwrap().to_string()) {
                     result.push(entry.path().into_os_string().into_string().unwrap());
-                } else if entry.file_type().unwrap().is_dir() {
+                    continue;
+                }
+
+                if entry.file_type().unwrap().is_dir() {
                     result.append(&mut search::<T>(&path));
                 }
             }
@@ -56,28 +55,38 @@ where
     search::<T>(&path)
 }
 
-pub trait StorageName {
-    fn storage_name() -> &'static Path;
-    fn acceptable_extensions() -> HashSet<String>;
+pub trait Resource {
+    fn folder_name() -> &'static Path;
+    fn acceptable_extensions() -> Vec<String>;
 }
 
-impl StorageName for Mesh {
-    fn storage_name() -> &'static Path {
-        Path::new(MESHES_FOLDER)
+impl Resource for Mesh {
+    fn folder_name() -> &'static Path {
+        Path::new("meshes")
     }
 
-    fn acceptable_extensions() -> HashSet<String> {
-        HashSet::<String>::from([FBX_EXT.to_string()])
+    fn acceptable_extensions() -> Vec<String> {
+        vec!["fbx".to_string()]
     }
 }
 
-impl StorageName for Script {
-    fn storage_name() -> &'static Path {
-        Path::new(SCRIPT_FOLDER)
+impl Resource for Script {
+    fn folder_name() -> &'static Path {
+        Path::new("scripts")
     }
 
-    fn acceptable_extensions() -> HashSet<String> {
-        HashSet::<String>::from([LUA_EXT.to_string()])
+    fn acceptable_extensions() -> Vec<String> {
+        vec!["lua".to_string()]
+    }
+}
+
+impl Resource for Scene {
+    fn folder_name() -> &'static Path {
+        Path::new("scenes")
+    }
+
+    fn acceptable_extensions() -> Vec<String> {
+        vec!["json".to_string()]
     }
 }
 
@@ -159,7 +168,11 @@ impl<Resource, ResourceIndex: Clone> ResourceContainer<Resource, ResourceIndex> 
 pub type RangeContainer<Resource> = ResourceContainer<Resource, Range<usize>>;
 
 impl<Resource> RangeContainer<Resource> {
-    pub fn push_resource(&mut self, name: &ResourcePath, mut resources: Vec<Resource>) -> Range<usize> {
+    pub fn push_resources(
+        &mut self,
+        name: &ResourcePath,
+        mut resources: Vec<Resource>,
+    ) -> Range<usize> {
         assert!(
             !self.table.contains_key(name),
             "Container already has this resource"
@@ -177,7 +190,7 @@ impl<Resource> RangeContainer<Resource> {
         if self.table.contains_key(name) {
             self.table[name].clone()
         } else {
-            self.push_resource(name, resources)
+            self.push_resources(name, resources)
         }
     }
 
@@ -207,12 +220,16 @@ impl<Resource> IndexContainer<Resource> {
 
 pub struct ResourceManager {
     meshes: RangeContainer<Mesh>,
+    scripts: IndexContainer<CompiledChunk>,
+    scenes: IndexContainer<Scene>,
 }
 
 impl ResourceManager {
     pub fn new() -> Self {
         Self {
-            meshes: RangeContainer::<Mesh>::new(),
+            meshes: RangeContainer::new(),
+            scripts: IndexContainer::new(),
+            scenes: IndexContainer::new(),
         }
     }
 
@@ -224,13 +241,44 @@ impl ResourceManager {
         &mut self.meshes
     }
 
-    pub fn load(&mut self, scene: &Scene) {
-        let mesh_components = scene.read_vec::<serializable::MeshComponent>();
-        for mesh_component in &mesh_components {
-            if !self.meshes.contains_resource(&mesh_component.mesh_path) {
-                let model = load_model(&mesh_component.mesh_path, DEFAULT_POSTPROCESS.into());
-                self.meshes.push_resource(&mesh_component.mesh_path, model);
+    pub fn load_scene(&mut self, scene_index: usize) -> Result<(), String> {
+        let scenes = get_paths::<Scene>();
+        let path = match scenes.get(scene_index) {
+            Some(val) => val,
+            None => return Err(String::from("No scene with such index")),
+        };
+        if !self.scenes.contains_resource(path) {
+            let target = Scene::new(path);
+            self.scenes.push_resource(path, target);
+        }
+        Ok(())
+    }
+
+    pub fn load_meshes(&mut self, scene: &Scene) {
+        fn load(resource_manager: &mut ResourceManager, entities: &Vec<Entity>) {
+            for entity in entities {
+                for mesh in &entity.meshes {
+                    if !resource_manager.meshes.contains_resource(&mesh.path) {
+                        let model_meshes = load_model(&mesh.path, DEFAULT_POSTPROCESS.into());
+                        resource_manager
+                            .meshes
+                            .push_resources(&mesh.path, model_meshes);
+                    }
+                }
+                if !entity.children.is_empty() {
+                    load(resource_manager, &entity.children);
+                }
             }
+        }
+        load(self, &scene.entities);
+    }
+
+    pub fn load_scripts(&mut self, scripting: &Scripting) {
+        let paths = get_paths::<Script>();
+        for path in &paths {
+            let src = fs::read_to_string(path).unwrap();
+            let chunk = scripting.compile_chunk(&src, &path).unwrap();
+            self.scripts.push_resource(path, chunk);
         }
     }
 }

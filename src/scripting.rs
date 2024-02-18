@@ -7,13 +7,12 @@ use nalgebra_glm::Vec3;
 use rlua::{
     Context, Error, Function, LightUserData, Lua, RegistryKey, Result, StdLib, Table, Value,
 };
-use std::{ffi::c_void, fs, sync::Arc};
+use std::{ffi::c_void, fs, ptr, sync::Arc};
 
 pub struct CompiledChunk(Vec<u8>);
 
-pub enum Script {
-    Object(RegistryObject),
-    File(RegistryObject),
+pub struct Script {
+    pub src: Vec<u8>,
 }
 
 pub struct Scripting {
@@ -33,6 +32,8 @@ impl Scripting {
             object_table_key,
         }
     }
+
+    
 
     pub fn register_object_id<'lua>(
         &self,
@@ -74,7 +75,7 @@ impl Scripting {
 
     pub fn create_wrappers(
         &self,
-        scene_manager: &mut SceneManager,
+        scene_manager: &SceneManager,
         events: &WindowEvents,
         window: &Window,
         frame_time: &f64,
