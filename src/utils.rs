@@ -79,8 +79,10 @@ impl UntypedVec {
     }
 
     fn dealloc(&mut self) {
-        unsafe {
-            alloc::dealloc(self.buf, self.layout);
+        if self.buf != ptr::null_mut() {
+            unsafe {
+                alloc::dealloc(self.buf, self.layout);
+            }
         }
     }
 

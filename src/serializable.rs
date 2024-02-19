@@ -18,7 +18,7 @@ pub struct Entity {
     pub script_components: Vec<Script>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
     pub orientation: Vec3,
@@ -51,7 +51,7 @@ impl Into<linear::Transform> for Transform {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone, Copy)]
 pub struct Vec3 {
     pub x: f32,
     pub y: f32,
@@ -69,7 +69,7 @@ pub struct Mesh {
     pub path: ResourcePath,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct Camera {
     pub projection: Projection,
 }
@@ -80,7 +80,7 @@ impl Into<camera::Camera> for Camera {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct LightSource {
     pub color: Vec3,
     pub type_: LightType,
@@ -91,7 +91,6 @@ pub struct LightSource {
     pub quadratic: f32,
     pub inner_cutoff: f32,
     pub outer_cutoff: f32,
-    pub owner_id: EntityId,
 }
 
 impl Into<lighting::LightSource> for LightSource {

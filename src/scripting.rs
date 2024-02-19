@@ -33,8 +33,6 @@ impl Scripting {
         }
     }
 
-    
-
     pub fn register_object_id<'lua>(
         &self,
         context: &Context<'lua>,

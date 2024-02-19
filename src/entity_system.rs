@@ -1,10 +1,10 @@
 use crate::{
     camera,
     lighting::LightSource,
-    linear,
+    linear::{self, Transform},
     resources::ResourceManager,
     scene::Scene,
-    scripting::Script,
+    scripting::{Script, Scripting},
     serializable,
     utils::{self, Reallocated, UntypedVec},
 };
@@ -56,7 +56,12 @@ impl SceneManager {
         todo!()
     }
 
-    pub fn from_scene(resource_manager: &ResourceManager) -> Self {
+    pub fn from_scene(
+        scene: &Scene,
+        resource_manager: &mut ResourceManager,
+        scripting: &Scripting,
+    ) -> Self {
+        let mut scene_manager = Self::default();
         todo!()
         // let entities = scene.read_vec::<Entity>();
         // let transforms = scene.read_vec::<serializable::Transform>();

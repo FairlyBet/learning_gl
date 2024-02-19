@@ -17,12 +17,11 @@ use std::{
     str::FromStr as _,
 };
 
-const ASSETS_DIR: &str = "assets";
-
 pub fn get_paths<T>() -> Vec<String>
 where
     T: Resource,
 {
+    const ASSETS_DIR: &str = "assets";
     let result = fs::create_dir_all(ASSETS_DIR);
     result.unwrap();
     let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
@@ -221,7 +220,7 @@ impl<Resource> IndexContainer<Resource> {
 pub struct ResourceManager {
     meshes: RangeContainer<Mesh>,
     scripts: IndexContainer<CompiledChunk>,
-    scenes: IndexContainer<Scene>,
+    scenes: Vec<Scene>,
 }
 
 impl ResourceManager {
@@ -229,48 +228,29 @@ impl ResourceManager {
         Self {
             meshes: RangeContainer::new(),
             scripts: IndexContainer::new(),
-            scenes: IndexContainer::new(),
+            scenes: get_paths::<Scene>()
+                .iter()
+                .map(|path| Scene::new(path))
+                .collect(),
         }
     }
 
-    pub fn get_meshes(&self) -> &RangeContainer<Mesh> {
+    pub fn get_mesh_container(&self) -> &RangeContainer<Mesh> {
         &self.meshes
     }
 
-    pub fn get_meshes_mut(&mut self) -> &mut RangeContainer<Mesh> {
+    pub fn get_mesh_container_mut(&mut self) -> &mut RangeContainer<Mesh> {
         &mut self.meshes
     }
 
-    pub fn load_scene(&mut self, scene_index: usize) -> Result<(), String> {
-        let scenes = get_paths::<Scene>();
-        let path = match scenes.get(scene_index) {
-            Some(val) => val,
-            None => return Err(String::from("No scene with such index")),
-        };
-        if !self.scenes.contains_resource(path) {
-            let target = Scene::new(path);
-            self.scenes.push_resource(path, target);
+    pub fn get_mesh_lazily(&mut self, name: ResourcePath) -> Range<usize> {
+        if !self.meshes.contains_resource(&name) {
+            let model_meshes = load_model(&name, DEFAULT_POSTPROCESS.into());
+            let range_idx = self.meshes.push_resources(&name, model_meshes);
+            range_idx
+        } else {
+            self.meshes.get_index(&name)
         }
-        Ok(())
-    }
-
-    pub fn load_meshes(&mut self, scene: &Scene) {
-        fn load(resource_manager: &mut ResourceManager, entities: &Vec<Entity>) {
-            for entity in entities {
-                for mesh in &entity.meshes {
-                    if !resource_manager.meshes.contains_resource(&mesh.path) {
-                        let model_meshes = load_model(&mesh.path, DEFAULT_POSTPROCESS.into());
-                        resource_manager
-                            .meshes
-                            .push_resources(&mesh.path, model_meshes);
-                    }
-                }
-                if !entity.children.is_empty() {
-                    load(resource_manager, &entity.children);
-                }
-            }
-        }
-        load(self, &scene.entities);
     }
 
     pub fn load_scripts(&mut self, scripting: &Scripting) {

@@ -12,19 +12,17 @@ use std::{
 };
 
 pub struct Scene {
-    pub entities: Vec<Entity>,
+    pub path: String,
 }
 
 impl Scene {
     pub fn new(path: &String) -> Self {
-        Self {
-            entities: Self::load(path),
-        }
+        Self { path: path.clone() }
     }
 
-    fn load(path: &String) -> Vec<Entity> {
-        let json_str = fs::read_to_string(path).unwrap();
-        let entities = serde_json::from_str::<Vec<serializable::Entity>>(&json_str).unwrap();
+    pub fn get_entities(&self) -> Vec<Entity> {
+        let json_str = fs::read_to_string(&self.path).unwrap();
+        let entities = serde_json::from_str::<Vec<Entity>>(&json_str).unwrap();
         entities
     }
 }

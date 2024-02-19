@@ -18,6 +18,50 @@ impl Runtime {
         Self {}
     }
 
+    
+    pub fn run(self) {
+        let mut app = Application::new();
+        let mut scene_manager = SceneManager::default();
+        let mut resource_manager = ResourceManager::new();
+        let mut renderer = DefaultRenderer::new(
+            app.window.get_framebuffer_size(),
+            app.window.get_context_version(),
+        );
+        let mut screen = Screen::new(
+            app.window.get_framebuffer_size(),
+            app.window.get_context_version(),
+        );
+        let mut events = WindowEvents::default();
+        let mut frame_time = 0.0;
+        let scripting = Scripting::new();
+        scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
+        // resource_manager.load_scene(0).unwrap();
+
+        // scripting.create_wrappers(&mut scene_manager, &events, &app.window, &frame_time);
+        // let object_key = scripting.lua.context(|context| {
+        //     let chunk = context.load(test_script);
+        //     let object = chunk.eval::<Table>().unwrap();
+        //     let object_key = context.create_registry_value(object).unwrap();
+        //     let object = context.registry_value::<Table>(&object_key).unwrap();
+        //     scripting.register_object_id(&context, object, 1);
+        //     object_key
+        // });
+
+        // app.window.focus();
+        // let mut file = File::create("input.txt").unwrap();
+
+        while !app.window.should_close() {
+            app.glfw.set_time(0.0);
+
+            // file.write(&events.char_input.as_bytes());
+            Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
+            // Self::script_iteration(&scripting, &object_key);
+            Self::render_iteration(&mut app);
+
+            frame_time = app.glfw.get_time();
+        }
+    }
+
     fn update_events(
         app: &mut Application,
         events: &mut WindowEvents,
@@ -77,51 +121,6 @@ impl Runtime {
             let update = object.get::<_, Function>("update").unwrap();
             update.call::<_, ()>(object).unwrap();
         });
-    }
-
-    pub fn run(self) {
-        let mut app = Application::new();
-        let mut scene_manager = SceneManager::default();
-        let mut resource_manager = ResourceManager::new();
-        let mut renderer = DefaultRenderer::new(
-            app.window.get_framebuffer_size(),
-            app.window.get_context_version(),
-        );
-        let mut screen = Screen::new(
-            app.window.get_framebuffer_size(),
-            app.window.get_context_version(),
-        );
-        let mut events = WindowEvents::default();
-        let mut frame_time = 0.0;
-        let scripting = Scripting::new();
-
-        scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
-        resource_manager.load_scene(0).unwrap();
-
-
-        // scripting.create_wrappers(&mut scene_manager, &events, &app.window, &frame_time);
-        // let object_key = scripting.lua.context(|context| {
-        //     let chunk = context.load(test_script);
-        //     let object = chunk.eval::<Table>().unwrap();
-        //     let object_key = context.create_registry_value(object).unwrap();
-        //     let object = context.registry_value::<Table>(&object_key).unwrap();
-        //     scripting.register_object_id(&context, object, 1);
-        //     object_key
-        // });
-
-        // app.window.focus();
-        // let mut file = File::create("input.txt").unwrap();
-
-        while !app.window.should_close() {
-            app.glfw.set_time(0.0);
-
-            // file.write(&events.char_input.as_bytes());
-            Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            // Self::script_iteration(&scripting, &object_key);
-            Self::render_iteration(&mut app);
-
-            frame_time = app.glfw.get_time();
-        }
     }
 }
 
