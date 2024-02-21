@@ -47,8 +47,7 @@ impl UntypedVec {
     pub fn push<T>(&mut self, value: T) -> Reallocated {
         let mut realloc = Default::default();
         if self.len + size_of::<T>() > self.layout.size() {
-            let new_capacity = self.layout.size() / size_of::<T>() * 2
-                + (self.layout.size() / size_of::<T>() == 0) as usize;
+            let new_capacity = self.layout.size() * 2 + (self.layout.size() == 0) as usize;
             self.resize::<T>(new_capacity);
             realloc = Reallocated::Yes;
         }
@@ -74,7 +73,7 @@ impl UntypedVec {
     fn alloc_buf<T>(n: usize) -> (*mut u8, Layout) {
         let layout = Layout::array::<T>(n).unwrap();
         let buf = unsafe { alloc::alloc(layout) };
-        assert!(buf != ptr::null_mut::<u8>(), "Cannot allocate memory");
+        assert_ne!(buf, ptr::null_mut::<u8>(), "Cannot allocate memory");
         (buf, layout)
     }
 
@@ -162,23 +161,12 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     }
 }
 
-pub fn into_vec<From, To>(vec: Vec<From>) -> Vec<To>
-where
-    From: Into<To>,
-{
-    let mut res: Vec<To> = Vec::with_capacity(vec.len());
-    for item in vec {
-        res.push(item.into());
-    }
-    res
-}
-
-pub struct StaticVec<T, const SIZE: usize> {
+pub struct ArrayVec<T, const SIZE: usize> {
     buf: MaybeUninit<[T; SIZE]>,
     len: usize,
 }
 
-impl<T, const SIZE: usize> StaticVec<T, SIZE> {
+impl<T, const SIZE: usize> ArrayVec<T, SIZE> {
     pub fn new() -> Self {
         Self {
             buf: MaybeUninit::zeroed(),
@@ -186,12 +174,19 @@ impl<T, const SIZE: usize> StaticVec<T, SIZE> {
         }
     }
 
+    pub fn push(&mut self, value: T) {
+        assert!(self.len < SIZE, "Index is out of bounds");
+        unsafe { self.buf.as_mut_ptr().cast::<T>().add(self.len).write(value) }; // Need to be tested
+        self.len += 1;
+        // unsafe {
+        //     let zeroed = mem::replace(&mut (self.buf.assume_init_mut()[self.len]), value);
+        //     ManuallyDrop::new(zeroed);
+        // }
+    }
+
     pub fn try_push(&mut self, value: T) -> Result<(), T> {
         if self.len < SIZE {
-            unsafe {
-                let zeroed = mem::replace(&mut self.buf.assume_init_mut()[self.len], value);
-                ManuallyDrop::new(zeroed);
-            }
+            unsafe { self.buf.as_mut_ptr().cast::<T>().add(self.len).write(value) }; // Need to be tested
             self.len += 1;
             Ok(())
         } else {
@@ -205,7 +200,7 @@ impl<T, const SIZE: usize> StaticVec<T, SIZE> {
 
     pub fn get(&self, index: usize) -> &T {
         assert!(index < self.len, "Index is out of bounds");
-        unsafe { &self.buf.assume_init_ref()[index] }
+        unsafe { &self.buf.assume_init_ref().get_unchecked(index) }
     }
 
     pub fn get_mut(&mut self, index: usize) -> &mut T {
@@ -222,14 +217,35 @@ impl<T, const SIZE: usize> StaticVec<T, SIZE> {
     }
 }
 
-impl<T, const SIZE: usize> Drop for StaticVec<T, SIZE> {
+impl<T, const SIZE: usize> Drop for ArrayVec<T, SIZE> {
     fn drop(&mut self) {
         println!("Dropping {} elements", self.len);
         for i in 0..self.len {
             unsafe {
                 let mut zeroed = MaybeUninit::<T>::zeroed();
-                let actual = mem::replace(&mut self.buf.assume_init_mut()[i], zeroed.assume_init());
+                let actual =
+                    mem::replace(&mut (self.buf.assume_init_mut()[i]), zeroed.assume_init());
             }
         }
     }
+}
+
+pub fn into_vec_clone<From, Into>(from: &Vec<From>) -> Vec<Into>
+where
+    From: core::convert::Into<Into> + Clone,
+{
+    from.iter()
+        .map(|item| item.clone().into())
+        .collect::<Vec<Into>>()
+}
+
+pub fn into_vec<From, Into>(from: Vec<From>) -> Vec<Into>
+where
+    From: core::convert::Into<Into>,
+{
+    let mut vec = Vec::with_capacity(from.len());
+    for item in from {
+        vec.push(item.into());
+    }
+    vec
 }

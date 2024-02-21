@@ -1,6 +1,6 @@
 // #![windows_subsystem = "windows"]
 #![deny(rust_2018_compatibility)]
-#![allow(unused)]
+// #![allow(unused)]
 
 use entity_system::{Entity, SceneManager};
 use runtime::Runtime;

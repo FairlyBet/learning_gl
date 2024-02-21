@@ -1,17 +1,15 @@
+use crate::resources::RangedIndex;
 use crate::{
-    camera,
+    camera::Camera,
     lighting::LightSource,
-    linear::{self, Transform},
+    linear::Transform,
     resources::ResourceManager,
-    scene::Scene,
     scripting::{Script, Scripting},
     serializable,
-    utils::{self, Reallocated, UntypedVec},
+    utils::{self, FxHashMap32, Reallocated, UntypedVec},
 };
-use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, ops::Range};
 use strum::EnumCount;
-use utils::FxHashMap32;
 
 pub type EntityId = u32;
 
@@ -24,68 +22,75 @@ pub struct SceneManager {
 }
 
 impl SceneManager {
-    pub fn init() -> Self {
-        // assert_eq!(
-        //     entities.len(),
-        //     transforms.len(),
-        //     "Amount of entitites and transforms must be equal"
-        // );
+    pub fn from_scene_index(
+        index: usize,
+        resource_manager: &mut ResourceManager,
+        scripting: &Scripting,
+    ) -> Option<Self> {
+        let scene = resource_manager.scenes().get(index)?;
+        let entities = scene.load_entities();
+        let mut scene_manager = Self::default();
+        scene_manager.component_arrays[ComponentType::Transform as usize] =
+            UntypedVec::init::<Transform>(entities.len());
+        let mut current_id = 0;
 
-        // let mut res: Self = Default::default();
+        for entity in entities {
+            let mut ent = Entity {
+                id: current_id,
+                name: entity.name.clone(),
+                components: vec![],
+                children: vec![],
+                parent: None,
+            };
 
-        // let mut i = 0;
-        // for mut entity in entities {
-        //     assert_eq!(
-        //         i, entity.id as usize,
-        //         "Integrity of entities array is not satisfied"
-        //     );
-        //     res.entities.insert(entity.id, entity);
-        //     i += 1;
-        // }
+            current_id += 1;
 
-        // res.component_arrays[ComponentType::Transform as usize] =
-        //     UntypedVec::init::<linear::Transform>(transforms.len());
-        // for transform in transforms {
-        //     let transform: linear::Transform = transform.into();
-        //     res.component_arrays[ComponentType::Transform as usize].push(transform);
-        // }
-        // res.id_counter = i as EntityId;
+            let cameras = utils::into_vec::<_, Camera>(entity.cameras);
+            let light_sources = utils::into_vec::<_, LightSource>(entity.light_sources);
+            let meshes = entity
+                .meshes
+                .iter()
+                .map(|item| resource_manager.get_mesh_lazily(&item.path))
+                .collect::<Vec<Range<usize>>>();
+            let scripts = entity.scripts;
 
-        // res
+            if !entity.children.is_empty() {
+                Self::create_children(
+                    ent.id,
+                    &mut current_id,
+                    entity.children,
+                    &mut scene_manager,
+                    resource_manager,
+                    &scripting,
+                );
+            }
+
+            scene_manager.entities.insert(ent.id, ent);
+        }
 
         todo!()
     }
 
-    pub fn from_scene(
-        scene: &Scene,
+    fn create_children(
+        parent_id: EntityId,
+        current_id: &mut EntityId,
+        children: Vec<serializable::Entity>,
+        scene_manager: &mut SceneManager,
         resource_manager: &mut ResourceManager,
         scripting: &Scripting,
-    ) -> Self {
-        let mut scene_manager = Self::default();
+    ) -> Vec<Entity> {
+        for child in children {
+            let mut ent = Entity {
+                id: *current_id,
+                name: child.name.clone(),
+                components: vec![],
+                children: vec![],
+                parent: Some(parent_id),
+            };
+
+            *current_id += 1;
+        }
         todo!()
-        // let entities = scene.read_vec::<Entity>();
-        // let transforms = scene.read_vec::<serializable::Transform>();
-
-        // let mut self_ = Self::init(entities, transforms);
-
-        // let mesh_components: Vec<MeshComponent> = scene
-        //     .read_vec::<serializable::MeshComponent>()
-        //     .iter()
-        //     .map(|x| MeshComponent {
-        //         model_index: asset_manager.get_meshes().get_index(&x.mesh_path),
-        //         owner_id: x.owner_id,
-        //     })
-        //     .collect();
-        // let camera_components: Vec<CameraComponent> =
-        //     util::into_vec(scene.read_vec::<serializable::CameraComponent>());
-        // let light_components: Vec<LightComponent> =
-        //     util::into_vec(scene.read_vec::<serializable::LightComponent>());
-
-        // self_.attach_components(mesh_components);
-        // self_.attach_components(camera_components);
-        // self_.attach_components(light_components);
-
-        // self_
     }
 
     pub fn create_entity(&mut self) -> EntityId {
@@ -96,9 +101,9 @@ impl SceneManager {
             res
         });
 
-        let transform = linear::Transform::new();
+        let transform = Transform::new();
         if (entity.id as usize)
-            < self.component_arrays[ComponentType::Transform as usize].len::<linear::Transform>()
+            < self.component_arrays[ComponentType::Transform as usize].len::<Transform>()
         {
             self.component_arrays[ComponentType::Transform as usize]
                 .rewrite(transform, entity.id as usize); // rewrite existing item
@@ -119,64 +124,25 @@ impl SceneManager {
     /// Only updates parent transform pointers
     fn update_transform_pointers_on_reallocation(&mut self) {
         todo!()
-        // for entity in self.entities.values() {
-        //     if let Some(parent_id) = entity.parent {
-        //         let parent = self.entities.get(&parent_id).unwrap();
-        //         let parent_transform_component = parent
-        //             .components
-        //             .iter()
-        //             .find(|x| x.type_ == ComponentType::Transform)
-        //             .unwrap();
-        //         let parent_transform: &linear::Transform = self.component_arrays
-        //             [ComponentType::Transform as usize]
-        //             .get(parent_transform_component.array_index);
-
-        //         let transform_component = entity
-        //             .components
-        //             .iter()
-        //             .find(|x| x.type_ == ComponentType::Transform)
-        //             .unwrap();
-        //         let transform: &mut linear::Transform = self.component_arrays
-        //             [ComponentType::Transform as usize]
-        //             .get_mut(transform_component.array_index);
-        //         // finally
-        //         transform.parent = Some(parent_transform);
-        //     }
-        // }
-    }
-
-    pub fn attach_component<T>(&mut self, component: T)
-    where
-        T: Component,
-    {
-        let comp = ComponentRecord {
-            array_index: self.component_arrays[T::component_type() as usize].len::<T>(),
-            type_: T::component_type(),
-        };
-        let owner = self.entities.get_mut(&component.owner_id()).unwrap();
-        owner.components.push(comp);
-        self.component_arrays[T::component_type() as usize].push(component);
-    }
-
-    pub fn attach_components(&mut self, components: Vec<impl Component>) {
-        for component in components {
-            self.attach_component(component);
-        }
     }
 
     pub fn get_component<T>(&self, entity_id: EntityId) -> Option<&T>
     where
         T: Component,
     {
-        let entity = self.entities.get(&entity_id).unwrap();
+        let entity = match self.entities.get(&entity_id) {
+            Some(val) => val,
+            None => {
+                println!("Entity with invalid id is detected: {}", entity_id);
+                return None;
+            }
+        };
         let component = entity
             .components
             .iter()
-            .find(|x| x.type_ == T::component_type());
-        match component {
-            Some(val) => Some(self.component_arrays[val.type_ as usize].get::<T>(val.array_index)),
-            None => None,
-        }
+            .find(|x| x.type_ == T::component_type())?;
+
+        Some(self.component_arrays[component.type_ as usize].get::<T>(component.array_index))
     }
 
     pub fn component_slice<T>(&self) -> &[T]
@@ -193,17 +159,18 @@ impl SceneManager {
         self.component_arrays[T::component_type() as usize].mut_slice::<T>()
     }
 
-    /// This optimization requires entities ids to be a consequtive progression (0, 1, 2...)
-    pub fn get_transfom(&self, entity_id: EntityId) -> &linear::Transform {
+    // This optimization requires entities' ids to directly
+    // correlate with their transforms' positions in the array
+    pub fn get_transform(&self, entity_id: EntityId) -> &Transform {
         self.component_arrays[ComponentType::Transform as usize].get(entity_id as usize)
     }
 
-    pub fn get_transfom_mut(&mut self, entity_id: EntityId) -> &mut linear::Transform {
+    pub fn get_transform_mute(&mut self, entity_id: EntityId) -> &mut Transform {
         self.component_arrays[ComponentType::Transform as usize].get_mut(entity_id as usize)
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default)]
 pub struct Entity {
     pub id: EntityId,
     pub name: String,
@@ -212,13 +179,12 @@ pub struct Entity {
     pub parent: Option<EntityId>,
 }
 
-#[derive(Serialize, Deserialize)]
 pub struct ComponentRecord {
     pub array_index: usize,
     pub type_: ComponentType,
 }
 
-#[derive(Serialize, Deserialize, EnumCount, PartialEq, Debug, Clone, Copy)]
+#[derive(EnumCount, PartialEq, Debug, Clone, Copy)]
 #[repr(u32)]
 pub enum ComponentType {
     Transform,
@@ -234,7 +200,7 @@ pub trait Component {
 }
 
 pub struct MeshComponent {
-    pub model_index: Range<usize>,
+    pub model_index: RangedIndex,
     pub owner_id: EntityId,
 }
 
@@ -249,7 +215,7 @@ impl Component for MeshComponent {
 }
 
 pub struct CameraComponent {
-    pub camera: camera::Camera,
+    pub camera: Camera,
     pub owner_id: EntityId,
 }
 
@@ -279,8 +245,8 @@ impl Component for LightComponent {
 }
 
 pub struct ScriptComponent {
-    pub owner_id: EntityId,
     pub script: Script,
+    pub owner_id: EntityId,
 }
 
 impl Component for ScriptComponent {
@@ -291,4 +257,44 @@ impl Component for ScriptComponent {
     fn owner_id(&self) -> EntityId {
         self.owner_id
     }
+}
+
+pub trait ToComponent<Component: self::Component> {
+    fn convert(self, owner_id: EntityId) -> Component;
+}
+
+impl ToComponent<CameraComponent> for Camera {
+    fn convert(self, owner_id: EntityId) -> CameraComponent {
+        CameraComponent {
+            camera: self,
+            owner_id,
+        }
+    }
+}
+
+impl ToComponent<LightComponent> for LightSource {
+    fn convert(self, owner_id: EntityId) -> LightComponent {
+        LightComponent {
+            light_source: self,
+            owner_id,
+        }
+    }
+}
+
+impl ToComponent<MeshComponent> for RangedIndex {
+    fn convert(self, owner_id: EntityId) -> MeshComponent {
+        MeshComponent {
+            model_index: self,
+            owner_id,
+        }
+    }
+}
+
+pub struct Comp<T: Component> {
+    owner_id: EntityId,
+    val: T
+}
+
+impl<T: Component> Comp<T> {
+    
 }

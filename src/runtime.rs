@@ -18,11 +18,10 @@ impl Runtime {
         Self {}
     }
 
-    
     pub fn run(self) {
         let mut app = Application::new();
-        let mut scene_manager = SceneManager::default();
         let mut resource_manager = ResourceManager::new();
+        let mut scene_manager = SceneManager::default();
         let mut renderer = DefaultRenderer::new(
             app.window.get_framebuffer_size(),
             app.window.get_context_version(),
@@ -35,27 +34,12 @@ impl Runtime {
         let mut frame_time = 0.0;
         let scripting = Scripting::new();
         scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
-        // resource_manager.load_scene(0).unwrap();
-
-        // scripting.create_wrappers(&mut scene_manager, &events, &app.window, &frame_time);
-        // let object_key = scripting.lua.context(|context| {
-        //     let chunk = context.load(test_script);
-        //     let object = chunk.eval::<Table>().unwrap();
-        //     let object_key = context.create_registry_value(object).unwrap();
-        //     let object = context.registry_value::<Table>(&object_key).unwrap();
-        //     scripting.register_object_id(&context, object, 1);
-        //     object_key
-        // });
-
-        // app.window.focus();
-        // let mut file = File::create("input.txt").unwrap();
 
         while !app.window.should_close() {
             app.glfw.set_time(0.0);
 
-            // file.write(&events.char_input.as_bytes());
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            // Self::script_iteration(&scripting, &object_key);
+            Self::script_iteration(&scripting);
             Self::render_iteration(&mut app);
 
             frame_time = app.glfw.get_time();
@@ -110,17 +94,13 @@ impl Runtime {
         }
     }
 
+    fn script_iteration(scripting: &Scripting) {
+        scripting.lua.context(|context| {});
+    }
+
     fn render_iteration(app: &mut Application) {
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
         app.window.swap_buffers();
-    }
-
-    fn script_iteration(scripting: &Scripting, object_key: &RegistryKey) {
-        scripting.lua.context(|context| {
-            let object = context.registry_value::<Table>(object_key).unwrap();
-            let update = object.get::<_, Function>("update").unwrap();
-            update.call::<_, ()>(object).unwrap();
-        });
     }
 }
 

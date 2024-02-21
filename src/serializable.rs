@@ -1,6 +1,5 @@
 use crate::{
     camera,
-    entity_system::{self, EntityId},
     lighting::{self, LightData, LightType},
     linear::{self, Projection},
     resources::ResourcePath,
@@ -10,12 +9,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct Entity {
     pub name: String,
-    pub transfom: Transform,
+    pub transform: Transform,
     pub children: Vec<Entity>,
     pub meshes: Vec<Mesh>,
-    pub camera_components: Vec<Camera>,
-    pub light_components: Vec<LightSource>,
-    pub script_components: Vec<Script>,
+    pub cameras: Vec<Camera>,
+    pub light_sources: Vec<LightSource>,
+    pub scripts: Vec<Script>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -64,7 +63,7 @@ impl Into<glm::Vec3> for Vec3 {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Mesh {
     pub path: ResourcePath,
 }
@@ -116,7 +115,7 @@ impl Into<lighting::LightSource> for LightSource {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Script {
     pub script_path: String,
 }

@@ -119,8 +119,8 @@ impl Renderer for DefaultRenderer {
         };
         let mesh_components = entity_system.component_slice::<MeshComponent>();
 
-        let camera_transform = entity_system.get_transfom(camera_comp.owner_id);
-        let light_transform = entity_system.get_transfom(light_comp.owner_id);
+        let camera_transform = entity_system.get_transform(camera_comp.owner_id);
+        let light_transform = entity_system.get_transform(light_comp.owner_id);
 
         let lighting_data = LightingData {
             light_data: light_comp.light_source.get_data(light_transform),
@@ -139,7 +139,7 @@ impl Renderer for DefaultRenderer {
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
         for mesh in mesh_components {
-            let mesh_transform = entity_system.get_transfom(mesh.owner_id);
+            let mesh_transform = entity_system.get_transform(mesh.owner_id);
 
             let matrix_data = MatrixData {
                 mvp: camera_comp.camera.projection_view(camera_transform) * mesh_transform.model(),

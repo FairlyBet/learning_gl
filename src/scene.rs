@@ -20,7 +20,7 @@ impl Scene {
         Self { path: path.clone() }
     }
 
-    pub fn get_entities(&self) -> Vec<Entity> {
+    pub fn load_entities(&self) -> Vec<Entity> {
         let json_str = fs::read_to_string(&self.path).unwrap();
         let entities = serde_json::from_str::<Vec<Entity>>(&json_str).unwrap();
         entities

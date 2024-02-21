@@ -10,7 +10,7 @@ function Input.getKey(key, action, modifiers) end
 
 ---@param key function
 ---@return boolean
-function Input.getKeyHolded(key) end
+function Input.getKeyHeld(key) end
 
 -- function Input.getMouseButton(button, action) end
 

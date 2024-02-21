@@ -1,9 +1,7 @@
 use crate::{
     data3d::{Mesh, Model, VertexData},
-    entity_system::SceneManager,
     scene::Scene,
     scripting::{CompiledChunk, Script, Scripting},
-    serializable::{self, Entity},
 };
 use fxhash::FxHashMap;
 use russimp::{
@@ -97,8 +95,8 @@ pub const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
     PostProcess::ImproveCacheLocality,
 ];
 
-pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
-    let model = russimp::scene::Scene::from_file(path, post_pocess).unwrap();
+pub fn load_model(path: &String, post_process: PostProcessSteps) -> Model {
+    let model = russimp::scene::Scene::from_file(path, post_process).unwrap();
     let mut meshes = Model::with_capacity(model.meshes.len());
     for mesh in &model.meshes {
         let vertex_count = mesh.vertices.len();
@@ -136,6 +134,7 @@ pub fn load_model(path: &String, post_pocess: PostProcessSteps) -> Model {
 }
 
 pub type ResourcePath = String;
+pub type RangedIndex = Range<usize>;
 
 pub struct ResourceContainer<Resource, ResourceIndex: Clone> {
     table: FxHashMap<ResourcePath, ResourceIndex>,
@@ -164,28 +163,24 @@ impl<Resource, ResourceIndex: Clone> ResourceContainer<Resource, ResourceIndex> 
     }
 }
 
-pub type RangeContainer<Resource> = ResourceContainer<Resource, Range<usize>>;
+pub type RangeContainer<Resource> = ResourceContainer<Resource, RangedIndex>;
 
 impl<Resource> RangeContainer<Resource> {
     pub fn push_resources(
         &mut self,
         name: &ResourcePath,
         mut resources: Vec<Resource>,
-    ) -> Range<usize> {
-        assert!(
-            !self.table.contains_key(name),
-            "Container already has this resource"
-        );
+    ) -> RangedIndex {
         let idx = Range {
             start: self.vec.len(),
             end: self.vec.len() + resources.len(),
         };
-        _ = self.table.insert(name.clone(), idx.clone());
+        assert!(self.table.insert(name.clone(), idx.clone()).is_none(), "Container already has this resource");
         self.vec.append(&mut resources);
         idx
     }
 
-    pub fn soft_push(&mut self, name: &ResourcePath, mut resources: Vec<Resource>) -> Range<usize> {
+    pub fn soft_push(&mut self, name: &ResourcePath, resources: Vec<Resource>) -> RangedIndex {
         if self.table.contains_key(name) {
             self.table[name].clone()
         } else {
@@ -193,7 +188,7 @@ impl<Resource> RangeContainer<Resource> {
         }
     }
 
-    pub fn get_resource(&self, idx: Range<usize>) -> &[Resource] {
+    pub fn get_resource(&self, idx: RangedIndex) -> &[Resource] {
         &self.vec[idx]
     }
 }
@@ -235,6 +230,10 @@ impl ResourceManager {
         }
     }
 
+    pub fn scenes(&self) -> &[Scene] {
+        &self.scenes
+    }
+
     pub fn get_mesh_container(&self) -> &RangeContainer<Mesh> {
         &self.meshes
     }
@@ -243,10 +242,10 @@ impl ResourceManager {
         &mut self.meshes
     }
 
-    pub fn get_mesh_lazily(&mut self, name: ResourcePath) -> Range<usize> {
+    pub fn get_mesh_lazily(&mut self, name: &ResourcePath) -> RangedIndex {
         if !self.meshes.contains_resource(&name) {
             let model_meshes = load_model(&name, DEFAULT_POSTPROCESS.into());
-            let range_idx = self.meshes.push_resources(&name, model_meshes);
+            let range_idx = self.meshes.push_resources(name, model_meshes);
             range_idx
         } else {
             self.meshes.get_index(&name)

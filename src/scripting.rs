@@ -7,12 +7,16 @@ use nalgebra_glm::Vec3;
 use rlua::{
     Context, Error, Function, LightUserData, Lua, RegistryKey, Result, StdLib, Table, Value,
 };
-use std::{ffi::c_void, fs, ptr, sync::Arc};
+use std::{ffi::c_void, fs, sync::Arc};
 
 pub struct CompiledChunk(Vec<u8>);
 
 pub struct Script {
-    pub src: Vec<u8>,
+    chunk: CompiledChunk,
+}
+
+pub struct RegistryObject {
+    key: RegistryKey,
 }
 
 pub struct Scripting {
@@ -42,15 +46,15 @@ impl Scripting {
         let object_table = context
             .registry_value::<Table>(&self.object_table_key)
             .unwrap();
-        object_table.set(object, id);
+        object_table.set(object, id).unwrap();
     }
 
     pub fn compile_chunk(&self, src: &str, chunk_name: &str) -> Result<CompiledChunk> {
         self.lua.context(|context| {
             let chunk = context.load(src);
             let chunk = chunk.set_name(chunk_name)?;
-            let fucntion = chunk.into_function()?;
-            let dumped = fucntion.dump()?;
+            let function = chunk.into_function()?;
+            let dumped = function.dump()?;
             Ok(CompiledChunk(dumped))
         })
     }
@@ -67,7 +71,7 @@ impl Scripting {
 
     pub fn delete_registry_object(&self, object: RegistryObject) {
         self.lua.context(|context| {
-            context.remove_registry_value(object.key);
+            context.remove_registry_value(object.key).unwrap();
         });
     }
 
@@ -79,11 +83,11 @@ impl Scripting {
         frame_time: &f64,
     ) {
         self.lua.context(|context| {
-            let scene_manager = LightUserData(scene_manager as *const _ as *mut c_void);
-            let window_events = LightUserData(events as *const _ as *mut c_void);
-            let window = LightUserData(window as *const _ as *mut c_void);
-            let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
-            let object_table = LightUserData(&self.object_table_key as *const _ as *mut c_void);
+            let scene_manager   = LightUserData(scene_manager             as *const _ as *mut c_void);
+            let window_events   = LightUserData(events                    as *const _ as *mut c_void);
+            let window          = LightUserData(window                    as *const _ as *mut c_void);
+            let frame_time      = LightUserData(frame_time                as *const _ as *mut c_void);
+            let object_table    = LightUserData(&self.object_table_key    as *const _ as *mut c_void);
 
             let transform_move = context
                 .create_function(TransformWrappers::transform_move)
@@ -95,39 +99,41 @@ impl Scripting {
                 .unwrap()
                 .bind((object_table, scene_manager))
                 .unwrap();
-            let transfrom_get_position = context
+            let transform_get_position = context
                 .create_function(TransformWrappers::transform_get_position)
                 .unwrap()
                 .bind((object_table, scene_manager))
                 .unwrap();
 
             let transform = context.create_table().unwrap();
-            transform.set("move", transform_move);
-            transform.set("moveLocal", transform_move_local);
-            transform.set("getPosition", transfrom_get_position);
-            context.globals().set("Transform", transform);
+            transform.set("move", transform_move).unwrap();
+            transform.set("moveLocal", transform_move_local).unwrap();
+            transform
+                .set("getPosition", transform_get_position)
+                .unwrap();
+            context.globals().set("Transform", transform).unwrap();
 
             let get_key = context
                 .create_function(InputWrappers::get_key)
                 .unwrap()
                 .bind(window_events)
                 .unwrap();
-            let get_key_holded = context
-                .create_function(InputWrappers::get_key_holded)
+            let get_key_held = context
+                .create_function(InputWrappers::get_key_held)
                 .unwrap()
                 .bind(window)
                 .unwrap();
             let input = context.create_table().unwrap();
-            input.set("getKey", get_key);
-            input.set("getKeyHolded", get_key_holded);
-            context.globals().set("Input", input);
+            input.set("getKey", get_key).unwrap();
+            input.set("getKeyHeld", get_key_held).unwrap();
+            context.globals().set("Input", input).unwrap();
 
             let frame_time = context
                 .create_function(ApplicationWrappers::frame_time)
                 .unwrap()
                 .bind(frame_time)
                 .unwrap();
-            context.globals().set("frameTime", frame_time);
+            context.globals().set("frameTime", frame_time).unwrap();
 
             InputWrappers::create_keys_table(&context);
         });
@@ -139,7 +145,8 @@ impl Scripting {
                 .load(&chunk.0)
                 .into_function_allow_binary()
                 .unwrap()
-                .call::<_, ()>(());
+                .call::<_, ()>(())
+                .unwrap();
         });
     }
 }
@@ -162,7 +169,7 @@ impl TransformWrappers {
         let vector = vec_from_lua(&vector_lua)?;
         let id = object_table.get::<_, EntityId>(object)?;
 
-        scene_manager.get_transfom_mut(id).move_(&vector);
+        scene_manager.get_transform_mute(id).move_(&vector);
 
         Ok(())
     }
@@ -182,7 +189,7 @@ impl TransformWrappers {
         let vector_lua = args.3;
         let vector = vec_from_lua(&vector_lua)?;
 
-        scene_manager.get_transfom_mut(id).move_local(&vector);
+        scene_manager.get_transform_mute(id).move_local(&vector);
 
         Ok(())
     }
@@ -199,7 +206,7 @@ impl TransformWrappers {
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
         let id = object_table.get::<_, EntityId>(object)?;
-        let position = &scene_manager.get_transfom(id).position;
+        let position = &scene_manager.get_transform(id).position;
         let vector_lua = vec_to_lua(&context, position);
 
         Ok(vector_lua)
@@ -459,138 +466,157 @@ impl InputWrappers {
         }
     }
 
-    pub fn key_from_i32(value: i32) -> Option<Key> {
+    pub fn key_from_i32(value: i32) -> Result<Key> {
         match value {
-            32 => Some(Key::Space),
-            39 => Some(Key::Apostrophe),
-            44 => Some(Key::Comma),
-            45 => Some(Key::Minus),
-            46 => Some(Key::Period),
-            47 => Some(Key::Slash),
-            48 => Some(Key::Num0),
-            49 => Some(Key::Num1),
-            50 => Some(Key::Num2),
-            51 => Some(Key::Num3),
-            52 => Some(Key::Num4),
-            53 => Some(Key::Num5),
-            54 => Some(Key::Num6),
-            55 => Some(Key::Num7),
-            56 => Some(Key::Num8),
-            57 => Some(Key::Num9),
-            59 => Some(Key::Semicolon),
-            61 => Some(Key::Equal),
-            65 => Some(Key::A),
-            66 => Some(Key::B),
-            67 => Some(Key::C),
-            68 => Some(Key::D),
-            69 => Some(Key::E),
-            70 => Some(Key::F),
-            71 => Some(Key::G),
-            72 => Some(Key::H),
-            73 => Some(Key::I),
-            74 => Some(Key::J),
-            75 => Some(Key::K),
-            76 => Some(Key::L),
-            77 => Some(Key::M),
-            78 => Some(Key::N),
-            79 => Some(Key::O),
-            80 => Some(Key::P),
-            81 => Some(Key::Q),
-            82 => Some(Key::R),
-            83 => Some(Key::S),
-            84 => Some(Key::T),
-            85 => Some(Key::U),
-            86 => Some(Key::V),
-            87 => Some(Key::W),
-            88 => Some(Key::X),
-            89 => Some(Key::Y),
-            90 => Some(Key::Z),
-            91 => Some(Key::LeftBracket),
-            92 => Some(Key::Backslash),
-            93 => Some(Key::RightBracket),
-            96 => Some(Key::GraveAccent),
-            161 => Some(Key::World1),
-            162 => Some(Key::World2),
-            256 => Some(Key::Escape),
-            257 => Some(Key::Enter),
-            258 => Some(Key::Tab),
-            259 => Some(Key::Backspace),
-            260 => Some(Key::Insert),
-            261 => Some(Key::Delete),
-            262 => Some(Key::Right),
-            263 => Some(Key::Left),
-            264 => Some(Key::Down),
-            265 => Some(Key::Up),
-            266 => Some(Key::PageUp),
-            267 => Some(Key::PageDown),
-            268 => Some(Key::Home),
-            269 => Some(Key::End),
-            280 => Some(Key::CapsLock),
-            281 => Some(Key::ScrollLock),
-            282 => Some(Key::NumLock),
-            283 => Some(Key::PrintScreen),
-            284 => Some(Key::Pause),
-            290 => Some(Key::F1),
-            291 => Some(Key::F2),
-            292 => Some(Key::F3),
-            293 => Some(Key::F4),
-            294 => Some(Key::F5),
-            295 => Some(Key::F6),
-            296 => Some(Key::F7),
-            297 => Some(Key::F8),
-            298 => Some(Key::F9),
-            299 => Some(Key::F10),
-            300 => Some(Key::F11),
-            301 => Some(Key::F12),
-            302 => Some(Key::F13),
-            303 => Some(Key::F14),
-            304 => Some(Key::F15),
-            305 => Some(Key::F16),
-            306 => Some(Key::F17),
-            307 => Some(Key::F18),
-            308 => Some(Key::F19),
-            309 => Some(Key::F20),
-            310 => Some(Key::F21),
-            311 => Some(Key::F22),
-            312 => Some(Key::F23),
-            313 => Some(Key::F24),
-            314 => Some(Key::F25),
-            320 => Some(Key::Kp0),
-            321 => Some(Key::Kp1),
-            322 => Some(Key::Kp2),
-            323 => Some(Key::Kp3),
-            324 => Some(Key::Kp4),
-            325 => Some(Key::Kp5),
-            326 => Some(Key::Kp6),
-            327 => Some(Key::Kp7),
-            328 => Some(Key::Kp8),
-            329 => Some(Key::Kp9),
-            330 => Some(Key::KpDecimal),
-            331 => Some(Key::KpDivide),
-            332 => Some(Key::KpMultiply),
-            333 => Some(Key::KpSubtract),
-            334 => Some(Key::KpAdd),
-            335 => Some(Key::KpEnter),
-            336 => Some(Key::KpEqual),
-            340 => Some(Key::LeftShift),
-            341 => Some(Key::LeftControl),
-            342 => Some(Key::LeftAlt),
-            343 => Some(Key::LeftSuper),
-            344 => Some(Key::RightShift),
-            345 => Some(Key::RightControl),
-            346 => Some(Key::RightAlt),
-            347 => Some(Key::RightSuper),
-            348 => Some(Key::Menu),
-            -1 => Some(Key::Unknown),
-            _ => None,
+            32 => Ok(Key::Space),
+            39 => Ok(Key::Apostrophe),
+            44 => Ok(Key::Comma),
+            45 => Ok(Key::Minus),
+            46 => Ok(Key::Period),
+            47 => Ok(Key::Slash),
+            48 => Ok(Key::Num0),
+            49 => Ok(Key::Num1),
+            50 => Ok(Key::Num2),
+            51 => Ok(Key::Num3),
+            52 => Ok(Key::Num4),
+            53 => Ok(Key::Num5),
+            54 => Ok(Key::Num6),
+            55 => Ok(Key::Num7),
+            56 => Ok(Key::Num8),
+            57 => Ok(Key::Num9),
+            59 => Ok(Key::Semicolon),
+            61 => Ok(Key::Equal),
+            65 => Ok(Key::A),
+            66 => Ok(Key::B),
+            67 => Ok(Key::C),
+            68 => Ok(Key::D),
+            69 => Ok(Key::E),
+            70 => Ok(Key::F),
+            71 => Ok(Key::G),
+            72 => Ok(Key::H),
+            73 => Ok(Key::I),
+            74 => Ok(Key::J),
+            75 => Ok(Key::K),
+            76 => Ok(Key::L),
+            77 => Ok(Key::M),
+            78 => Ok(Key::N),
+            79 => Ok(Key::O),
+            80 => Ok(Key::P),
+            81 => Ok(Key::Q),
+            82 => Ok(Key::R),
+            83 => Ok(Key::S),
+            84 => Ok(Key::T),
+            85 => Ok(Key::U),
+            86 => Ok(Key::V),
+            87 => Ok(Key::W),
+            88 => Ok(Key::X),
+            89 => Ok(Key::Y),
+            90 => Ok(Key::Z),
+            91 => Ok(Key::LeftBracket),
+            92 => Ok(Key::Backslash),
+            93 => Ok(Key::RightBracket),
+            96 => Ok(Key::GraveAccent),
+            161 => Ok(Key::World1),
+            162 => Ok(Key::World2),
+            256 => Ok(Key::Escape),
+            257 => Ok(Key::Enter),
+            258 => Ok(Key::Tab),
+            259 => Ok(Key::Backspace),
+            260 => Ok(Key::Insert),
+            261 => Ok(Key::Delete),
+            262 => Ok(Key::Right),
+            263 => Ok(Key::Left),
+            264 => Ok(Key::Down),
+            265 => Ok(Key::Up),
+            266 => Ok(Key::PageUp),
+            267 => Ok(Key::PageDown),
+            268 => Ok(Key::Home),
+            269 => Ok(Key::End),
+            280 => Ok(Key::CapsLock),
+            281 => Ok(Key::ScrollLock),
+            282 => Ok(Key::NumLock),
+            283 => Ok(Key::PrintScreen),
+            284 => Ok(Key::Pause),
+            290 => Ok(Key::F1),
+            291 => Ok(Key::F2),
+            292 => Ok(Key::F3),
+            293 => Ok(Key::F4),
+            294 => Ok(Key::F5),
+            295 => Ok(Key::F6),
+            296 => Ok(Key::F7),
+            297 => Ok(Key::F8),
+            298 => Ok(Key::F9),
+            299 => Ok(Key::F10),
+            300 => Ok(Key::F11),
+            301 => Ok(Key::F12),
+            302 => Ok(Key::F13),
+            303 => Ok(Key::F14),
+            304 => Ok(Key::F15),
+            305 => Ok(Key::F16),
+            306 => Ok(Key::F17),
+            307 => Ok(Key::F18),
+            308 => Ok(Key::F19),
+            309 => Ok(Key::F20),
+            310 => Ok(Key::F21),
+            311 => Ok(Key::F22),
+            312 => Ok(Key::F23),
+            313 => Ok(Key::F24),
+            314 => Ok(Key::F25),
+            320 => Ok(Key::Kp0),
+            321 => Ok(Key::Kp1),
+            322 => Ok(Key::Kp2),
+            323 => Ok(Key::Kp3),
+            324 => Ok(Key::Kp4),
+            325 => Ok(Key::Kp5),
+            326 => Ok(Key::Kp6),
+            327 => Ok(Key::Kp7),
+            328 => Ok(Key::Kp8),
+            329 => Ok(Key::Kp9),
+            330 => Ok(Key::KpDecimal),
+            331 => Ok(Key::KpDivide),
+            332 => Ok(Key::KpMultiply),
+            333 => Ok(Key::KpSubtract),
+            334 => Ok(Key::KpAdd),
+            335 => Ok(Key::KpEnter),
+            336 => Ok(Key::KpEqual),
+            340 => Ok(Key::LeftShift),
+            341 => Ok(Key::LeftControl),
+            342 => Ok(Key::LeftAlt),
+            343 => Ok(Key::LeftSuper),
+            344 => Ok(Key::RightShift),
+            345 => Ok(Key::RightControl),
+            346 => Ok(Key::RightAlt),
+            347 => Ok(Key::RightSuper),
+            348 => Ok(Key::Menu),
+            -1 => Ok(Key::Unknown),
+            _ => Err(Error::ExternalError(Arc::new(CustomError(
+                "Invalid key code".to_string(),
+            )))),
         }
     }
 
-    pub fn action_from_i32(value: i32) -> Option<Action> {
+    pub fn action_from_i32(value: i32) -> Result<Action> {
         match value {
-            0 => Some(Action::Release),
-            1 => Some(Action::Press),
-            _ => None,
+            0 => Ok(Action::Release),
+            1 => Ok(Action::Press),
+            _ => Err(Error::ExternalError(Arc::new(CustomError(
+                "Invalid action code".to_string(),
+            )))),
+        }
+    }
+
+    pub fn value_to_modifiers(value: Value) -> Result<Modifiers> {
+        match value {
+            Value::Nil => Ok(Modifiers::empty()),
+            Value::Integer(int) => match Modifiers::from_bits(int as i32) {
+                Some(val) => Ok(val),
+                None => Err(Error::ExternalError(Arc::new(CustomError(
+                    "Invalid argument value [modifiers]".to_string(),
+                )))),
+            },
+            _ => Err(Error::ExternalError(Arc::new(CustomError(
+                "Invalid argument type [modifiers]".to_string(),
+            )))),
         }
     }
 
@@ -598,57 +624,19 @@ impl InputWrappers {
         let key = args.1.call::<_, i32>(())?;
         let action = args.2.call::<_, i32>(())?;
 
-        let modifiers = match args.3 {
-            Value::Nil => 0,
-            Value::Integer(int) => int as i32,
-            _ => {
-                return Err(Error::ExternalError(Arc::new(CustomError(
-                    "Invalid argument type [modifiers]".to_string(),
-                ))))
-            }
-        };
-
-        let key = match Self::key_from_i32(key) {
-            Some(value) => value,
-            None => {
-                return Err(Error::ExternalError(Arc::new(CustomError(
-                    "Invalid key code".to_string(),
-                ))))
-            }
-        };
-        let action = match Self::action_from_i32(action) {
-            Some(value) => value,
-            None => {
-                return Err(Error::ExternalError(Arc::new(
-                    (CustomError("Invalid action code".to_string())),
-                )))
-            }
-        };
-        let modifiers = match Modifiers::from_bits(modifiers) {
-            Some(value) => value,
-            None => {
-                return Err(Error::ExternalError(Arc::new(
-                    (CustomError("Invalid modifiers".to_string())),
-                )))
-            }
-        };
+        let key = Self::key_from_i32(key)?;
+        let action = Self::action_from_i32(action)?;
+        let modifiers = Self::value_to_modifiers(args.3)?;
 
         let events = unsafe { &*(args.0 .0 as *const WindowEvents) };
         Ok(events.get_key((key, action, modifiers)))
     }
 
-    fn get_key_holded(_: Context, args: (LightUserData, Function)) -> Result<bool> {
+    fn get_key_held(_: Context, args: (LightUserData, Function)) -> Result<bool> {
         // Test if works with window recreation
 
         let key = args.1.call::<_, i32>(())?;
-        let key = match Self::key_from_i32(key) {
-            Some(value) => value,
-            None => {
-                return Err(Error::ExternalError(Arc::new(CustomError(
-                    "Invalid key code".to_string(),
-                ))))
-            }
-        };
+        let key = Self::key_from_i32(key)?;
         let window = unsafe { &*(args.0 .0 as *const Window) };
         Ok(window.get_key(key) == Action::Press)
     }
@@ -704,12 +692,8 @@ pub fn execute_file(path: &str) {
     let scr = Scripting::new();
     scr.lua.context(|context| {
         let chunk = context.load(&src);
-        chunk.exec();
+        chunk.exec().unwrap();
     });
-}
-
-pub struct RegistryObject {
-    key: RegistryKey,
 }
 
 #[derive(Debug)]
@@ -737,9 +721,9 @@ impl std::fmt::Display for CustomError {
 
 fn vec_to_lua<'lua>(context: &Context<'lua>, vector: &Vec3) -> Table<'lua> {
     let vector_lua = context.create_table().unwrap();
-    vector_lua.set("x", vector.x);
-    vector_lua.set("y", vector.y);
-    vector_lua.set("z", vector.z);
+    vector_lua.set("x", vector.x).unwrap();
+    vector_lua.set("y", vector.y).unwrap();
+    vector_lua.set("z", vector.z).unwrap();
     match context.globals().get::<_, Table>("Vector") {
         Ok(metatable) => vector_lua.set_metatable(Some(metatable)),
         _ => {}
