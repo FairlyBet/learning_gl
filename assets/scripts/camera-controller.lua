@@ -3,7 +3,7 @@ require "assets.scripts.vector"
 CameraController = { velocity = 10 }
 
 function CameraController:update()
-    if Input.getKeyHolded(Keys.W) then
+    if Input.getKeyHeld(Keys.W) then
         Transform.move(self, Vector:new(0, 0, -5) * frameTime())
     end
 

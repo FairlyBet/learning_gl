@@ -1,6 +1,4 @@
-use crate::entity_system::EntityId;
-use glm::Vec3;
-use nalgebra_glm::{Mat4, Quat, Vec4};
+use glm::{Mat4, Quat, Vec3, Vec4};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy)]
@@ -9,6 +7,7 @@ pub struct Transform {
     pub position: Vec3,
     pub orientation: Quat,
     pub scale: Vec3,
+    #[allow(unused)]
     padding: [u8; 8],
 }
 
@@ -33,11 +32,11 @@ impl Transform {
 
     pub fn model(&self) -> Mat4 {
         let identity = glm::identity();
-        let tranlation = glm::translate(&identity, &self.global_position());
+        let translation = glm::translate(&identity, &self.global_position());
         let rotation = glm::quat_to_mat4(&self.orientation);
         let scale = glm::scale(&identity, &self.scale);
 
-        tranlation * rotation * scale
+        translation * rotation * scale
     }
 
     pub fn set_rotation(&mut self, euler: &Vec3) {
@@ -164,7 +163,7 @@ pub fn view_matrix(transform: &Transform) -> Mat4 {
     let rotation = glm::inverse(&glm::quat_to_mat4(&transform.orientation));
 
     rotation * translation // applying quat rotation after translation makes object rotate
-                           // around coordinate center and around themselves simultaneoulsy
+                           // around coordinate center and around themselves simultaneously
 }
 
 pub const FRUSTUM_CORNERS_COUNT: usize = 8;

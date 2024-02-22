@@ -1,10 +1,9 @@
 use crate::{
     entity_system::{EntityId, SceneManager},
-    resources::ResourcePath,
     runtime::WindowEvents,
 };
 use glfw::{Action, Key, Modifiers, Window};
-use nalgebra_glm::Vec3;
+use glm::Vec3;
 use rlua::{
     Context, Error, Function, LightUserData, Lua, RegistryKey, Result, StdLib, Table, Value,
 };

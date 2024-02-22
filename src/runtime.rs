@@ -3,13 +3,10 @@ use crate::{
     entity_system::SceneManager,
     gl_wrappers,
     rendering::{DefaultRenderer, Screen},
-    resources::{self, ResourceManager},
-    scene::{self, Scene},
+    resources::ResourceManager,
     scripting::Scripting,
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
-use rlua::{Function, RegistryKey, Table};
-use std::fs::File;
 
 pub struct Runtime;
 

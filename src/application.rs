@@ -1,4 +1,4 @@
-use crate::{gl_wrappers::Gl, runtime::Runtime};
+use crate::gl_wrappers::Gl;
 use glfw::{
     Context as _, Glfw, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
     WindowMode,
@@ -14,10 +14,11 @@ const DEFAULT_MODE: WindowMode<'_> = WindowMode::Windowed;
 const VSYNC: bool = true;
 
 pub struct Application {
+    #[allow(unused)]
+    gl: Gl,
     pub receiver: Receiver<(f64, WindowEvent)>,
     pub window: Window,
     pub glfw: Glfw,
-    gl: Gl,
 }
 
 impl Application {

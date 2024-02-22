@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     hash::BuildHasherDefault,
     marker::PhantomData,
-    mem::{self, size_of, ManuallyDrop, MaybeUninit},
+    mem::{self, size_of, MaybeUninit},
     ptr, slice,
 };
 
@@ -151,7 +151,7 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if (self.index < self.data.len::<T>()) {
+        if self.index < self.data.len::<T>() {
             let result = Some(self.data.get(self.index));
             self.index += 1;
             result
@@ -222,9 +222,8 @@ impl<T, const SIZE: usize> Drop for ArrayVec<T, SIZE> {
         println!("Dropping {} elements", self.len);
         for i in 0..self.len {
             unsafe {
-                let mut zeroed = MaybeUninit::<T>::zeroed();
-                let actual =
-                    mem::replace(&mut (self.buf.assume_init_mut()[i]), zeroed.assume_init());
+                let zeroed = MaybeUninit::<T>::zeroed();
+                 _ = mem::replace(&mut (self.buf.assume_init_mut()[i]), zeroed.assume_init());
             }
         }
     }

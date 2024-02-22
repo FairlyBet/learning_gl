@@ -152,7 +152,7 @@ impl MeshData {
     }
 
     pub fn unbind(&self) {
-        VertexArrayObject::unbind(); // antipattern
+        VertexArrayObject::unbind(); // anti-pattern
     }
 }
 
