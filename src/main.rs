@@ -1,17 +1,12 @@
-// #![windows_subsystem = "windows"]
 #![deny(rust_2018_compatibility)]
+// #![windows_subsystem = "windows"]
 // #![allow(unused)]
-
-use entity_system::{Entity, SceneManager};
-use runtime::Runtime;
-use scripting::Scripting;
-use std::{fmt::Debug, fs};
 
 extern crate nalgebra_glm as glm;
 
 mod application;
 mod camera;
-mod data3d;
+mod data_3d;
 mod entity_system;
 mod gl_wrappers;
 mod lighting;
@@ -25,21 +20,9 @@ mod serializable;
 mod shader;
 mod utils;
 
+use runtime::Runtime;
+
 fn main() {
-    // scripting::execute_file("assets\\scripts\\Entity.lua");
-    // let entity = Entity::default();
-    // let transform = serializable::Transform::default();
-    // let mut chunk = SceneChunk::init(vec![entity], vec![transform]);
-
-    // let scripting = Scripting::new();
-    // scripting.create_wrappers(&mut chunk);
-
-    // scripting.();
-    // let key = s
-    //     .create_object(&fs::read_to_string("assets\\scripts\\CameraController.lua").unwrap())
-    //     .unwrap();
-
-    // scene::generate_sample();
     let r = Runtime::new();
     r.run();
 }

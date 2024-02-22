@@ -1,10 +1,9 @@
 use crate::{
     gl_wrappers::{self, BufferObject, VertexArrayObject},
-    resources,
+    resources::RangedIndex,
 };
-use fxhash::FxHashMap;
 use gl::types::GLenum;
-use russimp::{scene::PostProcessSteps, Vector2D, Vector3D};
+use russimp::{Vector2D, Vector3D};
 use std::{ffi::c_void, mem::size_of};
 
 pub const QUAD_VERTICES_TEX_COORDS: &[f32] = &[
@@ -26,7 +25,7 @@ pub enum VertexAttribute {
     TexCoord,
 }
 
-pub struct Mesh {
+pub struct MeshData {
     vao: VertexArrayObject,
     vbo: BufferObject,
     ebo: BufferObject,
@@ -34,7 +33,7 @@ pub struct Mesh {
     pub index_count: i32,
 }
 
-impl Mesh {
+impl MeshData {
     pub fn new(
         vertex_count: i32,
         vertex_data_size: usize,
@@ -55,9 +54,9 @@ impl Mesh {
         element_buffer.bind();
         element_buffer.buffer_data(index_count as usize * size_of::<u32>(), index_data, usage);
 
-        Mesh::configure_vertex_attributes(vertex_attributes);
+        MeshData::configure_vertex_attributes(vertex_attributes);
 
-        Mesh {
+        MeshData {
             vao,
             vbo: vertex_buffer,
             ebo: element_buffer,
@@ -70,7 +69,7 @@ impl Mesh {
         vertex_data: &Vec<VertexData>,
         index_data: &Vec<u32>,
         usage: GLenum,
-    ) -> Mesh {
+    ) -> MeshData {
         let attributes = vec![
             VertexAttribute::Position,
             VertexAttribute::Normal,
@@ -78,7 +77,7 @@ impl Mesh {
         ];
         let vertex_count = vertex_data.len() as i32;
         let index_count = index_data.len() as i32;
-        Mesh::new(
+        MeshData::new(
             vertex_count,
             vertex_data.len() * size_of::<VertexData>(),
             vertex_data.as_ptr().cast(),
@@ -157,4 +156,8 @@ impl Mesh {
     }
 }
 
-pub type Model = Vec<Mesh>;
+pub type Model3d = Vec<MeshData>;
+
+pub struct Mesh {
+    pub index: RangedIndex,
+}

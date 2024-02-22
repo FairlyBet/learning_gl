@@ -1,7 +1,7 @@
 use crate::{
-    data3d::{Mesh, Model, VertexData},
+    data_3d::{Mesh, MeshData, Model3d, VertexData},
     scene::Scene,
-    scripting::{CompiledChunk, Script, Scripting},
+    scripting::{ScriptFile, Scripting},
 };
 use fxhash::FxHashMap;
 use russimp::{
@@ -57,7 +57,7 @@ pub trait Resource {
     fn acceptable_extensions() -> Vec<String>;
 }
 
-impl Resource for Mesh {
+impl Resource for MeshData {
     fn folder_name() -> &'static Path {
         Path::new("meshes")
     }
@@ -67,7 +67,7 @@ impl Resource for Mesh {
     }
 }
 
-impl Resource for Script {
+impl Resource for ScriptFile {
     fn folder_name() -> &'static Path {
         Path::new("scripts")
     }
@@ -95,9 +95,9 @@ pub const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
     PostProcess::ImproveCacheLocality,
 ];
 
-pub fn load_model(path: &String, post_process: PostProcessSteps) -> Model {
+pub fn load_model(path: &String, post_process: PostProcessSteps) -> Model3d {
     let model = russimp::scene::Scene::from_file(path, post_process).unwrap();
-    let mut meshes = Model::with_capacity(model.meshes.len());
+    let mut meshes = Model3d::with_capacity(model.meshes.len());
     for mesh in &model.meshes {
         let vertex_count = mesh.vertices.len();
         let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
@@ -127,7 +127,7 @@ pub fn load_model(path: &String, post_process: PostProcessSteps) -> Model {
                 index_data.push(*index);
             }
         }
-        let mesh = Mesh::from_vertex_index_data(&vertex_data, &index_data, gl::STATIC_DRAW);
+        let mesh = MeshData::from_vertex_index_data(&vertex_data, &index_data, gl::STATIC_DRAW);
         meshes.push(mesh);
     }
     meshes
@@ -175,7 +175,10 @@ impl<Resource> RangeContainer<Resource> {
             start: self.vec.len(),
             end: self.vec.len() + resources.len(),
         };
-        assert!(self.table.insert(name.clone(), idx.clone()).is_none(), "Container already has this resource");
+        assert!(
+            self.table.insert(name.clone(), idx.clone()).is_none(),
+            "Container already has this resource"
+        );
         self.vec.append(&mut resources);
         idx
     }
@@ -213,8 +216,8 @@ impl<Resource> IndexContainer<Resource> {
 }
 
 pub struct ResourceManager {
-    meshes: RangeContainer<Mesh>,
-    scripts: IndexContainer<CompiledChunk>,
+    meshes: RangeContainer<MeshData>,
+    scripts: IndexContainer<ScriptFile>,
     scenes: Vec<Scene>,
 }
 
@@ -230,34 +233,35 @@ impl ResourceManager {
         }
     }
 
-    pub fn scenes(&self) -> &[Scene] {
+    pub fn get_scenes(&self) -> &[Scene] {
         &self.scenes
     }
 
-    pub fn get_mesh_container(&self) -> &RangeContainer<Mesh> {
+    pub fn get_mesh_data(&self) -> &RangeContainer<MeshData> {
         &self.meshes
     }
 
-    pub fn get_mesh_container_mut(&mut self) -> &mut RangeContainer<Mesh> {
+    pub fn get_mesh_data_mut(&mut self) -> &mut RangeContainer<MeshData> {
         &mut self.meshes
     }
 
-    pub fn get_mesh_lazily(&mut self, name: &ResourcePath) -> RangedIndex {
+    pub fn get_mesh_lazily(&mut self, name: &ResourcePath) -> Mesh {
         if !self.meshes.contains_resource(&name) {
             let model_meshes = load_model(&name, DEFAULT_POSTPROCESS.into());
-            let range_idx = self.meshes.push_resources(name, model_meshes);
-            range_idx
-        } else {
-            self.meshes.get_index(&name)
+            self.meshes.push_resources(name, model_meshes);
+        }
+        Mesh {
+            index: self.meshes.get_index(&name),
         }
     }
 
     pub fn load_scripts(&mut self, scripting: &Scripting) {
-        let paths = get_paths::<Script>();
+        let paths = get_paths::<ScriptFile>();
         for path in &paths {
             let src = fs::read_to_string(path).unwrap();
             let chunk = scripting.compile_chunk(&src, &path).unwrap();
-            self.scripts.push_resource(path, chunk);
+
+            self.scripts.push_resource(path, ScriptFile::new(chunk));
         }
     }
 }

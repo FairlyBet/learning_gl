@@ -1,6 +1,6 @@
 use crate::{
-    data3d::{self, Mesh, VertexAttribute},
-    entity_system::{CameraComponent, LightComponent, MeshComponent, SceneManager},
+    data_3d::{self, MeshData, VertexAttribute},
+    entity_system::SceneManager,
     gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
     lighting::LightData,
     resources::RangeContainer,
@@ -57,7 +57,7 @@ fn lighting_data_buffer() -> BufferObject {
 }
 
 pub trait Renderer {
-    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<Mesh>);
+    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<MeshData>);
 }
 
 pub struct DefaultRenderer {
@@ -108,61 +108,61 @@ impl DefaultRenderer {
 }
 
 impl Renderer for DefaultRenderer {
-    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<Mesh>) {
-        let camera_comp = match entity_system.component_slice::<CameraComponent>().first() {
-            Some(camera) => camera,
-            None => return,
-        };
-        let light_comp = match entity_system.component_slice::<LightComponent>().first() {
-            Some(light) => light,
-            None => return,
-        };
-        let mesh_components = entity_system.component_slice::<MeshComponent>();
+    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<MeshData>) {
+        // let camera_comp = match entity_system.component_slice::<CameraComponent>().first() {
+        //     Some(camera) => camera,
+        //     None => return,
+        // };
+        // let light_comp = match entity_system.component_slice::<LightComponent>().first() {
+        //     Some(light) => light,
+        //     None => return,
+        // };
+        // let mesh_components = entity_system.component_slice::<MeshComponent>();
 
-        let camera_transform = entity_system.get_transform(camera_comp.owner_id);
-        let light_transform = entity_system.get_transform(light_comp.owner_id);
+        // let camera_transform = entity_system.get_transform(camera_comp.owner_id);
+        // let light_transform = entity_system.get_transform(light_comp.owner_id);
 
-        let lighting_data = LightingData {
-            light_data: light_comp.light_source.get_data(light_transform),
-            viewer_position: Vec3::zeros(),
-        };
-        self.lighting_buffer.bind();
-        self.lighting_buffer.buffer_subdata(
-            size_of::<LightingData>(),
-            (&lighting_data as *const LightingData).cast(),
-            0,
-        );
+        // let lighting_data = LightingData {
+        //     light_data: light_comp.light_source.get_data(light_transform),
+        //     viewer_position: Vec3::zeros(),
+        // };
+        // self.lighting_buffer.bind();
+        // self.lighting_buffer.buffer_subdata(
+        //     size_of::<LightingData>(),
+        //     (&lighting_data as *const LightingData).cast(),
+        //     0,
+        // );
 
-        self.framebuffer.bind();
-        self.shader_program.use_();
-        Self::gl_config();
-        gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        // self.framebuffer.bind();
+        // self.shader_program.use_();
+        // Self::gl_config();
+        // gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-        for mesh in mesh_components {
-            let mesh_transform = entity_system.get_transform(mesh.owner_id);
+        // for mesh in mesh_components {
+        //     let mesh_transform = entity_system.get_transform(mesh.owner_id);
 
-            let matrix_data = MatrixData {
-                mvp: camera_comp.camera.projection_view(camera_transform) * mesh_transform.model(),
-                model: mesh_transform.model(),
-                orientation: glm::quat_to_mat4(&mesh_transform.orientation),
-                light_space: light_comp.light_source.lightspace(light_transform),
-            };
+        //     let matrix_data = MatrixData {
+        //         mvp: camera_comp.camera.projection_view(camera_transform) * mesh_transform.model(),
+        //         model: mesh_transform.model(),
+        //         orientation: glm::quat_to_mat4(&mesh_transform.orientation),
+        //         light_space: light_comp.light_source.lightspace(light_transform),
+        //     };
 
-            self.matrix_buffer.bind();
-            self.matrix_buffer.buffer_subdata(
-                size_of::<MatrixData>(),
-                (&matrix_data as *const MatrixData).cast(),
-                0,
-            );
-            self.lighting_buffer.bind();
-            self.lighting_buffer.buffer_subdata(
-                size_of::<Vec3>(),
-                (&mesh_transform.position as *const Vec3).cast(),
-                offset_of!(LightingData, viewer_position) as u32,
-            );
+        //     self.matrix_buffer.bind();
+        //     self.matrix_buffer.buffer_subdata(
+        //         size_of::<MatrixData>(),
+        //         (&matrix_data as *const MatrixData).cast(),
+        //         0,
+        //     );
+        //     self.lighting_buffer.bind();
+        //     self.lighting_buffer.buffer_subdata(
+        //         size_of::<Vec3>(),
+        //         (&mesh_transform.position as *const Vec3).cast(),
+        //         offset_of!(LightingData, viewer_position) as u32,
+        //     );
 
-            // render_meshes(model_container.get_model(mesh.model_index));
-        }
+        // render_meshes(model_container.get_model(mesh.model_index));
+        // }
     }
 }
 
@@ -172,7 +172,7 @@ impl FramebufferSizeCallback for DefaultRenderer {
     }
 }
 
-fn render_meshes(meshes: &[Mesh]) {
+fn render_meshes(meshes: &[MeshData]) {
     for mesh in meshes {
         mesh.bind();
         unsafe {
@@ -189,7 +189,7 @@ fn render_meshes(meshes: &[Mesh]) {
 pub struct Screen {
     resolution: (i32, i32),
     program: ShaderProgram,
-    quad: Mesh,
+    quad: MeshData,
     gamma_correction: f32,
 }
 
@@ -207,10 +207,10 @@ impl Screen {
         unsafe {
             gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
         }
-        let quad = Mesh::new(
+        let quad = MeshData::new(
             6,
-            size_of_val(data3d::QUAD_VERTICES_TEX_COORDS),
-            data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
+            size_of_val(data_3d::QUAD_VERTICES_TEX_COORDS),
+            data_3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
             vec![VertexAttribute::Position, VertexAttribute::TexCoord],
             0,
             ptr::null(),

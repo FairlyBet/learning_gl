@@ -1,5 +1,6 @@
 use crate::{
     entity_system::{EntityId, SceneManager},
+    resources::ResourcePath,
     runtime::WindowEvents,
 };
 use glfw::{Action, Key, Modifiers, Window};
@@ -11,9 +12,17 @@ use std::{ffi::c_void, fs, sync::Arc};
 
 pub struct CompiledChunk(Vec<u8>);
 
-pub struct Script {
+pub struct ScriptFile {
     chunk: CompiledChunk,
 }
+
+impl ScriptFile {
+    pub fn new(chunk: CompiledChunk) -> Self {
+        Self { chunk }
+    }
+}
+
+pub struct ScriptObject {}
 
 pub struct RegistryObject {
     key: RegistryKey,
@@ -83,11 +92,11 @@ impl Scripting {
         frame_time: &f64,
     ) {
         self.lua.context(|context| {
-            let scene_manager   = LightUserData(scene_manager             as *const _ as *mut c_void);
-            let window_events   = LightUserData(events                    as *const _ as *mut c_void);
-            let window          = LightUserData(window                    as *const _ as *mut c_void);
-            let frame_time      = LightUserData(frame_time                as *const _ as *mut c_void);
-            let object_table    = LightUserData(&self.object_table_key    as *const _ as *mut c_void);
+            let scene_manager = LightUserData(scene_manager as *const _ as *mut c_void);
+            let window_events = LightUserData(events as *const _ as *mut c_void);
+            let window = LightUserData(window as *const _ as *mut c_void);
+            let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
+            let object_table = LightUserData(&self.object_table_key as *const _ as *mut c_void);
 
             let transform_move = context
                 .create_function(TransformWrappers::transform_move)

@@ -11,10 +11,10 @@ pub struct Entity {
     pub name: String,
     pub transform: Transform,
     pub children: Vec<Entity>,
-    pub meshes: Vec<Mesh>,
+    pub meshes: Vec<MeshData>,
     pub cameras: Vec<Camera>,
     pub light_sources: Vec<LightSource>,
-    pub scripts: Vec<Script>,
+    pub scripts: Vec<ScriptFile>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -64,7 +64,7 @@ impl Into<glm::Vec3> for Vec3 {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Mesh {
+pub struct MeshData {
     pub path: ResourcePath,
 }
 
@@ -116,6 +116,6 @@ impl Into<lighting::LightSource> for LightSource {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Script {
+pub struct ScriptFile {
     pub script_path: String,
 }

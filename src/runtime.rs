@@ -33,7 +33,11 @@ impl Runtime {
         let mut events = WindowEvents::default();
         let mut frame_time = 0.0;
         let scripting = Scripting::new();
+
+        resource_manager.load_scripts(&scripting);
         scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
+        scene_manager =
+            SceneManager::from_scene_index(0, &mut resource_manager, &scripting).unwrap();
 
         while !app.window.should_close() {
             app.glfw.set_time(0.0);
@@ -80,7 +84,7 @@ impl Runtime {
                 }
                 WindowEvent::Scroll(x, y) => {}
                 WindowEvent::FramebufferSize(w, h) => {
-                    if (w == 0 || h == 0) {
+                    if w == 0 || h == 0 {
                         continue;
                     }
                     for callback in framebuffer_size_callbacks.iter_mut() {
