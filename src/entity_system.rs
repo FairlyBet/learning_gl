@@ -1,11 +1,11 @@
-use crate::data_3d::Mesh;
 use crate::{
     camera::Camera,
+    data_3d::Mesh,
     lighting::LightSource,
     linear::Transform,
     resources::ResourceManager,
     scripting::{ScriptFile, Scripting},
-    serializable,
+    serializable, utils,
     utils::{FxHashMap32, Reallocated, UntypedVec},
 };
 use rlua::UserData;
@@ -17,6 +17,10 @@ use strum::EnumCount;
 pub struct EntityId(u32);
 
 impl EntityId {
+    pub fn id(&self) -> u32 {
+        self.0
+    }
+
     fn clone(&self) -> Self {
         EntityId(self.0)
     }
@@ -29,6 +33,8 @@ impl Hash for EntityId {
 }
 
 impl UserData for EntityId {}
+
+impl UserData for &EntityId {}
 
 #[derive(Default)]
 pub struct SceneManager {
@@ -52,28 +58,27 @@ impl SceneManager {
         let mut current_id = 0;
 
         for entity in entities {
-            let mut ent = Entity {
-                id: EntityId(current_id),
-                name: entity.name.clone(),
-                components: vec![],
-                children: vec![],
-                parent: None,
-            };
-
-            current_id += 1;
-
+            let id = scene_manager.create_entity();
+            scene_manager.entities.get_mut(&id).unwrap().name = entity.name.clone();
+            scene_manager.attach_components(&id, utils::into_vec::<_, Camera>(entity.cameras));
+            scene_manager
+                .attach_components(&id, utils::into_vec::<_, LightSource>(entity.light_sources));
+            scene_manager.attach_components(
+                &id,
+                entity
+                    .meshes
+                    .iter()
+                    .map(|item| resource_manager.get_mesh_lazily(&item.path))
+                    .collect::<Vec<Mesh>>(),
+            );
             // let cameras = Component::from_vec(ent.id, utils::into_vec::<_, Camera>(entity.cameras));
             // let light_sources = Component::from_vec(
             //     ent.id,
-            //     utils::into_vec::<_, LightSource>(entity.light_sources),
+            //     ,
             // );
             // let meshes = Component::from_vec(
             //     ent.id,
-            //     entity
-            //         .meshes
-            //         .iter()
-            //         .map(|item| resource_manager.get_mesh_lazily(&item.path))
-            //         .collect::<Vec<Mesh>>(),
+
             // );
             let scripts = entity.scripts;
 
@@ -122,7 +127,7 @@ impl SceneManager {
             self.id_counter += 1;
             res
         });
-        let mut entity = Entity::new(id.clone());
+        let entity = Entity::new(id.clone());
 
         assert!(
             self.entities.insert(entity.id.clone(), entity).is_none(),
@@ -152,7 +157,7 @@ impl SceneManager {
         todo!()
     }
 
-    pub fn attach_component<T>(&mut self, target: EntityId, data: T)
+    pub fn attach_component<T>(&mut self, target: &EntityId, data: T)
     where
         T: ComponentData,
     {
@@ -161,7 +166,7 @@ impl SceneManager {
             "Attempt to attach component to non-existent entity"
         );
         let entity = self.entities.get_mut(&target).unwrap();
-        let component = Component::new(target, data);
+        let component = Component::new(target.clone(), data);
         let array_index = self.component_arrays[T::type_index().usize()].len::<Component<T>>();
         let component_record = ComponentRecord {
             array_index,
@@ -171,12 +176,12 @@ impl SceneManager {
         self.component_arrays[T::type_index().usize()].push(component);
     }
 
-    pub fn attach_components<T>(&mut self, target: EntityId, data: Vec<T>)
+    pub fn attach_components<T>(&mut self, target: &EntityId, data: Vec<T>)
     where
         T: ComponentData,
     {
         for item in data {
-            self.attach_component(target.clone(), item);
+            self.attach_component(target, item);
         }
     }
 
@@ -218,11 +223,11 @@ impl SceneManager {
 
     // This optimization requires entities' ids to directly
     // correlate with their transforms' positions in the array
-    pub fn get_transform(&self, entity_id: EntityId) -> &Transform {
+    pub fn get_transform(&self, entity_id: &EntityId) -> &Transform {
         self.component_arrays[ComponentDataType::Transform.usize()].get(entity_id.0 as usize)
     }
 
-    pub fn get_transform_mute(&mut self, entity_id: EntityId) -> &mut Transform {
+    pub fn get_transform_mute(&mut self, entity_id: &EntityId) -> &mut Transform {
         self.component_arrays[ComponentDataType::Transform.usize()].get_mut(entity_id.0 as usize)
     }
 }

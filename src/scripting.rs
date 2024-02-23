@@ -45,16 +45,16 @@ impl Scripting {
         }
     }
 
-    pub fn register_object_id<'lua>(
+    pub fn register_object_owner<'lua>(
         &self,
         context: &Context<'lua>,
         object: Table<'lua>, /* Probably replace with Value*/
-        id: EntityId,
+        owner: EntityId,
     ) {
         let object_table = context
             .registry_value::<Table>(&self.object_table_key)
             .unwrap();
-        object_table.set(object, id).unwrap();
+        object_table.set(object, owner).unwrap();
     }
 
     pub fn compile_chunk(&self, src: &str, chunk_name: &str) -> Result<CompiledChunk> {
@@ -175,7 +175,7 @@ impl TransformWrappers {
         let object = args.2;
         let vector_lua = args.3;
         let vector = vec_from_lua(&vector_lua)?;
-        let id = object_table.get::<_, EntityId>(object)?;
+        let id = object_table.get::<_, &EntityId>(object)?;
 
         scene_manager.get_transform_mute(id).move_(&vector);
 
@@ -193,7 +193,7 @@ impl TransformWrappers {
         };
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
-        let id = object_table.get::<_, EntityId>(object)?;
+        let id = object_table.get::<_, &EntityId>(object)?;
         let vector_lua = args.3;
         let vector = vec_from_lua(&vector_lua)?;
 
@@ -213,7 +213,7 @@ impl TransformWrappers {
         };
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
-        let id = object_table.get::<_, EntityId>(object)?;
+        let id = object_table.get::<_, &EntityId>(object)?; // Не факт что работает с ссылкой))
         let position = &scene_manager.get_transform(id).position;
         let vector_lua = vec_to_lua(&context, position);
 
