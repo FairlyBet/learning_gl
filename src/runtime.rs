@@ -37,13 +37,13 @@ impl Runtime {
             SceneManager::from_scene_index(0, &mut resource_manager, &scripting).unwrap();
 
         while !app.window.should_close() {
-            app.glfw.set_time(0.0);
+            app.window.glfw.set_time(0.0);
 
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
             Self::script_iteration(&scripting);
             Self::render_iteration(&mut app);
 
-            frame_time = app.glfw.get_time();
+            frame_time = app.window.glfw.get_time();
         }
     }
 
@@ -52,7 +52,7 @@ impl Runtime {
         events: &mut WindowEvents,
         framebuffer_size_callbacks: &mut Vec<&mut dyn FramebufferSizeCallback>,
     ) {
-        app.glfw.poll_events();
+        app.window.glfw.poll_events();
         events.clear_events();
         for (_, event) in glfw::flush_messages(&app.receiver) {
             match event {
@@ -95,9 +95,7 @@ impl Runtime {
         }
     }
 
-    fn script_iteration(scripting: &Scripting) {
-        scripting.lua.context(|context| {});
-    }
+    fn script_iteration(scripting: &Scripting) {}
 
     fn render_iteration(app: &mut Application) {
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT);

@@ -1,7 +1,7 @@
 use crate::{
     data_3d::{Mesh, MeshData, Model3d, VertexData},
     scene::Scene,
-    scripting::{ScriptFile, Scripting},
+    scripting::{CompiledScript, Scripting},
 };
 use fxhash::FxHashMap;
 use russimp::{
@@ -67,7 +67,7 @@ impl Resource for MeshData {
     }
 }
 
-impl Resource for ScriptFile {
+impl Resource for CompiledScript {
     fn folder_name() -> &'static Path {
         Path::new("scripts")
     }
@@ -217,7 +217,7 @@ impl<Resource> IndexContainer<Resource> {
 
 pub struct ResourceManager {
     meshes: RangeContainer<MeshData>,
-    scripts: IndexContainer<ScriptFile>,
+    scripts: FxHashMap<ResourcePath, CompiledScript>,
     scenes: Vec<Scene>,
 }
 
@@ -225,7 +225,7 @@ impl ResourceManager {
     pub fn new() -> Self {
         Self {
             meshes: RangeContainer::new(),
-            scripts: IndexContainer::new(),
+            scripts: Default::default(),
             scenes: get_paths::<Scene>()
                 .iter()
                 .map(|path| Scene::new(path))
@@ -256,12 +256,16 @@ impl ResourceManager {
     }
 
     pub fn load_scripts(&mut self, scripting: &Scripting) {
-        let paths = get_paths::<ScriptFile>();
-        for path in &paths {
-            let src = fs::read_to_string(path).unwrap();
-            let chunk = scripting.compile_chunk(&src, &path).unwrap();
+        let paths = get_paths::<CompiledScript>();
+        for path in paths {
+            let src = fs::read_to_string(&path).unwrap();
+            let script = scripting.compile_script(&src, &path).unwrap();
 
-            self.scripts.push_resource(path, ScriptFile::new(chunk));
+            self.scripts.insert(path, script);
         }
+    }
+
+    pub fn get_compiled_scripts(&self) -> &FxHashMap<ResourcePath, CompiledScript> {
+        &self.scripts
     }
 }

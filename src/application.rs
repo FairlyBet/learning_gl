@@ -1,9 +1,8 @@
 use crate::gl_wrappers::Gl;
 use glfw::{
-    Context as _, Glfw, OpenGlProfileHint, SwapInterval, Window, WindowEvent, WindowHint,
-    WindowMode,
+    fail_on_errors, Context as _, GlfwReceiver, OpenGlProfileHint, PWindow, SwapInterval,
+    WindowEvent, WindowHint, WindowMode,
 };
-use std::sync::mpsc::Receiver;
 
 const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 4);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
@@ -16,14 +15,13 @@ const VSYNC: bool = true;
 pub struct Application {
     #[allow(unused)]
     gl: Gl,
-    pub receiver: Receiver<(f64, WindowEvent)>,
-    pub window: Window,
-    pub glfw: Glfw,
+    pub receiver: GlfwReceiver<(f64, WindowEvent)>,
+    pub window: PWindow,
 }
 
 impl Application {
     pub fn new() -> Self {
-        let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
+        let mut glfw = glfw::init(fail_on_errors!()).unwrap();
         glfw.window_hint(OPENGL_PROFILE);
         glfw.window_hint(CONTEXT_VERSION);
 
@@ -37,14 +35,13 @@ impl Application {
         let gl = Gl::load();
 
         Self {
+            gl,
             receiver,
             window,
-            glfw,
-            gl,
         }
     }
 
-    fn enable_polling(window: &mut Window) {
+    fn enable_polling(window: &mut PWindow) {
         window.set_key_polling(true);
         window.set_char_polling(true);
         window.set_cursor_pos_polling(true);

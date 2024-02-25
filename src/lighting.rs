@@ -1,7 +1,6 @@
 use crate::linear::{self, Projection, Transform};
 use nalgebra_glm::{Mat4, Vec3};
 use serde::{Deserialize, Serialize};
-use std::default;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
 #[repr(i32)]

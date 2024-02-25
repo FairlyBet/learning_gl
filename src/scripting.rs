@@ -1,86 +1,68 @@
 use crate::{
-    entity_system::{EntityId, SceneManager},
+    entity_system::{EntityId, RefEntityId, SceneManager},
+    resources::ResourceManager,
     runtime::WindowEvents,
+    serializable,
 };
 use glfw::{Action, Key, Modifiers, Window};
 use glm::Vec3;
-use rlua::{
-    Context, Error, Function, LightUserData, Lua, RegistryKey, Result, StdLib, Table, Value,
-};
-use std::{ffi::c_void, fs, sync::Arc};
+use mlua::{Error, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value};
+use std::{ffi::c_void, sync::Arc};
 
-pub struct CompiledChunk(Vec<u8>);
+pub struct CompiledScript(Vec<u8>);
 
-pub struct ScriptFile {
-    chunk: CompiledChunk,
-}
+pub struct ScriptObject(RegistryKey);
 
-impl ScriptFile {
-    pub fn new(chunk: CompiledChunk) -> Self {
-        Self { chunk }
+impl ScriptObject {
+    fn table<'lua>(&self, lua: &'lua Lua) -> Result<Table<'lua>> {
+        lua.registry_value::<Table>(&self.0)
     }
-}
-
-pub struct ScriptObject {}
-
-pub struct RegistryObject {
-    key: RegistryKey,
 }
 
 pub struct Scripting {
     pub lua: Lua,
-    object_table_key: RegistryKey,
+    object_owner_table_key: RegistryKey,
 }
 
 impl Scripting {
     pub fn new() -> Self {
-        let lua = Lua::new_with(StdLib::ALL_NO_DEBUG);
-        let object_table_key = lua.context(|context| {
-            let table = context.create_table().unwrap();
-            context.create_registry_value(table).unwrap()
-        });
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        table.set("__mode", "k").unwrap();
+        table.set_metatable(Some(table.clone()));
+        let object_owner_table_key = lua.create_registry_value(table).unwrap();
+
         Self {
             lua,
-            object_table_key,
+            object_owner_table_key,
         }
     }
 
-    pub fn register_object_owner<'lua>(
+    pub fn create_script_object(
         &self,
-        context: &Context<'lua>,
-        object: Table<'lua>, /* Probably replace with Value*/
-        owner: EntityId,
-    ) {
-        let object_table = context
-            .registry_value::<Table>(&self.object_table_key)
-            .unwrap();
-        object_table.set(object, owner).unwrap();
+        target: &EntityId,
+        script: &serializable::Script,
+        resource_manager: &ResourceManager,
+    ) -> Result<ScriptObject> {
+        let object = self
+            .lua
+            .load(&resource_manager.get_compiled_scripts()[&script.script_path].0)
+            .eval::<Table>()?;
+        let key = self.lua.create_registry_value(object)?;
+        let object = ScriptObject(key);
+
+        let object_owner_table = self
+            .lua
+            .registry_value::<Table>(&self.object_owner_table_key)?;
+        object_owner_table.set(object.table(&self.lua)?, target)?;
+
+        Ok(object)
     }
 
-    pub fn compile_chunk(&self, src: &str, chunk_name: &str) -> Result<CompiledChunk> {
-        self.lua.context(|context| {
-            let chunk = context.load(src);
-            let chunk = chunk.set_name(chunk_name)?;
-            let function = chunk.into_function()?;
-            let dumped = function.dump()?;
-            Ok(CompiledChunk(dumped))
-        })
-    }
-
-    pub fn create_registry_object(&self, chunk: &CompiledChunk) -> Result<RegistryObject> {
-        self.lua.context(|context| {
-            let dumped = context.load(&chunk.0);
-            let function = unsafe { dumped.into_function_allow_binary() }?;
-            let object = function.call::<(), Table>(())?;
-            let key = context.create_registry_value(object)?;
-            Ok(RegistryObject { key })
-        })
-    }
-
-    pub fn delete_registry_object(&self, object: RegistryObject) {
-        self.lua.context(|context| {
-            context.remove_registry_value(object.key).unwrap();
-        });
+    pub fn compile_script(&self, src: &str, name: &str) -> Result<CompiledScript> {
+        let chunk = self.lua.load(src).set_name(name);
+        let dumped = chunk.into_function()?.dump(false);
+        Ok(CompiledScript(dumped))
     }
 
     pub fn create_wrappers(
@@ -90,132 +72,131 @@ impl Scripting {
         window: &Window,
         frame_time: &f64,
     ) {
-        self.lua.context(|context| {
-            let scene_manager = LightUserData(scene_manager as *const _ as *mut c_void);
-            let window_events = LightUserData(events as *const _ as *mut c_void);
-            let window = LightUserData(window as *const _ as *mut c_void);
-            let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
-            let object_table = LightUserData(&self.object_table_key as *const _ as *mut c_void);
+        let scene_manager = LightUserData(scene_manager as *const _ as *mut c_void);
+        let window_events = LightUserData(events as *const _ as *mut c_void);
+        let window = LightUserData(window as *const _ as *mut c_void);
+        let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
+        let object_table = LightUserData(self as *const _ as *mut c_void);
 
-            let transform_move = context
-                .create_function(TransformWrappers::transform_move)
-                .unwrap()
-                .bind((object_table, scene_manager))
-                .unwrap();
-            let transform_move_local = context
-                .create_function(TransformWrappers::transform_move_local)
-                .unwrap()
-                .bind((object_table, scene_manager))
-                .unwrap();
-            let transform_get_position = context
-                .create_function(TransformWrappers::transform_get_position)
-                .unwrap()
-                .bind((object_table, scene_manager))
-                .unwrap();
+        let transform_move = self
+            .lua
+            .create_function(TransformWrappers::transform_move)
+            .unwrap()
+            .bind((object_table, scene_manager))
+            .unwrap();
+        let transform_move_local = self
+            .lua
+            .create_function(TransformWrappers::transform_move_local)
+            .unwrap()
+            .bind((object_table, scene_manager))
+            .unwrap();
+        let transform_get_position = self
+            .lua
+            .create_function(TransformWrappers::transform_get_position)
+            .unwrap()
+            .bind((object_table, scene_manager))
+            .unwrap();
 
-            let transform = context.create_table().unwrap();
-            transform.set("move", transform_move).unwrap();
-            transform.set("moveLocal", transform_move_local).unwrap();
-            transform
-                .set("getPosition", transform_get_position)
-                .unwrap();
-            context.globals().set("Transform", transform).unwrap();
+        let transform = self.lua.create_table().unwrap();
+        transform.set("move", transform_move).unwrap();
+        transform.set("moveLocal", transform_move_local).unwrap();
+        transform
+            .set("getPosition", transform_get_position)
+            .unwrap();
+        self.lua.globals().set("Transform", transform).unwrap();
 
-            let get_key = context
-                .create_function(InputWrappers::get_key)
-                .unwrap()
-                .bind(window_events)
-                .unwrap();
-            let get_key_held = context
-                .create_function(InputWrappers::get_key_held)
-                .unwrap()
-                .bind(window)
-                .unwrap();
-            let input = context.create_table().unwrap();
-            input.set("getKey", get_key).unwrap();
-            input.set("getKeyHeld", get_key_held).unwrap();
-            context.globals().set("Input", input).unwrap();
+        let get_key = self
+            .lua
+            .create_function(InputWrappers::get_key)
+            .unwrap()
+            .bind(window_events)
+            .unwrap();
+        let get_key_held = self
+            .lua
+            .create_function(InputWrappers::get_key_held)
+            .unwrap()
+            .bind(window)
+            .unwrap();
+        let input = self.lua.create_table().unwrap();
+        input.set("getKey", get_key).unwrap();
+        input.set("getKeyHeld", get_key_held).unwrap();
+        self.lua.globals().set("Input", input).unwrap();
 
-            let frame_time = context
-                .create_function(ApplicationWrappers::frame_time)
-                .unwrap()
-                .bind(frame_time)
-                .unwrap();
-            context.globals().set("frameTime", frame_time).unwrap();
+        let frame_time = self
+            .lua
+            .create_function(ApplicationWrappers::frame_time)
+            .unwrap()
+            .bind(frame_time)
+            .unwrap();
+        self.lua.globals().set("frameTime", frame_time).unwrap();
 
-            InputWrappers::create_keys_table(&context);
-        });
+        InputWrappers::create_keys_table(&self.lua);
     }
 
-    pub fn execute_chunk(&self, chunk: &CompiledChunk) {
-        self.lua.context(|context| unsafe {
-            context
-                .load(&chunk.0)
-                .into_function_allow_binary()
-                .unwrap()
-                .call::<_, ()>(())
-                .unwrap();
-        });
-    }
+    // pub fn execute_chunk(&self, script: &CompiledScript) {
+    //     todo!()
+    // self.lua.context(|context| unsafe {
+    //     context
+    //         .load(&script.0)
+    //         .into_function_allow_binary()
+    //         .unwrap()
+    //         .call::<_, ()>(())
+    //         .unwrap();
+    // });
+    // }
 }
 
 struct TransformWrappers;
 
 impl TransformWrappers {
-    fn transform_move<'lua>(
-        context: Context<'lua>,
-        args: (LightUserData, LightUserData, Table<'lua>, Table<'lua>),
-    ) -> Result<()> {
+    fn transform_move(lua: &Lua, args: (LightUserData, LightUserData, Table, Table)) -> Result<()> {
         let object_table = unsafe {
-            context
-                .registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
+            lua.registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
                 .unwrap()
         };
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
         let vector_lua = args.3;
         let vector = vec_from_lua(&vector_lua)?;
-        let id = object_table.get::<_, &EntityId>(object)?;
+        let id = object_table.get::<_, RefEntityId>(object)?; // Does it work?
 
-        scene_manager.get_transform_mute(id).move_(&vector);
+        scene_manager.get_transform_mut(&id).move_(&vector);
 
         Ok(())
     }
 
-    fn transform_move_local<'lua>(
-        context: Context<'lua>,
-        args: (LightUserData, LightUserData, Table<'lua>, Table<'lua>),
+    fn transform_move_local(
+        lua: &Lua,
+        args: (LightUserData, LightUserData, Table, Table),
     ) -> Result<()> {
         let object_table = unsafe {
-            context
-                .registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
+            lua.registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
                 .unwrap()
         };
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
-        let id = object_table.get::<_, &EntityId>(object)?;
         let vector_lua = args.3;
         let vector = vec_from_lua(&vector_lua)?;
+        let id = object_table.get::<_, RefEntityId>(object)?;
 
-        scene_manager.get_transform_mute(id).move_local(&vector);
+        scene_manager.get_transform_mut(&id).move_local(&vector);
 
         Ok(())
     }
 
     fn transform_get_position<'lua>(
-        context: Context<'lua>,
+        lua: &'lua Lua,
         args: (LightUserData, LightUserData, Table<'lua>),
     ) -> Result<Table<'lua>> {
         let object_table = unsafe {
-            context
-                .registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
+            lua.registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
                 .unwrap()
         };
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
-        let id = object_table.get::<_, &EntityId>(object)?; // Не факт что работает с ссылкой))
-        let position = &scene_manager.get_transform(id).position;
-        let vector_lua = vec_to_lua(&context, position);
+        let id = object_table.get::<_, RefEntityId>(object)?;
+        let position = &scene_manager.get_transform(&id).position;
+        let vector_lua = vec_to_lua(&lua, position);
 
         Ok(vector_lua)
     }
@@ -628,7 +609,7 @@ impl InputWrappers {
         }
     }
 
-    fn get_key(_: Context, args: (LightUserData, Function, Function, Value)) -> Result<bool> {
+    fn get_key(_: &Lua, args: (LightUserData, Function, Function, Value)) -> Result<bool> {
         let key = args.1.call::<_, i32>(())?;
         let action = args.2.call::<_, i32>(())?;
 
@@ -640,7 +621,7 @@ impl InputWrappers {
         Ok(events.get_key((key, action, modifiers)))
     }
 
-    fn get_key_held(_: Context, args: (LightUserData, Function)) -> Result<bool> {
+    fn get_key_held(_: &Lua, args: (LightUserData, Function)) -> Result<bool> {
         // Test if works with window recreation
 
         let key = args.1.call::<_, i32>(())?;
@@ -649,7 +630,7 @@ impl InputWrappers {
         Ok(window.get_key(key) == Action::Press)
     }
 
-    fn create_keys_table(context: &Context) {
+    fn create_keys_table(lua: &Lua) {
         let mut s = format!(
             "
 Actions = {{}}
@@ -682,26 +663,16 @@ Keys = {{}}\n",
             ));
         }
         // println!("{}", s);
-        let chunk = context.load(&s);
-        chunk.exec().unwrap();
+        lua.load(&s).exec().unwrap();
     }
 }
 
 struct ApplicationWrappers;
 
 impl ApplicationWrappers {
-    fn frame_time(_: Context, args: LightUserData) -> Result<f64> {
+    fn frame_time(_: &Lua, args: LightUserData) -> Result<f64> {
         unsafe { Ok(*(args.0 as *const f64)) }
     }
-}
-
-pub fn execute_file(path: &str) {
-    let src = fs::read_to_string(path).unwrap();
-    let scr = Scripting::new();
-    scr.lua.context(|context| {
-        let chunk = context.load(&src);
-        chunk.exec().unwrap();
-    });
 }
 
 #[derive(Debug)]
@@ -727,12 +698,12 @@ impl std::fmt::Display for CustomError {
     }
 }
 
-fn vec_to_lua<'lua>(context: &Context<'lua>, vector: &Vec3) -> Table<'lua> {
-    let vector_lua = context.create_table().unwrap();
+fn vec_to_lua<'lua>(lua: &'lua Lua, vector: &Vec3) -> Table<'lua> {
+    let vector_lua = lua.create_table().unwrap();
     vector_lua.set("x", vector.x).unwrap();
     vector_lua.set("y", vector.y).unwrap();
     vector_lua.set("z", vector.z).unwrap();
-    match context.globals().get::<_, Table>("Vector") {
+    match lua.globals().get::<_, Table>("Vector") {
         Ok(metatable) => vector_lua.set_metatable(Some(metatable)),
         _ => {}
     }
@@ -745,3 +716,11 @@ fn vec_from_lua(vector_lua: &Table) -> Result<Vec3> {
     let z: f32 = vector_lua.get("z")?;
     Ok(glm::vec3(x, y, z))
 }
+
+struct LuaVec3(Vec3);
+
+impl UserData for LuaVec3 {}
+
+struct LuaKey(Key);
+struct LuaAction(Action);
+struct LuaModifiers(Modifiers);
