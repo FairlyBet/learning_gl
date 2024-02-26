@@ -24,6 +24,10 @@ impl EntityId {
     fn clone(&self) -> Self {
         EntityId(self.0)
     }
+
+    pub fn id(&self) -> u32 {
+        self.0
+    }
 }
 
 impl Hash for EntityId {
@@ -100,6 +104,11 @@ impl SceneManager {
             let id = scene_manager.create_entity();
 
             scene_manager.entities.get_mut(&id).unwrap().name = entity.name.clone();
+
+            let transform: Transform = entity.transform.into();
+            scene_manager.component_arrays[ComponentDataType::Transform.usize()]
+                .rewrite(transform, id.0 as usize);
+
             scene_manager.attach_components(&id, utils::into_vec::<_, Camera>(entity.cameras));
             scene_manager
                 .attach_components(&id, utils::into_vec::<_, LightSource>(entity.light_sources));
@@ -116,11 +125,7 @@ impl SceneManager {
                 entity
                     .scripts
                     .iter()
-                    .map(|item| {
-                        scripting
-                            .create_script_object(&id, item, resource_manager)
-                            .unwrap()
-                    })
+                    .map(|item| scripting.create_script_object(&id, item, resource_manager))
                     .collect::<Vec<ScriptObject>>(),
             );
 

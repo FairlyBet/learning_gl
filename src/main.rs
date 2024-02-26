@@ -1,6 +1,6 @@
 #![deny(rust_2018_compatibility)]
 // #![windows_subsystem = "windows"]
-// #![allow(unused)]
+#![allow(unused)]
 
 extern crate nalgebra_glm as glm;
 
@@ -21,8 +21,10 @@ mod shader;
 mod utils;
 
 use runtime::Runtime;
+use scene::Scene;
 
 fn main() {
+    // Scene::sample();
     let r = Runtime::new();
     r.run();
 }

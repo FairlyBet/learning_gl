@@ -1,0 +1,71 @@
+[
+    {
+        "name": "object1",
+        "transform": {
+            "position": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 0.0
+            },
+            "orientation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        "children": [],
+        "meshes": [
+            {
+                "path": "assets\\meshes\\cube.fbx"
+            }
+        ],
+        "cameras": [],
+        "light_sources": [],
+        "scripts": []
+    },
+    {
+        "name": "object2",
+        "transform": {
+            "position": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 0.0
+            },
+            "orientation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            }
+        },
+        "children": [],
+        "meshes": [],
+        "cameras": [
+            {
+                "projection": {
+                    "Perspective": {
+                        "aspect": 1.0,
+                        "fovy": 45.0,
+                        "near": 0.01,
+                        "far": 100.0
+                    }
+                }
+            }
+        ],
+        "light_sources": [],
+        "scripts": [
+            {
+                "script_path": "assets\\scripts\\camera-controller.lua"
+            }
+        ]
+    }
+]

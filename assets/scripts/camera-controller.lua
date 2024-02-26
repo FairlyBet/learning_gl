@@ -1,13 +1,16 @@
 require "assets.scripts.vector"
 
-CameraController = { velocity = 10 }
+CameraController = { velocity = 2 }
+CameraController.__index = CameraController
 
 function CameraController:update()
     if Input.getKeyHeld(Keys.W) then
-        Transform.move(self, Vector:new(0, 0, -5) * frameTime())
-    end
-
-    if Input.getKey(Keys.Space, Actions.Press) then
-        print(Transform.position(self))
+        Transform.move(self, Vector:new(0, 0, -1) * self.velocity * frameTime())
+        print(Transform.getPosition(self))
     end
 end
+
+local cc = {}
+setmetatable(cc, CameraController)
+
+return cc

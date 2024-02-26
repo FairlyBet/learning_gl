@@ -6,7 +6,7 @@ use crate::{
     resources::ResourceManager,
     scripting::Scripting,
 };
-use glfw::{Action, Context as _, Key, Modifiers, MouseButton, WindowEvent};
+use glfw::{Action, Context as _, Key, Modifiers, MouseButton, PWindow, WindowEvent};
 
 pub struct Runtime;
 
@@ -40,7 +40,7 @@ impl Runtime {
             app.window.glfw.set_time(0.0);
 
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            Self::script_iteration(&scripting);
+            Self::script_iteration(&scripting, &mut scene_manager, &mut app.window);
             Self::render_iteration(&mut app);
 
             frame_time = app.window.glfw.get_time();
@@ -95,7 +95,13 @@ impl Runtime {
         }
     }
 
-    fn script_iteration(scripting: &Scripting) {}
+    fn script_iteration(
+        scripting: &Scripting,
+        scene_manager: &mut SceneManager,
+        window: &mut PWindow,
+    ) {
+        scripting.run_updates(scene_manager, window);
+    }
 
     fn render_iteration(app: &mut Application) {
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT);

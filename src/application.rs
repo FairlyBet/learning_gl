@@ -29,8 +29,8 @@ impl Application {
             .create_window(DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_TITLE, DEFAULT_MODE)
             .unwrap();
         window.make_current();
-        Self::enable_polling(&mut window);
         glfw.set_swap_interval(SwapInterval::Sync(VSYNC.into()));
+        Self::enable_polling(&mut window);
 
         let gl = Gl::load();
 

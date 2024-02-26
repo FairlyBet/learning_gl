@@ -68,7 +68,7 @@ pub struct MeshData {
     pub path: ResourcePath,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Default)]
 pub struct Camera {
     pub projection: Projection,
 }

@@ -252,7 +252,7 @@ impl Screen {
 
 impl FramebufferSizeCallback for Screen {
     fn framebuffer_size(&mut self, size: (i32, i32)) {
-        self.resolution = size;
+        self.set_resolution(size)
     }
 }
 

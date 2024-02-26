@@ -4,10 +4,12 @@ use crate::{
     runtime::WindowEvents,
     serializable,
 };
-use glfw::{Action, Key, Modifiers, Window};
+use glfw::{Action, Key, Modifiers, PWindow};
 use glm::Vec3;
-use mlua::{Error, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value};
-use std::{ffi::c_void, sync::Arc};
+use mlua::{
+    Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value,
+};
+use std::{ffi::c_void, ops::Deref, sync::Arc};
 
 pub struct CompiledScript(Vec<u8>);
 
@@ -21,20 +23,30 @@ impl ScriptObject {
 
 pub struct Scripting {
     pub lua: Lua,
-    object_owner_table_key: RegistryKey,
+    object_owners: ScriptObject,
+    updates: ScriptObject,
 }
 
 impl Scripting {
     pub fn new() -> Self {
         let lua = Lua::new();
+
         let table = lua.create_table().unwrap();
-        table.set("__mode", "k").unwrap();
-        table.set_metatable(Some(table.clone()));
+        let metatable = lua.create_table().unwrap();
+        metatable.set("__mode", "k").unwrap();
+        table.set_metatable(Some(metatable));
         let object_owner_table_key = lua.create_registry_value(table).unwrap();
+
+        let table = lua.create_table().unwrap();
+        let metatable = lua.create_table().unwrap();
+        metatable.set("__mode", "kv").unwrap();
+        table.set_metatable(Some(metatable));
+        let update_table_key = lua.create_registry_value(table).unwrap();
 
         Self {
             lua,
-            object_owner_table_key,
+            object_owners: ScriptObject(object_owner_table_key),
+            updates: ScriptObject(update_table_key),
         }
     }
 
@@ -43,20 +55,27 @@ impl Scripting {
         target: &EntityId,
         script: &serializable::Script,
         resource_manager: &ResourceManager,
-    ) -> Result<ScriptObject> {
+    ) -> ScriptObject {
         let object = self
             .lua
             .load(&resource_manager.get_compiled_scripts()[&script.script_path].0)
-            .eval::<Table>()?;
-        let key = self.lua.create_registry_value(object)?;
-        let object = ScriptObject(key);
+            .eval::<Table>()
+            .unwrap();
 
-        let object_owner_table = self
-            .lua
-            .registry_value::<Table>(&self.object_owner_table_key)?;
-        object_owner_table.set(object.table(&self.lua)?, target)?;
+        if let Ok(fun) = object.get::<_, Function>("update") {
+            let updates = self.updates.table(&self.lua).unwrap();
+            updates.set(object.clone(), fun).unwrap();
+        }
 
-        Ok(object)
+        self.object_owners
+            .table(&self.lua)
+            .unwrap()
+            .set(object.clone(), target)
+            .unwrap();
+
+        let key = self.lua.create_registry_value(object).unwrap();
+
+        ScriptObject(key)
     }
 
     pub fn compile_script(&self, src: &str, name: &str) -> Result<CompiledScript> {
@@ -69,32 +88,32 @@ impl Scripting {
         &self,
         scene_manager: &SceneManager,
         events: &WindowEvents,
-        window: &Window,
+        window: &PWindow,
         frame_time: &f64,
     ) {
         let scene_manager = LightUserData(scene_manager as *const _ as *mut c_void);
         let window_events = LightUserData(events as *const _ as *mut c_void);
         let window = LightUserData(window as *const _ as *mut c_void);
         let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
-        let object_table = LightUserData(self as *const _ as *mut c_void);
+        let object_owners = LightUserData(&self.object_owners.0 as *const _ as *mut c_void);
 
         let transform_move = self
             .lua
             .create_function(TransformWrappers::transform_move)
             .unwrap()
-            .bind((object_table, scene_manager))
+            .bind((object_owners, scene_manager))
             .unwrap();
         let transform_move_local = self
             .lua
             .create_function(TransformWrappers::transform_move_local)
             .unwrap()
-            .bind((object_table, scene_manager))
+            .bind((object_owners, scene_manager))
             .unwrap();
         let transform_get_position = self
             .lua
             .create_function(TransformWrappers::transform_get_position)
             .unwrap()
-            .bind((object_table, scene_manager))
+            .bind((object_owners, scene_manager))
             .unwrap();
 
         let transform = self.lua.create_table().unwrap();
@@ -133,17 +152,10 @@ impl Scripting {
         InputWrappers::create_keys_table(&self.lua);
     }
 
-    // pub fn execute_chunk(&self, script: &CompiledScript) {
-    //     todo!()
-    // self.lua.context(|context| unsafe {
-    //     context
-    //         .load(&script.0)
-    //         .into_function_allow_binary()
-    //         .unwrap()
-    //         .call::<_, ()>(())
-    //         .unwrap();
-    // });
-    // }
+    pub fn run_updates(&self, _: &mut SceneManager, _: &mut PWindow) {
+        let updates = self.updates.table(&self.lua).unwrap();
+        updates.for_each(|k: Table, v: Function| v.call::<_, ()>(k));
+    }
 }
 
 struct TransformWrappers;
@@ -188,13 +200,14 @@ impl TransformWrappers {
         lua: &'lua Lua,
         args: (LightUserData, LightUserData, Table<'lua>),
     ) -> Result<Table<'lua>> {
-        let object_table = unsafe {
+        let object_owners = unsafe {
             lua.registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
                 .unwrap()
         };
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
-        let id = object_table.get::<_, RefEntityId>(object)?;
+        let id = object_owners.get::<_, RefEntityId>(object)?;
+
         let position = &scene_manager.get_transform(&id).position;
         let vector_lua = vec_to_lua(&lua, position);
 
@@ -626,7 +639,7 @@ impl InputWrappers {
 
         let key = args.1.call::<_, i32>(())?;
         let key = Self::key_from_i32(key)?;
-        let window = unsafe { &*(args.0 .0 as *const Window) };
+        let window = unsafe { &*(args.0 .0 as *const PWindow) };
         Ok(window.get_key(key) == Action::Press)
     }
 
