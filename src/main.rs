@@ -22,6 +22,7 @@ mod utils;
 
 use runtime::Runtime;
 use scene::Scene;
+use utils::UntypedVec;
 
 fn main() {
     // Scene::sample();

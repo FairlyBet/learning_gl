@@ -4,13 +4,13 @@ use std::{
     collections::HashMap,
     hash::BuildHasherDefault,
     marker::PhantomData,
-    mem::{self, size_of, MaybeUninit},
+    mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ptr, slice,
 };
 
 pub type FxHashMap32<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
-/// Do not store impl Drop types there!!!
+/// Doen't call Drop of elements
 pub struct UntypedVec {
     buf: *mut u8,
     layout: Layout,
@@ -18,8 +18,16 @@ pub struct UntypedVec {
 }
 
 impl UntypedVec {
+    pub fn capacity<T>(&self) -> usize {
+        self.layout.size() / size_of::<T>()
+    }
+
+    pub fn len<T>(&self) -> usize {
+        self.len / size_of::<T>()
+    }
+
     pub fn init<T>(capacity: usize) -> Self {
-        let (buf, layout) = Self::alloc_buf::<T>(capacity * size_of::<T>());
+        let (buf, layout) = Self::alloc_buf::<T>(capacity);
         Self {
             buf,
             layout,
@@ -29,32 +37,30 @@ impl UntypedVec {
 
     fn empty() -> Self {
         Self {
-            buf: ptr::null_mut::<u8>(),
+            buf: ptr::null_mut(),
             layout: Layout::new::<()>(),
             len: Default::default(),
         }
     }
 
-    pub fn rewrite<T>(&mut self, value: T, index: usize) {
-        assert!(index < self.len::<T>(), "Index is out of bound");
+    pub fn rewrite<T>(&mut self, index: usize, value: T) -> T {
+        assert!(index < self.len::<T>(), "Index is out of bounds");
         unsafe {
-            self.buf
-                .add(index * size_of::<T>())
-                .copy_from_nonoverlapping(&value as *const T as *const u8, size_of::<T>());
+            let old_value = self.buf.cast::<T>().add(index).read();
+            self.buf.cast::<T>().add(index).write(value);
+            old_value
         }
     }
 
     pub fn push<T>(&mut self, value: T) -> Reallocated {
-        let mut realloc = Default::default();
+        let mut realloc = Reallocated::No;
         if self.len + size_of::<T>() > self.layout.size() {
-            let new_capacity = self.layout.size() * 2 + (self.layout.size() == 0) as usize;
+            let new_capacity = self.len::<T>() * 2 + (self.len::<T>() == 0) as usize;
             self.resize::<T>(new_capacity);
             realloc = Reallocated::Yes;
         }
         unsafe {
-            self.buf
-                .add(self.len)
-                .copy_from_nonoverlapping(&value as *const T as *const u8, size_of::<T>());
+            self.buf.add(self.len).cast::<T>().write(value);
         }
         self.len += size_of::<T>();
         realloc
@@ -83,10 +89,6 @@ impl UntypedVec {
                 alloc::dealloc(self.buf, self.layout);
             }
         }
-    }
-
-    pub fn len<T>(&self) -> usize {
-        self.len / size_of::<T>()
     }
 
     pub fn get_mut<T>(&mut self, index: usize) -> &mut T {
@@ -120,10 +122,27 @@ impl UntypedVec {
     pub fn mut_slice<T>(&mut self) -> &mut [T] {
         unsafe { slice::from_raw_parts_mut(self.buf as *mut T, self.len::<T>()) }
     }
+
+    pub fn take_at<T>(&mut self, index: usize) -> T {
+        assert!(index < self.len::<T>(), "Index is out of bounds");
+        unsafe {
+            let current = self.buf.cast::<T>().add(index);
+            let value = current.read();
+            let index_of_last = self.len::<T>() - 1;
+            let num_to_shift = index_of_last - index;
+            if num_to_shift > 0 {
+                let next = current.add(1);
+                current.copy_from(next, num_to_shift);
+            }
+            self.len -= size_of::<T>();
+            value
+        }
+    }
 }
 
 impl Drop for UntypedVec {
     fn drop(&mut self) {
+        println!("Drop");
         self.dealloc();
     }
 }
@@ -131,6 +150,15 @@ impl Drop for UntypedVec {
 impl Default for UntypedVec {
     fn default() -> Self {
         UntypedVec::empty()
+    }
+}
+
+impl<T> Into<Vec<T>> for UntypedVec {
+    fn into(self) -> Vec<T> {
+        let vec =
+            unsafe { Vec::from_raw_parts(self.buf.cast(), self.len::<T>(), self.layout.size()) };
+        ManuallyDrop::new(self);
+        vec
     }
 }
 
@@ -223,7 +251,7 @@ impl<T, const SIZE: usize> Drop for ArrayVec<T, SIZE> {
         for i in 0..self.len {
             unsafe {
                 let zeroed = MaybeUninit::<T>::zeroed();
-                 _ = mem::replace(&mut (self.buf.assume_init_mut()[i]), zeroed.assume_init());
+                _ = mem::replace(&mut (self.buf.assume_init_mut()[i]), zeroed.assume_init());
             }
         }
     }

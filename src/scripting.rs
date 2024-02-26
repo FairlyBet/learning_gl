@@ -7,9 +7,11 @@ use crate::{
 use glfw::{Action, Key, Modifiers, PWindow};
 use glm::Vec3;
 use mlua::{
-    Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value,
+    prelude::{LuaUserDataFields, LuaUserDataMethods},
+    Error, FromLua, Function, LightUserData, Lua, Number, RegistryKey, Result, Table, UserData,
+    Value,
 };
-use std::{ffi::c_void, ops::Deref, sync::Arc};
+use std::{borrow::Borrow, ffi::c_void, ops::Deref, sync::Arc};
 
 pub struct CompiledScript(Vec<u8>);
 
@@ -76,6 +78,15 @@ impl Scripting {
         let key = self.lua.create_registry_value(object).unwrap();
 
         ScriptObject(key)
+    }
+
+    pub fn run_updates(&self, _: &mut SceneManager, _: &mut PWindow) {
+        let updates = self.updates.table(&self.lua).unwrap();
+        updates.for_each(|k: Table, v: Function| v.call::<_, ()>(k));
+    }
+
+    pub fn delete_script_object(&self, object: ScriptObject) {
+        self.lua.remove_registry_value(object.0);
     }
 
     pub fn compile_script(&self, src: &str, name: &str) -> Result<CompiledScript> {
@@ -150,27 +161,27 @@ impl Scripting {
         self.lua.globals().set("frameTime", frame_time).unwrap();
 
         InputWrappers::create_keys_table(&self.lua);
-    }
 
-    pub fn run_updates(&self, _: &mut SceneManager, _: &mut PWindow) {
-        let updates = self.updates.table(&self.lua).unwrap();
-        updates.for_each(|k: Table, v: Function| v.call::<_, ()>(k));
+        let vec3_type = self.lua.create_proxy::<LuaVec3>().unwrap();
+        self.lua.globals().set("Vec3", vec3_type).unwrap();
     }
 }
 
 struct TransformWrappers;
 
 impl TransformWrappers {
-    fn transform_move(lua: &Lua, args: (LightUserData, LightUserData, Table, Table)) -> Result<()> {
+    fn transform_move(
+        lua: &Lua,
+        args: (LightUserData, LightUserData, Table, LuaVec3),
+    ) -> Result<()> {
         let object_table = unsafe {
             lua.registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
                 .unwrap()
         };
-        let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
+        let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) };
         let object = args.2;
-        let vector_lua = args.3;
-        let vector = vec_from_lua(&vector_lua)?;
-        let id = object_table.get::<_, RefEntityId>(object)?; // Does it work?
+        let vector = args.3;
+        let id = object_table.get::<_, RefEntityId>(object)?;
 
         scene_manager.get_transform_mut(&id).move_(&vector);
 
@@ -179,7 +190,7 @@ impl TransformWrappers {
 
     fn transform_move_local(
         lua: &Lua,
-        args: (LightUserData, LightUserData, Table, Table),
+        args: (LightUserData, LightUserData, Table, LuaVec3),
     ) -> Result<()> {
         let object_table = unsafe {
             lua.registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
@@ -187,8 +198,7 @@ impl TransformWrappers {
         };
         let scene_manager = unsafe { &mut *(args.1 .0 as *mut SceneManager) }; // seems quite unsafe
         let object = args.2;
-        let vector_lua = args.3;
-        let vector = vec_from_lua(&vector_lua)?;
+        let vector = args.3;
         let id = object_table.get::<_, RefEntityId>(object)?;
 
         scene_manager.get_transform_mut(&id).move_local(&vector);
@@ -199,7 +209,7 @@ impl TransformWrappers {
     fn transform_get_position<'lua>(
         lua: &'lua Lua,
         args: (LightUserData, LightUserData, Table<'lua>),
-    ) -> Result<Table<'lua>> {
+    ) -> Result<LuaVec3> {
         let object_owners = unsafe {
             lua.registry_value::<Table>(&*(args.0 .0 as *const RegistryKey))
                 .unwrap()
@@ -208,10 +218,7 @@ impl TransformWrappers {
         let object = args.2;
         let id = object_owners.get::<_, RefEntityId>(object)?;
 
-        let position = &scene_manager.get_transform(&id).position;
-        let vector_lua = vec_to_lua(&lua, position);
-
-        Ok(vector_lua)
+        Ok(LuaVec3(scene_manager.get_transform(&id).position))
     }
 }
 
@@ -711,29 +718,194 @@ impl std::fmt::Display for CustomError {
     }
 }
 
-fn vec_to_lua<'lua>(lua: &'lua Lua, vector: &Vec3) -> Table<'lua> {
-    let vector_lua = lua.create_table().unwrap();
-    vector_lua.set("x", vector.x).unwrap();
-    vector_lua.set("y", vector.y).unwrap();
-    vector_lua.set("z", vector.z).unwrap();
-    match lua.globals().get::<_, Table>("Vector") {
-        Ok(metatable) => vector_lua.set_metatable(Some(metatable)),
-        _ => {}
-    }
-    vector_lua
-}
-
-fn vec_from_lua(vector_lua: &Table) -> Result<Vec3> {
-    let x: f32 = vector_lua.get("x")?;
-    let y: f32 = vector_lua.get("y")?;
-    let z: f32 = vector_lua.get("z")?;
-    Ok(glm::vec3(x, y, z))
-}
-
 struct LuaVec3(Vec3);
 
-impl UserData for LuaVec3 {}
+impl<'lua> FromLua<'lua> for LuaVec3 {
+    fn from_lua(value: Value<'lua>, lua: &'lua Lua) -> Result<Self> {
+        if let Some(data) = value.as_userdata() {
+            Ok(LuaVec3(data.borrow::<LuaVec3>()?.0))
+        } else {
+            Err(Error::FromLuaConversionError {
+                from: "Value",
+                to: "LuaVec3",
+                message: Some("Invalid argument".to_string()),
+            })
+        }
+    }
+}
+
+impl UserData for LuaVec3 {
+    fn add_fields<'lua, F: LuaUserDataFields<'lua, Self>>(fields: &mut F) {
+        fields.add_field_method_get("x", |_, this| Ok(this.0.x));
+        fields.add_field_method_get("y", |_, this| Ok(this.0.y));
+        fields.add_field_method_get("z", |_, this| Ok(this.0.z));
+
+        fields.add_field_method_set("x", |_, self_, value: f32| {
+            self_.0.x = value;
+            Ok(())
+        });
+        fields.add_field_method_set("y", |_, self_, value: f32| {
+            self_.0.y = value;
+            Ok(())
+        });
+        fields.add_field_method_set("z", |_, self_, value: f32| {
+            self_.0.z = value;
+            Ok(())
+        });
+    }
+
+    fn add_methods<'lua, M: LuaUserDataMethods<'lua, Self>>(methods: &mut M) {
+        methods.add_meta_method("__tostring", |_, self_, _: Value| {
+            Ok(format!("[{}; {}; {}]", self_.0.x, self_.0.y, self_.0.z))
+        });
+        methods.add_meta_method("__add", |_, self_, vec: LuaVec3| {
+            Ok(LuaVec3(self_.0 + vec.0))
+        });
+        methods.add_meta_method("__sub", |_, self_, vec: LuaVec3| {
+            Ok(LuaVec3(self_.0 - vec.0))
+        });
+        methods.add_meta_method("__unm", |_, self_, vec: LuaVec3| Ok(LuaVec3(-self_.0)));
+        methods.add_meta_method("__mul", |_, self_, num: f32| Ok(LuaVec3(self_.0 * num)));
+
+        methods.add_function("new", |_, args: (f32, f32, f32)| {
+            Ok(LuaVec3(glm::vec3(args.0, args.1, args.2)))
+        });
+        methods.add_function("zeros", |_, args: ()| Ok(LuaVec3(glm::Vec3::zeros())));
+    }
+}
+
+impl Deref for LuaVec3 {
+    type Target = Vec3;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 struct LuaKey(Key);
 struct LuaAction(Action);
 struct LuaModifiers(Modifiers);
+
+const ARR: &[Key] = &[
+    Key::Space,
+    Key::Apostrophe,
+    Key::Comma,
+    Key::Minus,
+    Key::Period,
+    Key::Slash,
+    Key::Num0,
+    Key::Num1,
+    Key::Num2,
+    Key::Num3,
+    Key::Num4,
+    Key::Num5,
+    Key::Num6,
+    Key::Num7,
+    Key::Num8,
+    Key::Num9,
+    Key::Semicolon,
+    Key::Equal,
+    Key::A,
+    Key::B,
+    Key::C,
+    Key::D,
+    Key::E,
+    Key::F,
+    Key::G,
+    Key::H,
+    Key::I,
+    Key::J,
+    Key::K,
+    Key::L,
+    Key::M,
+    Key::N,
+    Key::O,
+    Key::P,
+    Key::Q,
+    Key::R,
+    Key::S,
+    Key::T,
+    Key::U,
+    Key::V,
+    Key::W,
+    Key::X,
+    Key::Y,
+    Key::Z,
+    Key::LeftBracket,
+    Key::Backslash,
+    Key::RightBracket,
+    Key::GraveAccent,
+    Key::World1,
+    Key::World2,
+    Key::Escape,
+    Key::Enter,
+    Key::Tab,
+    Key::Backspace,
+    Key::Insert,
+    Key::Delete,
+    Key::Right,
+    Key::Left,
+    Key::Down,
+    Key::Up,
+    Key::PageUp,
+    Key::PageDown,
+    Key::Home,
+    Key::End,
+    Key::CapsLock,
+    Key::ScrollLock,
+    Key::NumLock,
+    Key::PrintScreen,
+    Key::Pause,
+    Key::F1,
+    Key::F2,
+    Key::F3,
+    Key::F4,
+    Key::F5,
+    Key::F6,
+    Key::F7,
+    Key::F8,
+    Key::F9,
+    Key::F10,
+    Key::F11,
+    Key::F12,
+    Key::F13,
+    Key::F14,
+    Key::F15,
+    Key::F16,
+    Key::F17,
+    Key::F18,
+    Key::F19,
+    Key::F20,
+    Key::F21,
+    Key::F22,
+    Key::F23,
+    Key::F24,
+    Key::F25,
+    Key::Kp0,
+    Key::Kp1,
+    Key::Kp2,
+    Key::Kp3,
+    Key::Kp4,
+    Key::Kp5,
+    Key::Kp6,
+    Key::Kp7,
+    Key::Kp8,
+    Key::Kp9,
+    Key::KpDecimal,
+    Key::KpDivide,
+    Key::KpMultiply,
+    Key::KpSubtract,
+    Key::KpAdd,
+    Key::KpEnter,
+    Key::KpEqual,
+    Key::LeftShift,
+    Key::LeftControl,
+    Key::LeftAlt,
+    Key::LeftSuper,
+    Key::RightShift,
+    Key::RightControl,
+    Key::RightAlt,
+    Key::RightSuper,
+    Key::Menu,
+    Key::Unknown,
+];

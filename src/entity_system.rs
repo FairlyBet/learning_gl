@@ -65,7 +65,7 @@ impl<'lua> FromLua<'lua> for RefEntityId<'lua> {
 #[derive(Default)]
 pub struct SceneManager {
     entities: FxHashMap32<EntityId, Entity>,
-    component_arrays: [UntypedVec; ComponentDataType::COUNT],
+    components: [UntypedVec; ComponentDataType::COUNT],
     free_ids: VecDeque<EntityId>,
     id_counter: u32,
 }
@@ -79,7 +79,7 @@ impl SceneManager {
         let scene = resource_manager.get_scenes().get(index)?;
         let entities = scene.load_entities();
         let mut scene_manager = Self::default();
-        scene_manager.component_arrays[ComponentDataType::Transform.usize()] =
+        scene_manager.components[ComponentDataType::Transform.usize()] =
             UntypedVec::init::<Transform>(entities.len());
 
         Self::create_entities(
@@ -106,8 +106,8 @@ impl SceneManager {
             scene_manager.entities.get_mut(&id).unwrap().name = entity.name.clone();
 
             let transform: Transform = entity.transform.into();
-            scene_manager.component_arrays[ComponentDataType::Transform.usize()]
-                .rewrite(transform, id.0 as usize);
+            _ = scene_manager.components[ComponentDataType::Transform.usize()]
+                .rewrite(id.0 as usize, transform);
 
             scene_manager.attach_components(&id, utils::into_vec::<_, Camera>(entity.cameras));
             scene_manager
@@ -156,12 +156,12 @@ impl SceneManager {
 
         let transform = Transform::new();
         if (id.0 as usize)
-            < self.component_arrays[ComponentDataType::Transform.usize()].len::<Transform>()
+            < self.components[ComponentDataType::Transform.usize()].len::<Transform>()
         {
-            self.component_arrays[ComponentDataType::Transform.usize()]
-                .rewrite(transform, id.0 as usize); // rewriting unused item
+            _ = self.components[ComponentDataType::Transform.usize()]
+                .rewrite(id.0 as usize, transform); // rewriting unused item
         } else {
-            let re = self.component_arrays[ComponentDataType::Transform.usize()].push(transform); // pushing new item
+            let re = self.components[ComponentDataType::Transform.usize()].push(transform); // pushing new item
             if let Reallocated::Yes = re {
                 // update pointers
                 self.update_transform_pointers_on_reallocation();
@@ -183,12 +183,11 @@ impl SceneManager {
                         .push(child.clone());
                     self.entities.get_mut(child).unwrap().parent = Some(parent.clone());
 
-                    let parent_transform = self.component_arrays
-                        [ComponentDataType::Transform.usize()]
-                    .get::<Transform>(parent.0 as usize)
+                    let parent_transform = self.components[ComponentDataType::Transform.usize()]
+                        .get::<Transform>(parent.0 as usize)
                         as *const _;
 
-                    self.component_arrays[ComponentDataType::Transform.usize()]
+                    self.components[ComponentDataType::Transform.usize()]
                         .get_mut::<Transform>(child.0 as usize)
                         .parent = Some(parent_transform);
                 }
@@ -203,7 +202,7 @@ impl SceneManager {
                         .retain(|item| item != child);
                     self.entities.get_mut(child).unwrap().parent = None;
 
-                    self.component_arrays[ComponentDataType::Transform.usize()]
+                    self.components[ComponentDataType::Transform.usize()]
                         .get_mut::<Transform>(child.0 as usize)
                         .parent = None;
                 }
@@ -227,13 +226,13 @@ impl SceneManager {
         );
         let entity = self.entities.get_mut(&target).unwrap();
         let component = Component::new(target.clone(), data);
-        let array_index = self.component_arrays[T::type_index().usize()].len::<Component<T>>();
+        let array_index = self.components[T::data_type().usize()].len::<Component<T>>();
         let component_record = ComponentRecord {
             array_index,
-            type_index: T::type_index(),
+            data_type: T::data_type(),
         };
         entity.components.push(component_record);
-        self.component_arrays[T::type_index().usize()].push(component);
+        self.components[T::data_type().usize()].push(component);
     }
 
     pub fn attach_components<T>(&mut self, target: &EntityId, data: Vec<T>)
@@ -259,36 +258,72 @@ impl SceneManager {
         let component_record = entity
             .components
             .iter()
-            .find(|x| x.type_index == T::type_index())?;
+            .find(|x| x.data_type == T::data_type())?;
 
-        Some(
-            self.component_arrays[component_record.type_index.usize()]
-                .get(component_record.array_index),
-        )
+        Some(self.components[component_record.data_type.usize()].get(component_record.array_index))
     }
 
     pub fn component_slice<T>(&self) -> &[Component<T>]
     where
         T: ComponentData,
     {
-        self.component_arrays[T::type_index().usize()].slice()
+        self.components[T::data_type().usize()].slice()
     }
 
     pub fn component_slice_mut<T>(&mut self) -> &mut [Component<T>]
     where
         T: ComponentData,
     {
-        self.component_arrays[T::type_index().usize()].mut_slice()
+        self.components[T::data_type().usize()].mut_slice()
     }
 
     // This optimization requires entities' ids to directly
     // correlate with their transforms' positions in the array
     pub fn get_transform(&self, entity_id: &EntityId) -> &Transform {
-        self.component_arrays[ComponentDataType::Transform.usize()].get(entity_id.0 as usize)
+        self.components[ComponentDataType::Transform.usize()].get(entity_id.0 as usize)
     }
 
     pub fn get_transform_mut(&mut self, entity_id: &EntityId) -> &mut Transform {
-        self.component_arrays[ComponentDataType::Transform.usize()].get_mut(entity_id.0 as usize)
+        self.components[ComponentDataType::Transform.usize()].get_mut(entity_id.0 as usize)
+    }
+
+    pub fn delete_component<T>(&mut self, record: &ComponentRecord)
+    where
+        T: ComponentData,
+    {
+        assert_eq!(T::data_type(), record.data_type);
+
+        let index_of_deleting = record.array_index;
+        let owner_id = self.component_slice::<T>()[record.array_index]
+            .owner_id
+            .clone();
+
+        self.entities
+            .get_mut(&owner_id)
+            .unwrap()
+            .components
+            .retain(|item| item != record);
+
+        _ = self.components[T::data_type().usize()].take_at::<T>(index_of_deleting);
+
+        let affected_entities = self
+            .component_slice::<T>()
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i >= index_of_deleting)
+            .map(|(_, component)| component.owner_id.clone())
+            .collect::<Vec<EntityId>>();
+
+        for id in affected_entities {
+            let entity = self.entities.get_mut(&id).unwrap();
+            entity
+                .components
+                .iter_mut()
+                .filter(|record| {
+                    record.data_type == T::data_type() && record.array_index > index_of_deleting
+                })
+                .for_each(|record| record.array_index -= 1);
+        }
     }
 }
 
@@ -312,21 +347,22 @@ impl Entity {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct ComponentRecord {
     array_index: usize,
-    type_index: ComponentDataType,
+    data_type: ComponentDataType,
 }
 
 impl ComponentRecord {
     fn new(array_index: usize, type_index: ComponentDataType) -> Self {
         Self {
             array_index,
-            type_index,
+            data_type: type_index,
         }
     }
 }
 
-#[derive(EnumCount, PartialEq, Eq, Clone, Copy)]
+#[derive(EnumCount, PartialEq, Eq, Clone, Copy, Debug)]
 #[repr(u32)]
 enum ComponentDataType {
     Transform,
@@ -344,29 +380,29 @@ impl ComponentDataType {
 }
 
 trait ComponentData {
-    fn type_index() -> ComponentDataType;
+    fn data_type() -> ComponentDataType;
 }
 
 impl ComponentData for Mesh {
-    fn type_index() -> ComponentDataType {
+    fn data_type() -> ComponentDataType {
         ComponentDataType::Mesh
     }
 }
 
 impl ComponentData for Camera {
-    fn type_index() -> ComponentDataType {
+    fn data_type() -> ComponentDataType {
         ComponentDataType::Camera
     }
 }
 
 impl ComponentData for LightSource {
-    fn type_index() -> ComponentDataType {
+    fn data_type() -> ComponentDataType {
         ComponentDataType::Light
     }
 }
 
 impl ComponentData for ScriptObject {
-    fn type_index() -> ComponentDataType {
+    fn data_type() -> ComponentDataType {
         ComponentDataType::Script
     }
 }
@@ -377,10 +413,6 @@ pub struct Component<T: ComponentData> {
 }
 
 impl<T: ComponentData> Component<T> {
-    fn type_index() -> ComponentDataType {
-        T::type_index()
-    }
-
     pub fn new(owner_id: EntityId, data: T) -> Self {
         Self { owner_id, data }
     }
