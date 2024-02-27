@@ -1,7 +1,7 @@
 use glm::{Mat4, Quat, Vec3, Vec4};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Transform {
     pub parent: Option<*const Transform>,
     pub position: Vec3,
@@ -39,7 +39,7 @@ impl Transform {
         translation * rotation * scale
     }
 
-    pub fn set_rotation(&mut self, euler: &Vec3) {
+    pub fn set_orientation(&mut self, euler: &Vec3) {
         self.orientation = glm::quat_identity();
         self.rotate(euler);
     }
@@ -81,7 +81,7 @@ impl Transform {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum Projection {
     Orthographic {
         left: f32,

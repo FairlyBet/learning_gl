@@ -44,7 +44,7 @@ impl Into<linear::Transform> for Transform {
 
         result.position = self.position.into();
         result.scale = self.scale.into();
-        result.set_rotation(&self.orientation.into());
+        result.set_orientation(&self.orientation.into());
 
         result
     }

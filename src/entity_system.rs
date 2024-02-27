@@ -8,7 +8,7 @@ use crate::{
     serializable,
     utils::{self, FxHashMap32, Reallocated, UntypedVec},
 };
-use mlua::{FromLua, IntoLua, Lua, Value};
+use mlua::{FromLua, IntoLua, Lua, RegistryKey, Value};
 use std::{
     collections::VecDeque,
     hash::{Hash, Hasher},
@@ -17,7 +17,7 @@ use std::{
 };
 use strum::EnumCount;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct EntityId(u32);
 
 impl EntityId {
@@ -42,7 +42,16 @@ impl<'lua> IntoLua<'lua> for &EntityId {
     }
 }
 
+#[derive(Debug)]
 pub struct RefEntityId<'lua>(EntityId, PhantomData<&'lua ()>);
+
+impl<'lua> PartialEq for RefEntityId<'lua> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<'lua> Eq for RefEntityId<'lua> {}
 
 impl<'lua> Deref for RefEntityId<'lua> {
     type Target = EntityId;
@@ -62,7 +71,7 @@ impl<'lua> FromLua<'lua> for RefEntityId<'lua> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SceneManager {
     entities: FxHashMap32<EntityId, Entity>,
     components: [UntypedVec; ComponentDataType::COUNT],
@@ -270,7 +279,7 @@ impl SceneManager {
         self.components[T::data_type().usize()].slice()
     }
 
-    pub fn component_slice_mut<T>(&mut self) -> &mut [Component<T>]
+    fn component_slice_mut<T>(&mut self) -> &mut [Component<T>]
     where
         T: ComponentData,
     {
@@ -287,7 +296,7 @@ impl SceneManager {
         self.components[ComponentDataType::Transform.usize()].get_mut(entity_id.0 as usize)
     }
 
-    pub fn delete_component<T>(&mut self, record: &ComponentRecord)
+    pub fn delete_component<T>(&mut self, record: &ComponentRecord) -> T
     where
         T: ComponentData,
     {
@@ -304,29 +313,41 @@ impl SceneManager {
             .components
             .retain(|item| item != record);
 
-        _ = self.components[T::data_type().usize()].take_at::<T>(index_of_deleting);
+        let value = self.components[T::data_type().usize()].take_at::<Component<T>>(index_of_deleting).data;
 
-        let affected_entities = self
-            .component_slice::<T>()
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| *i >= index_of_deleting)
-            .map(|(_, component)| component.owner_id.clone())
-            .collect::<Vec<EntityId>>();
+        let len = self.component_slice::<T>().len();
+        if index_of_deleting < len {
+            let affected_entities = (&self.component_slice::<T>()[index_of_deleting..len])
+                .iter()
+                .map(|component| component.owner_id.clone())
+                .collect::<Vec<EntityId>>();
 
-        for id in affected_entities {
-            let entity = self.entities.get_mut(&id).unwrap();
-            entity
-                .components
-                .iter_mut()
-                .filter(|record| {
-                    record.data_type == T::data_type() && record.array_index > index_of_deleting
-                })
-                .for_each(|record| record.array_index -= 1);
+            for id in affected_entities {
+                let entity = self.entities.get_mut(&id).unwrap();
+                entity
+                    .components
+                    .iter_mut()
+                    .filter(|record| {
+                        record.data_type == T::data_type() && record.array_index > index_of_deleting
+                    })
+                    .for_each(|record| record.array_index -= 1);
+            }
         }
+
+        value
+    }
+
+    pub fn delete_script(&mut self, owner_id: &EntityId, index: usize) -> ScriptObject {
+        let record = ComponentRecord {
+            array_index: index,
+            data_type: ComponentDataType::ScriptObject,
+        };
+        assert!(self.entities[owner_id].components.contains(&record));
+        self.delete_component::<ScriptObject>(&record)
     }
 }
 
+#[derive(Debug)]
 pub struct Entity {
     pub id: EntityId,
     pub name: String,
@@ -369,7 +390,7 @@ enum ComponentDataType {
     Camera,
     Light,
     Mesh,
-    Script,
+    ScriptObject,
 }
 
 impl ComponentDataType {
@@ -403,7 +424,7 @@ impl ComponentData for LightSource {
 
 impl ComponentData for ScriptObject {
     fn data_type() -> ComponentDataType {
-        ComponentDataType::Script
+        ComponentDataType::ScriptObject
     }
 }
 

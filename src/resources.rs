@@ -265,7 +265,7 @@ impl ResourceManager {
         }
     }
 
-    pub fn get_compiled_scripts(&self) -> &FxHashMap<ResourcePath, CompiledScript> {
+    pub fn compiled_scripts(&self) -> &FxHashMap<ResourcePath, CompiledScript> {
         &self.scripts
     }
 }

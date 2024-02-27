@@ -8,6 +8,7 @@ use crate::{
 };
 use glfw::{Action, Context as _, Key, Modifiers, MouseButton, PWindow, WindowEvent};
 
+#[derive(Debug)]
 pub struct Runtime;
 
 impl Runtime {
@@ -36,12 +37,21 @@ impl Runtime {
         scene_manager =
             SceneManager::from_scene_index(0, &mut resource_manager, &scripting).unwrap();
 
+
+        let mut collect_time = 0.0;
         while !app.window.should_close() {
             app.window.glfw.set_time(0.0);
 
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
             Self::script_iteration(&scripting, &mut scene_manager, &mut app.window);
             Self::render_iteration(&mut app);
+            
+            collect_time += frame_time;
+            if collect_time >= 30.0 {
+                scripting.gc_collect();
+                println!("Collect");
+                collect_time = 0.0;
+            }
 
             frame_time = app.window.glfw.get_time();
         }
@@ -109,7 +119,7 @@ impl Runtime {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct WindowEvents {
     key_input: Vec<(Key, Action, Modifiers)>,
     char_input: String,

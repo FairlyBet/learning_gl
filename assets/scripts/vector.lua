@@ -4,7 +4,6 @@
 ---@field public x number
 ---@field public y number
 ---@field public z number
----@field private __index table
 Vec3 = {}
 
 ---@return Vec3

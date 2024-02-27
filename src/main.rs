@@ -25,6 +25,23 @@ use scene::Scene;
 use utils::UntypedVec;
 
 fn main() {
+    // let mut v = UntypedVec::default();
+    // v.push(10);
+    // v.push(20);
+    // v.push(30);
+    // println!("{}", v.len::<i32>());
+    // println!("{}", v.capacity::<i32>());
+
+    // v.take_at::<i32>(0);
+    // v.take_at::<i32>(0);
+    // v.take_at::<i32>(0);
+    // println!("{}", v.len::<i32>());
+    // println!("{}", v.capacity::<i32>());
+    // v.slice::<i32>().iter().for_each(|item| println!("Item {}", *item));
+    
+    // v.push(12);
+    // println!("{}", v.len::<i32>());
+    // v.slice::<i32>().iter().for_each(|item| println!("Item {}", *item));
     // Scene::sample();
     let r = Runtime::new();
     r.run();

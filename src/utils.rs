@@ -11,6 +11,7 @@ use std::{
 pub type FxHashMap32<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
 /// Doen't call Drop of elements
+#[derive(Debug)]
 pub struct UntypedVec {
     buf: *mut u8,
     layout: Layout,
@@ -142,7 +143,7 @@ impl UntypedVec {
 
 impl Drop for UntypedVec {
     fn drop(&mut self) {
-        println!("Drop");
+        // println!("Drop");
         self.dealloc();
     }
 }
@@ -162,7 +163,7 @@ impl<T> Into<Vec<T>> for UntypedVec {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub enum Reallocated {
     #[default]
     No,
@@ -189,6 +190,7 @@ impl<'a, T: 'a> Iterator for Iter<'a, T> {
     }
 }
 
+#[derive(Debug)]
 pub struct ArrayVec<T, const SIZE: usize> {
     buf: MaybeUninit<[T; SIZE]>,
     len: usize,
