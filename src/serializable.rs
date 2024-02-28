@@ -90,6 +90,7 @@ pub struct LightSource {
     pub quadratic: f32,
     pub inner_cutoff: f32,
     pub outer_cutoff: f32,
+    pub shadow_distance: f32,
 }
 
 impl Into<lighting::LightSource> for LightSource {
@@ -111,7 +112,7 @@ impl Into<lighting::LightSource> for LightSource {
                 self.outer_cutoff,
             ),
         };
-        lighting::LightSource::new(light_data)
+        lighting::LightSource::new(light_data, self.shadow_distance)
     }
 }
 

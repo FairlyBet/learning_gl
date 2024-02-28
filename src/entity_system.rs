@@ -296,7 +296,7 @@ impl SceneManager {
         self.components[ComponentDataType::Transform.usize()].get_mut(entity_id.0 as usize)
     }
 
-    pub fn delete_component<T>(&mut self, record: &ComponentRecord) -> T
+    pub fn delete_component<T>(&mut self, record: &ComponentRecord)
     where
         T: ComponentData,
     {
@@ -313,7 +313,9 @@ impl SceneManager {
             .components
             .retain(|item| item != record);
 
-        let value = self.components[T::data_type().usize()].take_at::<Component<T>>(index_of_deleting).data;
+        _ = self.components[T::data_type().usize()]
+            .take_at::<Component<T>>(index_of_deleting)
+            .data;
 
         let len = self.component_slice::<T>().len();
         if index_of_deleting < len {
@@ -334,16 +336,36 @@ impl SceneManager {
             }
         }
 
-        value
     }
 
-    pub fn delete_script(&mut self, owner_id: &EntityId, index: usize) -> ScriptObject {
+    pub fn delete_script(&mut self, owner_id: &EntityId, index: usize) {
         let record = ComponentRecord {
             array_index: index,
             data_type: ComponentDataType::ScriptObject,
         };
         assert!(self.entities[owner_id].components.contains(&record));
         self.delete_component::<ScriptObject>(&record)
+    }
+
+    pub fn delete_entity(&mut self, id: &EntityId) {
+        let components = self.entities[id]
+            .components
+            .iter()
+            .map(|item| item.clone())
+            .collect::<Vec<ComponentRecord>>();
+
+        for component in components {
+            match component.data_type {
+                ComponentDataType::Camera => _ = self.delete_component::<Camera>(&component),
+                ComponentDataType::LightSource => _ = self.delete_component::<LightSource>(&component),
+                ComponentDataType::Mesh => _ = self.delete_component::<Mesh>(&component),
+                ComponentDataType::ScriptObject => _ = self.delete_component::<ScriptObject>(&component),
+                _ => {}
+            }
+        }
+
+        _ = self.entities.remove(&id).unwrap();
+        self.free_ids.push_back(id.clone());
     }
 }
 
@@ -381,6 +403,13 @@ impl ComponentRecord {
             data_type: type_index,
         }
     }
+
+    fn clone(&self) -> Self {
+        Self {
+            array_index: self.array_index,
+            data_type: self.data_type,
+        }
+    }
 }
 
 #[derive(EnumCount, PartialEq, Eq, Clone, Copy, Debug)]
@@ -388,7 +417,7 @@ impl ComponentRecord {
 enum ComponentDataType {
     Transform,
     Camera,
-    Light,
+    LightSource,
     Mesh,
     ScriptObject,
 }
@@ -418,7 +447,7 @@ impl ComponentData for Camera {
 
 impl ComponentData for LightSource {
     fn data_type() -> ComponentDataType {
-        ComponentDataType::Light
+        ComponentDataType::LightSource
     }
 }
 

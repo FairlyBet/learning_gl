@@ -8,8 +8,7 @@ use glfw::{Action, Key, Modifiers, PWindow};
 use glm::Vec3;
 use mlua::{
     prelude::{LuaUserDataFields, LuaUserDataMethods},
-    Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData,
-    Value,
+    Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value,
 };
 use std::{ffi::c_void, ops::Deref};
 
@@ -30,6 +29,7 @@ pub struct Scripting {
     pub lua: Lua,
     object_owners: ScriptObject,
     updates: ScriptObject,
+    collect_time: f64,
 }
 
 impl Scripting {
@@ -52,6 +52,7 @@ impl Scripting {
             lua,
             object_owners: ScriptObject(object_owners_key),
             updates: ScriptObject(updates_key),
+            collect_time: 0.0,
         }
     }
 
@@ -83,14 +84,20 @@ impl Scripting {
         ScriptObject(key)
     }
 
-    pub fn run_updates(&self, _: &mut SceneManager, _: &mut PWindow) {
+    pub fn run_updates(&mut self, _: &mut SceneManager, _: &mut PWindow, frame_time: &f64) {
         let updates = self.updates.table(&self.lua).unwrap();
         updates
             .for_each(|k: Table, v: Function| v.call::<_, ()>(k))
             .unwrap();
+        self.collect_time += *frame_time;
+        if self.collect_time > 60.0 {
+            self.gc_collect();
+            self.collect_time = 0.0;
+        }
     }
 
-    pub fn gc_collect(&self) {
+    fn gc_collect(&self) {
+        self.lua.expire_registry_values();
         self.lua.gc_collect();
     }
 
@@ -115,33 +122,7 @@ impl Scripting {
         let updates = LightUserData(&self.updates.0 as *const _ as *mut c_void);
 
         InputApi::create_wrappers(&self.lua, window_events, window);
-
-        let transform_move = self
-            .lua
-            .create_function(TransformApi::transform_move)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_move_local = self
-            .lua
-            .create_function(TransformApi::transform_move_local)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_get_position = self
-            .lua
-            .create_function(TransformApi::transform_get_position)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-
-        let transform = self.lua.create_table().unwrap();
-        transform.set("move", transform_move).unwrap();
-        transform.set("moveLocal", transform_move_local).unwrap();
-        transform
-            .set("getPosition", transform_get_position)
-            .unwrap();
-        self.lua.globals().set("Transform", transform).unwrap();
+        TransformApi::create_wrappers(&self.lua, object_owners, scene_manager);
 
         let frame_time = self
             .lua
@@ -158,15 +139,87 @@ impl Scripting {
             .bind((object_owners, updates, scene_manager))
             .unwrap();
         self.lua.globals().set("DeleteObject", delete_object);
-
-        let vec3_type = self.lua.create_proxy::<LuaVec3>().unwrap();
-        self.lua.globals().set("Vec3", vec3_type).unwrap();
     }
 }
 
 struct TransformApi;
 
 impl TransformApi {
+    fn create_wrappers(lua: &Lua, object_owners: LightUserData, scene_manager: LightUserData) {
+        let transform_move = lua
+            .create_function(TransformApi::transform_move)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_move_local = lua
+            .create_function(TransformApi::transform_move_local)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_rotate = lua
+            .create_function(TransformApi::transform_rotate)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_rotate_local = lua
+            .create_function(TransformApi::transform_rotate_local)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_get_position = lua
+            .create_function(TransformApi::transform_get_position)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_get_global_position = lua
+            .create_function(TransformApi::transform_get_global_position)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_get_orientation = lua
+            .create_function(TransformApi::transform_get_orientation)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_set_position = lua
+            .create_function(TransformApi::transform_set_position)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+        let transform_set_orientation = lua
+            .create_function(TransformApi::transform_set_orientation)
+            .unwrap()
+            .bind((object_owners, scene_manager))
+            .unwrap();
+
+        let transform = lua.create_table().unwrap();
+        transform.set("move", transform_move).unwrap();
+        transform.set("moveLocal", transform_move_local).unwrap();
+        transform.set("rotate", transform_rotate).unwrap();
+        transform
+            .set("rotateLocal", transform_rotate_local)
+            .unwrap();
+        transform
+            .set("getPosition", transform_get_position)
+            .unwrap();
+        transform
+            .set("getGlobalPosition", transform_get_global_position)
+            .unwrap();
+        transform
+            .set("getOrientation", transform_get_orientation)
+            .unwrap();
+        transform
+            .set("setPosition", transform_set_position)
+            .unwrap();
+        transform
+            .set("setOrientation", transform_set_orientation)
+            .unwrap();
+        lua.globals().set("Transform", transform).unwrap();
+
+        let vec3_type = lua.create_proxy::<LuaVec3>().unwrap();
+        lua.globals().set("Vec3", vec3_type).unwrap();
+    }
+
     fn transform_move(
         lua: &Lua,
         args: (LightUserData, LightUserData, Table, LuaVec3),
@@ -224,9 +277,9 @@ impl TransformApi {
         args: (LightUserData, LightUserData, Table<'lua>),
     ) -> Result<LuaVec3> {
         let (scene_manager, id) = Self::extract_args_no_vec(lua, args)?;
-        Ok(LuaVec3(glm::quat_euler_angles(
+        Ok(LuaVec3(glm::degrees(&glm::quat_euler_angles(
             &scene_manager.get_transform(&id).orientation,
-        )))
+        ))))
     }
 
     fn transform_set_position(
@@ -650,9 +703,9 @@ impl ScriptingApi {
 
         object_owners.set(object.clone(), Value::Nil).unwrap();
         updates.set(object, Value::Nil).unwrap();
-        let key = scene_manager.delete_script(&owner_id, *index).0;
-        lua.remove_registry_value(key).unwrap();
+        scene_manager.delete_script(&owner_id, *index);
         println!("Object is removed");
+
         Ok(())
     }
 }

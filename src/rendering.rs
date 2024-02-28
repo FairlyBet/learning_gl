@@ -1,14 +1,8 @@
 use crate::{
-    data_3d::{self, MeshData, VertexAttribute},
-    entity_system::SceneManager,
-    gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
-    lighting::LightData,
-    resources::RangeContainer,
-    runtime::FramebufferSizeCallback,
-    shader::{
+    camera::Camera, data_3d::{self, Mesh, MeshData, VertexAttribute}, entity_system::SceneManager, gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture}, lighting::{LightData, LightSource}, resources::RangeContainer, runtime::FramebufferSizeCallback, shader::{
         self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
         ScreenShaderFrag, ScreenShaderVert,
-    },
+    }
 };
 use gl::types::GLenum;
 use glfw::Version;
@@ -56,18 +50,28 @@ fn lighting_data_buffer() -> BufferObject {
     buffer
 }
 
-pub trait Renderer {
-    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<MeshData>);
+fn render_meshes(meshes: &[MeshData]) {
+    for mesh in meshes {
+        mesh.bind();
+        unsafe {
+            gl::DrawElements(
+                gl::TRIANGLES,
+                mesh.index_count,
+                gl::UNSIGNED_INT,
+                0 as *const _,
+            );
+        }
+    }
 }
 
-pub struct DefaultRenderer {
+pub struct Renderer {
     framebuffer: Framebuffer,
     shader_program: ShaderProgram,
     matrix_buffer: BufferObject,
     lighting_buffer: BufferObject,
 }
 
-impl DefaultRenderer {
+impl Renderer {
     pub fn new(size: (i32, i32), gl_version: Version) -> Self {
         let framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
 
@@ -98,40 +102,37 @@ impl DefaultRenderer {
         }
     }
 
-    fn gl_config() {
+    fn gl_enable() {
         unsafe {
-            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
         }
     }
-}
 
-impl Renderer for DefaultRenderer {
     fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<MeshData>) {
-        // let camera_comp = match entity_system.component_slice::<CameraComponent>().first() {
-        //     Some(camera) => camera,
-        //     None => return,
-        // };
-        // let light_comp = match entity_system.component_slice::<LightComponent>().first() {
-        //     Some(light) => light,
-        //     None => return,
-        // };
-        // let mesh_components = entity_system.component_slice::<MeshComponent>();
+        let camera = match entity_system.component_slice::<Camera>().first() {
+            Some(cam) => cam,
+            None => return,
+        };
+        let light = match entity_system.component_slice::<LightSource>().first() {
+            Some(light) => light,
+            None => return,
+        };
+        let meshes = entity_system.component_slice::<Mesh>();
 
-        // let camera_transform = entity_system.get_transform(camera_comp.owner_id);
-        // let light_transform = entity_system.get_transform(light_comp.owner_id);
+        let camera_transform = entity_system.get_transform(&camera.owner_id());
+        let light_transform = entity_system.get_transform(light.owner_id());
 
-        // let lighting_data = LightingData {
-        //     light_data: light_comp.light_source.get_data(light_transform),
-        //     viewer_position: Vec3::zeros(),
-        // };
-        // self.lighting_buffer.bind();
-        // self.lighting_buffer.buffer_subdata(
-        //     size_of::<LightingData>(),
-        //     (&lighting_data as *const LightingData).cast(),
-        //     0,
-        // );
+        let lighting_data = LightingData {
+            light_data: light.data.get_data(&light_transform),
+            viewer_position: camera_transform.global_position(),
+        };
+        self.lighting_buffer.bind();
+        self.lighting_buffer.buffer_subdata(
+            size_of::<LightingData>(),
+            (&lighting_data as *const LightingData).cast(),
+            0,
+        );
 
         // self.framebuffer.bind();
         // self.shader_program.use_();
@@ -164,25 +165,12 @@ impl Renderer for DefaultRenderer {
         // render_meshes(model_container.get_model(mesh.model_index));
         // }
     }
+
 }
 
-impl FramebufferSizeCallback for DefaultRenderer {
+impl FramebufferSizeCallback for Renderer {
     fn framebuffer_size(&mut self, size: (i32, i32)) {
         self.framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
-    }
-}
-
-fn render_meshes(meshes: &[MeshData]) {
-    for mesh in meshes {
-        mesh.bind();
-        unsafe {
-            gl::DrawElements(
-                gl::TRIANGLES,
-                mesh.index_count,
-                gl::UNSIGNED_INT,
-                0 as *const _,
-            );
-        }
     }
 }
 

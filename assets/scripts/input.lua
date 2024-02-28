@@ -5,7 +5,7 @@ Input = {}
 
 ---@param key userdata
 ---@param action userdata
----@param modifiers userdata
+---@param modifiers? userdata
 ---@return boolean
 function Input.getKey(key, action, modifiers) end
 

@@ -1,4 +1,7 @@
-use crate::linear::{self, Projection, Transform};
+use crate::{
+    linear::{self, Projection, Transform},
+    utils::ArrayVec,
+};
 use nalgebra_glm::{Mat4, Vec3};
 use serde::{Deserialize, Serialize};
 
@@ -66,58 +69,19 @@ impl LightData {
 
 pub struct LightSource {
     light_data: LightData,
-    projection: Mat4,
+    pub shadow_distance: f32,
+    pub projections: ArrayVec<Mat4, 4>,
 }
 
 impl LightSource {
-    const SHADOW_DISTANCE: f32 = 100.0;
+    const DEFAULT_SHADOW_DISTANCE: f32 = 100.0;
 
-    pub fn new(light_data: LightData) -> Self {
+    pub fn new(light_data: LightData, shadow_distance: f32) -> Self {
         Self {
-            projection: Self::light_projection(&light_data),
+            projections: ArrayVec::new(),
             light_data,
+            shadow_distance,
         }
-    }
-
-    pub fn light_projection(data: &LightData) -> Mat4 {
-        match data.type_ {
-            LightType::Directional => {
-                //     let projection = Projection::new_orthographic(
-                //         -frustum_size,
-                //         frustum_size,
-                //         -frustum_size,
-                //         frustum_size,
-                //         0.0,
-                //         frustum_size,
-                //     );
-                //     let mut view_obj = ViewObject::new(projection);
-                // view_obj.transform.orientation =
-                //     glm::quat_look_at(&direction, &Vec3::y_axis());
-                // view_obj.transform.move_(&(-self.direction * frustum_size));
-                // view_obj.transform.move_local(&Vec3::from_element(-frustum_size));
-                // view_obj.transform.orientation = glm::
-                todo!()
-            }
-            LightType::Point => {
-                let projection =
-                    Projection::new_perspective(1.0, 90.0, 0.01, Self::SHADOW_DISTANCE);
-                projection.matrix();
-                todo!()
-            }
-            LightType::Spot => {
-                let projection = Projection::new_perspective(
-                    1.0,
-                    data.outer_cutoff.acos().to_degrees() * 2.0,
-                    0.01,
-                    Self::SHADOW_DISTANCE,
-                );
-                projection.matrix()
-            }
-        }
-    }
-
-    pub fn lightspace(&self, transform: &Transform) -> Mat4 {
-        self.projection * linear::view_matrix(transform)
     }
 
     pub fn get_data(&self, transform: &Transform) -> LightData {

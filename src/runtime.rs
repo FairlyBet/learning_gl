@@ -2,7 +2,7 @@ use crate::{
     application::Application,
     entity_system::SceneManager,
     gl_wrappers,
-    rendering::{DefaultRenderer, Screen},
+    rendering::{Renderer, Screen},
     resources::ResourceManager,
     scripting::Scripting,
 };
@@ -20,7 +20,7 @@ impl Runtime {
         let mut app = Application::new();
         let mut resource_manager = ResourceManager::new();
         let mut scene_manager = SceneManager::default();
-        let mut renderer = DefaultRenderer::new(
+        let mut renderer = Renderer::new(
             app.window.get_framebuffer_size(),
             app.window.get_context_version(),
         );
@@ -30,7 +30,7 @@ impl Runtime {
         );
         let mut events = WindowEvents::default();
         let mut frame_time = 0.0;
-        let scripting = Scripting::new();
+        let mut scripting = Scripting::new();
 
         resource_manager.load_scripts(&scripting);
         scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
@@ -43,15 +43,10 @@ impl Runtime {
             app.window.glfw.set_time(0.0);
 
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            Self::script_iteration(&scripting, &mut scene_manager, &mut app.window);
+            Self::script_iteration(&mut scripting, &mut scene_manager, &mut app.window, &frame_time);
             Self::render_iteration(&mut app);
             
-            collect_time += frame_time;
-            if collect_time >= 30.0 {
-                scripting.gc_collect();
-                println!("Collect");
-                collect_time = 0.0;
-            }
+            
 
             frame_time = app.window.glfw.get_time();
         }
@@ -106,11 +101,12 @@ impl Runtime {
     }
 
     fn script_iteration(
-        scripting: &Scripting,
+        scripting: &mut Scripting,
         scene_manager: &mut SceneManager,
         window: &mut PWindow,
+        frame_time: &f64,
     ) {
-        scripting.run_updates(scene_manager, window);
+        scripting.run_updates(scene_manager, window, &frame_time);
     }
 
     fn render_iteration(app: &mut Application) {
