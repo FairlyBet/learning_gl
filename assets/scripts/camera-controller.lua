@@ -1,29 +1,49 @@
-CameraController = { velocity = 2 }
+CameraController = { velocity = 3 }
 
 CameraController.__index = Transform
 setmetatable(CameraController, CameraController)
 
 function CameraController:update()
-    if Input.getKey(Keys.Space, Actions.Press) then
-        print("Position " .. tostring(self:getPosition()))
+    local movement = Vec3:zeros()
+    if Input.getKeyHeld(Keys.W) then
+        movement.z = movement.z - 1
     end
+    if Input.getKeyHeld(Keys.A) then
+        movement.x = movement.x - 1
+    end
+    if Input.getKeyHeld(Keys.S) then
+        movement.z = movement.z + 1
+    end
+    if Input.getKeyHeld(Keys.D) then
+        movement.x = movement.x + 1
+    end
+    self:moveLocal(movement * FrameTime() * self.velocity)
+
+    local rotationY = Vec3.zeros()
+    local rotationX = Vec3.zeros()
+    if Input.getKeyHeld(Keys.Up) then
+        rotationX.x = movement.x + 60
+    end
+    if Input.getKeyHeld(Keys.Down) then
+        rotationX.x = movement.z - 60
+    end
+    if Input.getKeyHeld(Keys.Right) then
+        rotationY.y = movement.y - 60
+    end
+    if Input.getKeyHeld(Keys.Left) then
+        rotationY.y = movement.y + 60
+    end
+    self:rotate(rotationY * FrameTime())
+    self:rotateLocal(rotationX * FrameTime())
+
     if Input.getKey(Keys.Tab, Actions.Press) then
-        print("Orientation " .. tostring(self:getOrientation()))
-    end
-    if Input.getKey(Keys.R, Actions.Press) then
-        self:rotate(Vec3.new(0, 90, 0))
-    end
-    if Input.getKey(Keys.Delete, Actions.Press) then
-        DeleteObject(self)
+        print(tostring(self:getPosition()))
+        print(tostring(self:getOrientation()))
     end
 end
 
 local object = {}
 object.__index = CameraController
-
-for i = 1, 10000000 do
-    object[i] = i
-end
 
 setmetatable(object, object)
 

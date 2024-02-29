@@ -10,7 +10,7 @@ use std::{
 
 pub type FxHashMap32<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
-/// Doen't call Drop of elements
+/// Elements don't drop! In order to drop elements convert into Vec<T>
 #[derive(Debug)]
 pub struct UntypedVec {
     buf: *mut u8,

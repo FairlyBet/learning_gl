@@ -1,12 +1,18 @@
 use crate::{
-    camera::Camera, data_3d::{self, Mesh, MeshData, VertexAttribute}, entity_system::SceneManager, gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture}, lighting::{LightData, LightSource}, resources::RangeContainer, runtime::FramebufferSizeCallback, shader::{
+    camera::Camera,
+    data_3d::{self, Mesh, MeshData, VertexAttribute},
+    entity_system::SceneManager,
+    gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
+    lighting::{LightData, LightSource},
+    resources::ResourceManager,
+    runtime::FramebufferSizeCallback,
+    shader::{
         self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
         ScreenShaderFrag, ScreenShaderVert,
-    }
+    },
 };
 use gl::types::GLenum;
 use glfw::Version;
-use memoffset::offset_of;
 use nalgebra_glm::{Mat4, Vec3};
 use std::{
     mem::{size_of, size_of_val},
@@ -50,20 +56,7 @@ fn lighting_data_buffer() -> BufferObject {
     buffer
 }
 
-fn render_meshes(meshes: &[MeshData]) {
-    for mesh in meshes {
-        mesh.bind();
-        unsafe {
-            gl::DrawElements(
-                gl::TRIANGLES,
-                mesh.index_count,
-                gl::UNSIGNED_INT,
-                0 as *const _,
-            );
-        }
-    }
-}
-
+#[derive(Debug)]
 pub struct Renderer {
     framebuffer: Framebuffer,
     shader_program: ShaderProgram,
@@ -75,14 +68,14 @@ impl Renderer {
     pub fn new(size: (i32, i32), gl_version: Version) -> Self {
         let framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
 
-        let main_vert_src = MainShader::<MainVertexShader>::new();
-        let main_vert = shader::build_shader(&main_vert_src, gl_version);
+        let main_vert = MainShader::<MainVertexShader>::new();
+        let main_vert = shader::build_shader(&main_vert, gl_version);
 
-        let mut main_frag_src = MainShader::<MainFragmentShader>::new();
-        let light_shader_src = DefaultLightShader::new();
-        main_frag_src.attach_shader(&light_shader_src);
-        let light_shader = shader::build_shader(&light_shader_src, gl_version);
-        let main_frag = shader::build_shader(&main_frag_src, gl_version);
+        let mut main_frag = MainShader::<MainFragmentShader>::new();
+        let light_shader = DefaultLightShader::new();
+        main_frag.attach_shader(&light_shader);
+        let light_shader = shader::build_shader(&light_shader, gl_version);
+        let main_frag = shader::build_shader(&main_frag, gl_version);
 
         let program = ShaderProgram::new().unwrap();
         program.attach_shader(&main_vert);
@@ -102,26 +95,22 @@ impl Renderer {
         }
     }
 
-    fn gl_enable() {
-        unsafe {
-            gl::Enable(gl::DEPTH_TEST);
-            gl::Enable(gl::CULL_FACE);
-        }
+    pub fn framebuffer(&self) -> &Framebuffer {
+        &self.framebuffer
     }
 
-    fn render(&self, entity_system: &SceneManager, model_container: &RangeContainer<MeshData>) {
-        let camera = match entity_system.component_slice::<Camera>().first() {
+    pub fn render(&self, scene_manager: &SceneManager, resource_manager: &ResourceManager) {
+        let camera = match scene_manager.component_slice::<Camera>().first() {
             Some(cam) => cam,
             None => return,
         };
-        let light = match entity_system.component_slice::<LightSource>().first() {
+        let light = match scene_manager.component_slice::<LightSource>().first() {
             Some(light) => light,
             None => return,
         };
-        let meshes = entity_system.component_slice::<Mesh>();
 
-        let camera_transform = entity_system.get_transform(&camera.owner_id());
-        let light_transform = entity_system.get_transform(light.owner_id());
+        let camera_transform = scene_manager.get_transform(&camera.owner_id());
+        let light_transform = scene_manager.get_transform(light.owner_id());
 
         let lighting_data = LightingData {
             light_data: light.data.get_data(&light_transform),
@@ -134,38 +123,51 @@ impl Renderer {
             0,
         );
 
-        // self.framebuffer.bind();
-        // self.shader_program.use_();
-        // Self::gl_config();
-        // gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        self.framebuffer.bind();
+        self.shader_program.use_();
+        Self::gl_enable();
+        gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-        // for mesh in mesh_components {
-        //     let mesh_transform = entity_system.get_transform(mesh.owner_id);
+        for mesh in scene_manager.component_slice::<Mesh>() {
+            let mesh_transform = scene_manager.get_transform(mesh.owner_id());
 
-        //     let matrix_data = MatrixData {
-        //         mvp: camera_comp.camera.projection_view(camera_transform) * mesh_transform.model(),
-        //         model: mesh_transform.model(),
-        //         orientation: glm::quat_to_mat4(&mesh_transform.orientation),
-        //         light_space: light_comp.light_source.lightspace(light_transform),
-        //     };
+            let matrix_data = MatrixData {
+                mvp: camera.data.projection_view(camera_transform) * mesh_transform.model(),
+                model: mesh_transform.model(),
+                orientation: glm::quat_to_mat4(&mesh_transform.orientation),
+                light_space: glm::Mat4::identity(),
+            };
+            self.matrix_buffer.bind();
+            self.matrix_buffer.buffer_subdata(
+                size_of::<MatrixData>(),
+                (&matrix_data as *const MatrixData).cast(),
+                0,
+            );
 
-        //     self.matrix_buffer.bind();
-        //     self.matrix_buffer.buffer_subdata(
-        //         size_of::<MatrixData>(),
-        //         (&matrix_data as *const MatrixData).cast(),
-        //         0,
-        //     );
-        //     self.lighting_buffer.bind();
-        //     self.lighting_buffer.buffer_subdata(
-        //         size_of::<Vec3>(),
-        //         (&mesh_transform.position as *const Vec3).cast(),
-        //         offset_of!(LightingData, viewer_position) as u32,
-        //     );
-
-        // render_meshes(model_container.get_model(mesh.model_index));
-        // }
+            Self::render_meshes(resource_manager.mesh_data().get_resource(&mesh.data.index));
+        }
     }
 
+    fn gl_enable() {
+        unsafe {
+            gl::Enable(gl::DEPTH_TEST);
+            gl::Enable(gl::CULL_FACE);
+        }
+    }
+
+    fn render_meshes(meshes: &[MeshData]) {
+        for mesh in meshes {
+            mesh.bind();
+            unsafe {
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    mesh.index_count,
+                    gl::UNSIGNED_INT,
+                    0 as *const _,
+                );
+            }
+        }
+    }
 }
 
 impl FramebufferSizeCallback for Renderer {
@@ -174,6 +176,7 @@ impl FramebufferSizeCallback for Renderer {
     }
 }
 
+#[derive(Debug)]
 pub struct Screen {
     resolution: (i32, i32),
     program: ShaderProgram,
@@ -220,7 +223,7 @@ impl Screen {
         self.quad.bind();
         offscreen.sampler_buffer.bind();
         unsafe {
-            gl::Disable(gl::DEPTH_TEST | gl::STENCIL_TEST);
+            gl::Disable(gl::DEPTH_TEST);
             gl::DrawArrays(gl::TRIANGLES, 0, self.quad.vertex_count);
         }
     }
@@ -244,6 +247,7 @@ impl FramebufferSizeCallback for Screen {
     }
 }
 
+#[derive(Debug)]
 pub struct Framebuffer {
     framebuffer: gl_wrappers::Framebuffer,
     pub sampler_buffer: Texture,

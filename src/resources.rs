@@ -191,8 +191,8 @@ impl<Resource> RangeContainer<Resource> {
         }
     }
 
-    pub fn get_resource(&self, idx: RangedIndex) -> &[Resource] {
-        &self.vec[idx]
+    pub fn get_resource(&self, idx: &RangedIndex) -> &[Resource] {
+        &self.vec[idx.start..idx.end]
     }
 }
 
@@ -233,15 +233,15 @@ impl ResourceManager {
         }
     }
 
-    pub fn get_scenes(&self) -> &[Scene] {
+    pub fn scenes(&self) -> &[Scene] {
         &self.scenes
     }
 
-    pub fn get_mesh_data(&self) -> &RangeContainer<MeshData> {
+    pub fn mesh_data(&self) -> &RangeContainer<MeshData> {
         &self.meshes
     }
 
-    pub fn get_mesh_data_mut(&mut self) -> &mut RangeContainer<MeshData> {
+    pub fn mesh_data_mut(&mut self) -> &mut RangeContainer<MeshData> {
         &mut self.meshes
     }
 

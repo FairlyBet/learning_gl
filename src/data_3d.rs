@@ -25,6 +25,7 @@ pub enum VertexAttribute {
     TexCoord,
 }
 
+#[derive(Debug)]
 pub struct MeshData {
     vao: VertexArrayObject,
     vbo: BufferObject,

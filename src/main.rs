@@ -1,6 +1,7 @@
 #![deny(rust_2018_compatibility)]
 // #![windows_subsystem = "windows"]
 #![allow(unused)]
+#![allow(private_bounds)]
 
 extern crate nalgebra_glm as glm;
 
@@ -38,11 +39,12 @@ fn main() {
     // println!("{}", v.len::<i32>());
     // println!("{}", v.capacity::<i32>());
     // v.slice::<i32>().iter().for_each(|item| println!("Item {}", *item));
-    
+
     // v.push(12);
     // println!("{}", v.len::<i32>());
     // v.slice::<i32>().iter().for_each(|item| println!("Item {}", *item));
     // Scene::sample();
+
     let r = Runtime::new();
     r.run();
 }

@@ -19,7 +19,7 @@ pub struct CompiledScript(Vec<u8>);
 pub struct ScriptObject(RegistryKey);
 
 impl ScriptObject {
-    fn table<'lua>(&self, lua: &'lua Lua) -> Result<Table<'lua>> {
+    fn as_table<'lua>(&self, lua: &'lua Lua) -> Result<Table<'lua>> {
         lua.registry_value::<Table>(&self.0)
     }
 }
@@ -69,12 +69,12 @@ impl Scripting {
             .unwrap();
 
         if let Ok(fun) = object.get::<_, Function>("update") {
-            let updates = self.updates.table(&self.lua).unwrap();
+            let updates = self.updates.as_table(&self.lua).unwrap();
             updates.set(object.clone(), fun).unwrap();
         }
 
         self.object_owners
-            .table(&self.lua)
+            .as_table(&self.lua)
             .unwrap()
             .set(object.clone(), owner_id)
             .unwrap();
@@ -84,16 +84,11 @@ impl Scripting {
         ScriptObject(key)
     }
 
-    pub fn run_updates(&mut self, _: &mut SceneManager, _: &mut PWindow, frame_time: &f64) {
-        let updates = self.updates.table(&self.lua).unwrap();
+    pub fn run_updates(&self ) {
+        let updates = self.updates.as_table(&self.lua).unwrap();
         updates
             .for_each(|k: Table, v: Function| v.call::<_, ()>(k))
             .unwrap();
-        self.collect_time += *frame_time;
-        if self.collect_time > 60.0 {
-            self.gc_collect();
-            self.collect_time = 0.0;
-        }
     }
 
     fn gc_collect(&self) {
@@ -107,17 +102,18 @@ impl Scripting {
         Ok(CompiledScript(dumped))
     }
 
-    pub fn create_wrappers(
-        &self,
-        scene_manager: &SceneManager,
-        events: &WindowEvents,
-        window: &PWindow,
-        frame_time: &f64,
+    pub fn create_wrappers<'a>(
+        &'a self,
+        scene_manager: &'a SceneManager,
+        events: &'a WindowEvents,
+        window: &'a PWindow,
+        frame_time: &'a f64,
     ) {
         let scene_manager = LightUserData(scene_manager as *const _ as *mut c_void);
         let window_events = LightUserData(events as *const _ as *mut c_void);
         let window = LightUserData(window as *const _ as *mut c_void);
         let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
+        let scripting = LightUserData(self as *const _ as *mut c_void);
         let object_owners = LightUserData(&self.object_owners.0 as *const _ as *mut c_void);
         let updates = LightUserData(&self.updates.0 as *const _ as *mut c_void);
 
@@ -130,15 +126,30 @@ impl Scripting {
             .unwrap()
             .bind(frame_time)
             .unwrap();
-        self.lua.globals().set("frameTime", frame_time).unwrap();
+        self.lua.globals().set("FrameTime", frame_time).unwrap();
 
-        let delete_object = self
+        let delete_script = self
             .lua
-            .create_function(ScriptingApi::delete_object)
+            .create_function(ScriptingApi::delete_script)
             .unwrap()
-            .bind((object_owners, updates, scene_manager))
+            .bind((scripting, scene_manager))
             .unwrap();
-        self.lua.globals().set("DeleteObject", delete_object);
+        self.lua.globals().set("DeleteScript", delete_script);
+
+        // let delete_entity = self.lua.create_function()
+    }
+
+    pub fn delete_script_object(&self, script_object: ScriptObject) {
+        let object = self.lua.registry_value::<Table>(&script_object.0).unwrap();
+        self.object_owners
+            .as_table(&self.lua)
+            .unwrap()
+            .set(object.clone(), Value::Nil);
+        self.updates
+            .as_table(&self.lua)
+            .unwrap()
+            .set(object.clone(), Value::Nil);
+        self.lua.remove_registry_value(script_object.0);
     }
 }
 
@@ -677,7 +688,36 @@ impl ApplicationApi {
 struct ScriptingApi;
 
 impl ScriptingApi {
-    fn delete_object(
+    fn delete_script(lua: &Lua, args: (LightUserData, LightUserData, Table)) -> Result<()> {
+        let scripting = unsafe { &*args.0 .0.cast::<Scripting>() };
+        let scene_manager = unsafe { &mut *(args.1 .0.cast::<SceneManager>()) };
+        let object = args.2;
+
+        let object_owners = scripting.object_owners.as_table(lua).unwrap();
+        let updates = scripting.updates.as_table(lua).unwrap();
+        let owner_id = object_owners.get::<_, RefEntityId>(object.clone())?;
+        
+        object_owners.set(object.clone(), Value::Nil).unwrap();
+        updates.set(object.clone(), Value::Nil).unwrap();
+
+        let target = scene_manager
+            .get_components::<ScriptObject>(&owner_id)
+            .find(|item| {
+                let key = &scene_manager.component_slice::<ScriptObject>()[item.array_index()]
+                    .data
+                    .0;
+                let o = lua.registry_value::<Table>(key).unwrap();
+                o == object
+            })
+            .unwrap();
+
+        // scene_manager.delete_managed_component::<ScriptObject>(target, scripting);
+        println!("Object is removed");
+
+        Ok(())
+    }
+
+    fn delete_entity(
         lua: &Lua,
         args: (LightUserData, LightUserData, LightUserData, Table),
     ) -> Result<()> {
@@ -703,7 +743,7 @@ impl ScriptingApi {
 
         object_owners.set(object.clone(), Value::Nil).unwrap();
         updates.set(object, Value::Nil).unwrap();
-        scene_manager.delete_script(&owner_id, *index);
+        // scene_manager.delete_script(&owner_id, *index);
         println!("Object is removed");
 
         Ok(())

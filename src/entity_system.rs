@@ -85,7 +85,7 @@ impl SceneManager {
         resource_manager: &mut ResourceManager,
         scripting: &Scripting,
     ) -> Option<Self> {
-        let scene = resource_manager.get_scenes().get(index)?;
+        let scene = resource_manager.scenes().get(index)?;
         let entities = scene.load_entities();
         let mut scene_manager = Self::default();
         scene_manager.components[ComponentDataType::Transform.usize()] =
@@ -110,7 +110,7 @@ impl SceneManager {
         scripting: &Scripting,
     ) {
         for entity in entities {
-            let id = scene_manager.create_entity();
+            let id = scene_manager.create_entity().clone();
 
             scene_manager.entities.get_mut(&id).unwrap().name = entity.name.clone();
 
@@ -150,7 +150,7 @@ impl SceneManager {
         }
     }
 
-    pub fn create_entity(&mut self) -> EntityId {
+    pub fn create_entity(&mut self) -> &EntityId {
         let id = self.free_ids.pop_front().unwrap_or_else(|| {
             let res = EntityId(self.id_counter);
             self.id_counter += 1;
@@ -177,7 +177,7 @@ impl SceneManager {
             }
         }
 
-        id
+        &self.entities[&id].id
     }
 
     pub fn set_parent(&mut self, child: &EntityId, parent: Option<&EntityId>) {
@@ -253,23 +253,24 @@ impl SceneManager {
         }
     }
 
-    pub fn get_component<T>(&self, entity_id: EntityId) -> Option<&Component<T>>
+    pub fn get_component<T>(&self, owner_id: &EntityId) -> Option<&ComponentRecord>
     where
         T: ComponentData,
     {
-        let entity = match self.entities.get(&entity_id) {
-            Some(val) => val,
-            None => {
-                println!("Entity with invalid id is detected: {}", entity_id.0);
-                return None;
-            }
-        };
-        let component_record = entity
+        self.entities[owner_id]
             .components
             .iter()
-            .find(|x| x.data_type == T::data_type())?;
+            .find(|record| record.data_type == T::data_type())
+    }
 
-        Some(self.components[component_record.data_type.usize()].get(component_record.array_index))
+    pub fn get_components<T>(&self, owner_id: &EntityId) -> impl Iterator<Item = &ComponentRecord>
+    where
+        T: ComponentData,
+    {
+        self.entities[owner_id]
+            .components
+            .iter()
+            .filter(|record| record.data_type == T::data_type())
     }
 
     pub fn component_slice<T>(&self) -> &[Component<T>]
@@ -296,7 +297,29 @@ impl SceneManager {
         self.components[ComponentDataType::Transform.usize()].get_mut(entity_id.0 as usize)
     }
 
-    pub fn delete_component<T>(&mut self, record: &ComponentRecord)
+    pub fn delete_unmanaged_component<T>(&mut self, record: &ComponentRecord)
+    where
+        T: ComponentData + Unmanaged,
+    {
+        _ = self.delete_component::<T>(record);
+    }
+
+    pub fn delete_managed_component<T>(&mut self, record: &ComponentRecord, scripting: &Scripting)
+    where
+        T: ComponentData + Managed,
+    {
+        match T::data_type() {
+            ComponentDataType::ScriptObject => {
+                let script_object = self.delete_component::<ScriptObject>(record);
+                scripting.delete_script_object(script_object)
+            }
+            _ => {
+                unreachable!()
+            }
+        }
+    }
+
+    fn delete_component<T>(&mut self, record: &ComponentRecord) -> T
     where
         T: ComponentData,
     {
@@ -313,7 +336,7 @@ impl SceneManager {
             .components
             .retain(|item| item != record);
 
-        _ = self.components[T::data_type().usize()]
+        let data = self.components[T::data_type().usize()]
             .take_at::<Component<T>>(index_of_deleting)
             .data;
 
@@ -335,32 +358,27 @@ impl SceneManager {
                     .for_each(|record| record.array_index -= 1);
             }
         }
-
+        data
     }
 
-    pub fn delete_script(&mut self, owner_id: &EntityId, index: usize) {
-        let record = ComponentRecord {
-            array_index: index,
-            data_type: ComponentDataType::ScriptObject,
-        };
-        assert!(self.entities[owner_id].components.contains(&record));
-        self.delete_component::<ScriptObject>(&record)
-    }
-
-    pub fn delete_entity(&mut self, id: &EntityId) {
-        let components = self.entities[id]
+    pub fn delete_entity(&mut self, id: &EntityId, scripting: &Scripting) {
+        let records = self.entities[id]
             .components
             .iter()
             .map(|item| item.clone())
             .collect::<Vec<ComponentRecord>>();
 
-        for component in components {
-            match component.data_type {
-                ComponentDataType::Camera => _ = self.delete_component::<Camera>(&component),
-                ComponentDataType::LightSource => _ = self.delete_component::<LightSource>(&component),
-                ComponentDataType::Mesh => _ = self.delete_component::<Mesh>(&component),
-                ComponentDataType::ScriptObject => _ = self.delete_component::<ScriptObject>(&component),
-                _ => {}
+        for record in records {
+            match record.data_type {
+                ComponentDataType::Camera => self.delete_unmanaged_component::<Camera>(&record),
+                ComponentDataType::LightSource => {
+                    self.delete_unmanaged_component::<LightSource>(&record)
+                }
+                ComponentDataType::Mesh => self.delete_unmanaged_component::<Mesh>(&record),
+                ComponentDataType::ScriptObject => {
+                    self.delete_managed_component::<ScriptObject>(&record, scripting)
+                }
+                _ => unreachable!(),
             }
         }
 
@@ -402,6 +420,10 @@ impl ComponentRecord {
             array_index,
             data_type: type_index,
         }
+    }
+
+    pub fn array_index(&self) -> usize {
+        self.array_index
     }
 
     fn clone(&self) -> Self {
@@ -456,6 +478,16 @@ impl ComponentData for ScriptObject {
         ComponentDataType::ScriptObject
     }
 }
+
+trait Unmanaged {}
+
+impl Unmanaged for Mesh {}
+impl Unmanaged for Camera {}
+impl Unmanaged for LightSource {}
+
+trait Managed {}
+
+impl Managed for ScriptObject {}
 
 pub struct Component<T: ComponentData> {
     owner_id: EntityId,

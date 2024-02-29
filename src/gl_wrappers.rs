@@ -61,7 +61,7 @@ impl Drop for Gl {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq , Debug)]
 pub struct ShaderProgram {
     id: GLuint,
 }
@@ -248,6 +248,7 @@ impl Shader {
 //     }
 // }
 
+#[derive(Debug)]
 pub struct VertexArrayObject {
     id: GLuint,
 }
@@ -280,6 +281,7 @@ impl Drop for VertexArrayObject {
     }
 }
 
+#[derive(Debug)]
 pub struct BufferObject {
     id: GLuint,
     target: GLenum,
@@ -331,6 +333,7 @@ impl Drop for BufferObject {
     }
 }
 
+#[derive(Debug)]
 pub struct Texture {
     pub id: GLuint,
     target: GLenum,
@@ -426,6 +429,7 @@ impl Drop for Texture {
     }
 }
 
+#[derive(Debug)]
 pub struct Framebuffer {
     id: GLuint,
     target: GLenum,
@@ -486,6 +490,7 @@ impl Drop for Framebuffer {
     }
 }
 
+#[derive(Debug)]
 pub struct Renderbuffer {
     id: GLuint,
     target: GLenum,

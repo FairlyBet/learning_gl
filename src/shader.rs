@@ -14,7 +14,7 @@ pub enum ShaderDataSource {
 impl ShaderDataSource {
     const FRAG_COLOR_OUT: &'static str = "\nlayout (location = 0) out vec4 frag_color;";
 
-    const VERTEX_DATA: &'static str = "
+    const VERTEX_DATA_IN: &'static str = "
 in VertexData {
     vec3 position;
     vec3 normal;
@@ -51,7 +51,7 @@ layout (std140, binding = {}) uniform LightingData {{
 
     pub fn source(&self) -> String {
         match self {
-            ShaderDataSource::VertexData => Self::VERTEX_DATA.to_string(),
+            ShaderDataSource::VertexData => Self::VERTEX_DATA_IN.to_string(),
             ShaderDataSource::MatrixData => Self::MATRIX_DATA.with(|x| x.borrow().clone()),
             ShaderDataSource::LightingData => Self::LIGHTING_DATA.with(|x| x.borrow().clone()),
             ShaderDataSource::FragColorOut => Self::FRAG_COLOR_OUT.to_string(),
@@ -175,8 +175,8 @@ impl DefaultLightShader {
 #define POINT       1
 #define SPOT        2
 
-const float AMBIENT_INTENSITY = 0.1;
-const float SHININESS = 8;
+const float AMBIENT_INTENSITY = 0.01;
+const float SHININESS = 1;
 
 float blinn_specular(vec3 to_light_source_direction, float shininess) {
     vec3 to_viewer_direction = normalize(viewer_position - vertex.position);
@@ -322,7 +322,7 @@ void main() {{
     vec4 color = texture(screen_texture, vertex_data.tex_coord);
     vec3 correction = pow(color.rgb, vec3(gamma_correction));
     frag_color = vec4(correction, color.a);
-    //frag_color = vec4(1, 1, 1, 1);
+    // frag_color = vec4(0, 1, 0, 1);
 }}\n", ScreenShaderFrag::GAMMA_CORRECTION_LOCATION));
     }
 

@@ -87,7 +87,7 @@ impl LightSource {
     pub fn get_data(&self, transform: &Transform) -> LightData {
         let mut data = self.light_data;
         data.position = transform.position;
-        data.direction = glm::quat_rotate_vec3(&transform.orientation, &(-Vec3::z_axis()));
+        data.direction = glm::quat_rotate_vec3(&transform.orientation, &Vec3::z_axis());
         data
     }
 }

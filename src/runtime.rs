@@ -30,23 +30,26 @@ impl Runtime {
         );
         let mut events = WindowEvents::default();
         let mut frame_time = 0.0;
-        let mut scripting = Scripting::new();
+        let scripting = Scripting::new();
 
         resource_manager.load_scripts(&scripting);
         scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
         scene_manager =
             SceneManager::from_scene_index(0, &mut resource_manager, &scripting).unwrap();
 
-
         let mut collect_time = 0.0;
         while !app.window.should_close() {
             app.window.glfw.set_time(0.0);
 
             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-            Self::script_iteration(&mut scripting, &mut scene_manager, &mut app.window, &frame_time);
-            Self::render_iteration(&mut app);
-            
-            
+            Self::script_iteration(&scripting);
+            Self::render_iteration(
+                &mut app,
+                &renderer,
+                &scene_manager,
+                &resource_manager,
+                &screen,
+            );
 
             frame_time = app.window.glfw.get_time();
         }
@@ -100,17 +103,19 @@ impl Runtime {
         }
     }
 
-    fn script_iteration(
-        scripting: &mut Scripting,
-        scene_manager: &mut SceneManager,
-        window: &mut PWindow,
-        frame_time: &f64,
-    ) {
-        scripting.run_updates(scene_manager, window, &frame_time);
+    fn script_iteration(scripting: &Scripting) {
+        scripting.run_updates();
     }
 
-    fn render_iteration(app: &mut Application) {
-        gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
+    fn render_iteration(
+        app: &mut Application,
+        renderer: &Renderer,
+        scene_manager: &SceneManager,
+        resource_manager: &ResourceManager,
+        screen: &Screen,
+    ) {
+        renderer.render(scene_manager, resource_manager);
+        screen.render_offscreen(renderer.framebuffer());
         app.window.swap_buffers();
     }
 }
