@@ -40,28 +40,12 @@ impl Gl {
         Self {}
     }
 
-    // pub fn get_extensions() -> Vec<String> {
-    //     let mut amount = 0;
-    //     unsafe {
-    //         gl::GetIntegerv(gl::NUM_EXTENSIONS, &mut amount);
-    //     }
-    //     let mut result = Vec::<String>::with_capacity(amount as usize);
-    //     for i in 0..amount {
-    //         let name =
-    //             unsafe { CStr::from_ptr(gl::GetStringi(gl::EXTENSIONS, i as u32) as *const _) };
-    //         result.push(name.to_string_lossy().to_string());
-    //     }
-    //     result
-    // }
-}
-
-impl Drop for Gl {
-    fn drop(&mut self) {
+    pub fn unload(self) {
         gl_loader::end_gl();
     }
 }
 
-#[derive(PartialEq, Eq , Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct ShaderProgram {
     id: GLuint,
 }
@@ -487,6 +471,7 @@ impl Drop for Framebuffer {
         unsafe {
             gl::DeleteFramebuffers(1, &self.id);
         }
+        println!("Framebuffer is dropped");
     }
 }
 

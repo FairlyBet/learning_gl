@@ -2,14 +2,14 @@ use crate::{
     camera::Camera,
     data_3d::{self, Mesh, MeshData, VertexAttribute},
     entity_system::SceneManager,
-    gl_wrappers::{self, BufferObject, Renderbuffer, ShaderProgram, Texture},
+    gl_wrappers::{self, BufferObject, Gl, Renderbuffer, ShaderProgram, Texture},
     lighting::{LightData, LightSource},
     resources::ResourceManager,
-    runtime::FramebufferSizeCallback,
     shader::{
         self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
         ScreenShaderFrag, ScreenShaderVert,
     },
+    static_runtime::FramebufferSizeCallback,
 };
 use gl::types::GLenum;
 use glfw::Version;
@@ -65,17 +65,17 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(size: (i32, i32), gl_version: Version) -> Self {
+    pub fn new(size: (i32, i32), context_version: Version, _: &Gl) -> Self {
         let framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
 
         let main_vert = MainShader::<MainVertexShader>::new();
-        let main_vert = shader::build_shader(&main_vert, gl_version);
+        let main_vert = shader::build_shader(&main_vert, context_version);
 
         let mut main_frag = MainShader::<MainFragmentShader>::new();
         let light_shader = DefaultLightShader::new();
         main_frag.attach_shader(&light_shader);
-        let light_shader = shader::build_shader(&light_shader, gl_version);
-        let main_frag = shader::build_shader(&main_frag, gl_version);
+        let light_shader = shader::build_shader(&light_shader, context_version);
+        let main_frag = shader::build_shader(&main_frag, context_version);
 
         let program = ShaderProgram::new().unwrap();
         program.attach_shader(&main_vert);
@@ -172,22 +172,24 @@ impl Renderer {
 
 impl FramebufferSizeCallback for Renderer {
     fn framebuffer_size(&mut self, size: (i32, i32)) {
-        self.framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
+        if self.framebuffer.size != size {
+            self.framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct Screen {
-    resolution: (i32, i32),
+    size: (i32, i32),
     program: ShaderProgram,
     quad: MeshData,
     gamma_correction: f32,
 }
 
 impl Screen {
-    pub fn new(resolution: (i32, i32), gl_version: Version) -> Self {
-        let vert = shader::build_shader(&ScreenShaderVert::new(), gl_version);
-        let frag = shader::build_shader(&ScreenShaderFrag::new(), gl_version);
+    pub fn new(size: (i32, i32), context_version: Version, gl: &Gl) -> Self {
+        let vert = shader::build_shader(&ScreenShaderVert::new(), context_version);
+        let frag = shader::build_shader(&ScreenShaderFrag::new(), context_version);
         let program = ShaderProgram::new().unwrap();
         program.attach_shader(&vert);
         program.attach_shader(&frag);
@@ -209,7 +211,7 @@ impl Screen {
         );
 
         Self {
-            resolution,
+            size,
             program,
             quad,
             gamma_correction: gamma,
@@ -217,7 +219,7 @@ impl Screen {
     }
 
     pub fn render_offscreen(&self, offscreen: &Framebuffer) {
-        Framebuffer::bind_default(self.resolution);
+        Framebuffer::bind_default(self.size);
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
         self.program.use_();
         self.quad.bind();
@@ -236,14 +238,16 @@ impl Screen {
         }
     }
 
-    pub fn set_resolution(&mut self, resolution: (i32, i32)) {
-        self.resolution = resolution;
+    pub fn set_size(&mut self, size: (i32, i32)) {
+        self.size = size;
     }
 }
 
 impl FramebufferSizeCallback for Screen {
     fn framebuffer_size(&mut self, size: (i32, i32)) {
-        self.set_resolution(size)
+        if self.size != size {
+            self.set_size(size)
+        }
     }
 }
 

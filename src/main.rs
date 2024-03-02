@@ -20,10 +20,11 @@ mod scripting;
 mod serializable;
 mod shader;
 mod utils;
+mod static_runtime;
 
-use runtime::Runtime;
+// use runtime::Runtime;
 use scene::Scene;
-use utils::UntypedVec;
+use utils::TypelessVec;
 
 fn main() {
     // let mut v = UntypedVec::default();
@@ -45,6 +46,7 @@ fn main() {
     // v.slice::<i32>().iter().for_each(|item| println!("Item {}", *item));
     // Scene::sample();
 
-    let r = Runtime::new();
-    r.run();
+    // let r = Runtime::new();
+    // r.run();
+    static_runtime::start();
 }

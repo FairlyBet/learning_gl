@@ -10,7 +10,12 @@ use mlua::{
     prelude::{LuaUserDataFields, LuaUserDataMethods},
     Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value,
 };
-use std::{ffi::c_void, ops::Deref};
+use std::{
+    cell::Cell,
+    ffi::c_void,
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Debug)]
 pub struct CompiledScript(Vec<u8>);
@@ -29,7 +34,6 @@ pub struct Scripting {
     pub lua: Lua,
     object_owners: ScriptObject,
     updates: ScriptObject,
-    collect_time: f64,
 }
 
 impl Scripting {
@@ -52,13 +56,12 @@ impl Scripting {
             lua,
             object_owners: ScriptObject(object_owners_key),
             updates: ScriptObject(updates_key),
-            collect_time: 0.0,
         }
     }
 
     pub fn create_script_object(
         &self,
-        owner_id: &EntityId,
+        owner_id: u32,
         script: &serializable::Script,
         resource_manager: &ResourceManager,
     ) -> ScriptObject {
@@ -84,7 +87,7 @@ impl Scripting {
         ScriptObject(key)
     }
 
-    pub fn run_updates(&self ) {
+    pub fn run_updates(&self) {
         let updates = self.updates.as_table(&self.lua).unwrap();
         updates
             .for_each(|k: Table, v: Function| v.call::<_, ()>(k))
@@ -696,7 +699,7 @@ impl ScriptingApi {
         let object_owners = scripting.object_owners.as_table(lua).unwrap();
         let updates = scripting.updates.as_table(lua).unwrap();
         let owner_id = object_owners.get::<_, RefEntityId>(object.clone())?;
-        
+
         object_owners.set(object.clone(), Value::Nil).unwrap();
         updates.set(object.clone(), Value::Nil).unwrap();
 

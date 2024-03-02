@@ -345,9 +345,9 @@ impl ShaderSource for ScreenShaderFrag {
     }
 }
 
-pub fn build_shader(shader_source: &impl ShaderSource, gl_version: Version) -> Shader {
+pub fn build_shader(shader_source: &impl ShaderSource, context_version: Version) -> Shader {
     let shader = Shader::new(shader_source.type_() as u32).unwrap();
-    let mut source = format!("#version {}{}0 core\n", gl_version.major, gl_version.minor);
+    let mut source = format!("#version {}{}0 core\n", context_version.major, context_version.minor);
     for data in shader_source.data() {
         source.push_str(&data.source());
     }

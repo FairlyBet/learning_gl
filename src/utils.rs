@@ -12,13 +12,13 @@ pub type FxHashMap32<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher32>>;
 
 /// Elements don't drop! In order to drop elements convert into Vec<T>
 #[derive(Debug)]
-pub struct UntypedVec {
+pub struct TypelessVec {
     buf: *mut u8,
     layout: Layout,
     len: usize,
 }
 
-impl UntypedVec {
+impl TypelessVec {
     pub fn capacity<T>(&self) -> usize {
         self.layout.size() / size_of::<T>()
     }
@@ -120,7 +120,7 @@ impl UntypedVec {
         unsafe { slice::from_raw_parts(self.buf as *const T, self.len::<T>()) }
     }
 
-    pub fn mut_slice<T>(&mut self) -> &mut [T] {
+    pub fn slice_mut<T>(&mut self) -> &mut [T] {
         unsafe { slice::from_raw_parts_mut(self.buf as *mut T, self.len::<T>()) }
     }
 
@@ -139,22 +139,31 @@ impl UntypedVec {
             value
         }
     }
+
+    pub fn clear<T>(&mut self) {
+        // test when ptr is null
+        let slice = self.slice_mut::<T>();
+        self.len = 0;
+        unsafe {
+            ptr::drop_in_place(slice);
+        }
+    }
 }
 
-impl Drop for UntypedVec {
+impl Drop for TypelessVec {
     fn drop(&mut self) {
         // println!("Drop");
         self.dealloc();
     }
 }
 
-impl Default for UntypedVec {
+impl Default for TypelessVec {
     fn default() -> Self {
-        UntypedVec::empty()
+        TypelessVec::empty()
     }
 }
 
-impl<T> Into<Vec<T>> for UntypedVec {
+impl<T> Into<Vec<T>> for TypelessVec {
     fn into(self) -> Vec<T> {
         let vec =
             unsafe { Vec::from_raw_parts(self.buf.cast(), self.len::<T>(), self.layout.size()) };
@@ -171,7 +180,7 @@ pub enum Reallocated {
 }
 
 pub struct Iter<'a, T> {
-    data: &'a UntypedVec,
+    data: &'a TypelessVec,
     index: usize,
     phantom: PhantomData<T>,
 }
@@ -268,7 +277,7 @@ where
         .collect::<Vec<Into>>()
 }
 
-pub fn into_vec<From, Into>(from: Vec<From>) -> Vec<Into>
+pub fn convert_vec<From, Into>(from: Vec<From>) -> Vec<Into>
 where
     From: core::convert::Into<Into>,
 {

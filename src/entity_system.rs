@@ -6,7 +6,7 @@ use crate::{
     resources::ResourceManager,
     scripting::{ScriptObject, Scripting},
     serializable,
-    utils::{self, FxHashMap32, Reallocated, UntypedVec},
+    utils::{self, FxHashMap32, Reallocated, TypelessVec},
 };
 use mlua::{FromLua, IntoLua, Lua, RegistryKey, Value};
 use std::{
@@ -17,183 +17,117 @@ use std::{
 };
 use strum::EnumCount;
 
-#[derive(PartialEq, Eq, Debug)]
-pub struct EntityId(u32);
-
-impl EntityId {
-    fn clone(&self) -> Self {
-        EntityId(self.0)
-    }
-
-    pub fn id(&self) -> u32 {
-        self.0
-    }
-}
-
-impl Hash for EntityId {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl<'lua> IntoLua<'lua> for &EntityId {
-    fn into_lua(self, lua: &'lua Lua) -> mlua::prelude::LuaResult<Value<'lua>> {
-        lua.create_any_userdata(self.clone()).unwrap().into_lua(lua)
-    }
-}
-
-#[derive(Debug)]
-pub struct RefEntityId<'lua>(EntityId, PhantomData<&'lua ()>);
-
-impl<'lua> PartialEq for RefEntityId<'lua> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl<'lua> Eq for RefEntityId<'lua> {}
-
-impl<'lua> Deref for RefEntityId<'lua> {
-    type Target = EntityId;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'lua> FromLua<'lua> for RefEntityId<'lua> {
-    fn from_lua(value: Value<'lua>, _: &'lua Lua) -> mlua::prelude::LuaResult<Self> {
-        let userdata = value.as_userdata().unwrap();
-        Ok(RefEntityId(
-            userdata.borrow::<EntityId>()?.clone(),
-            PhantomData::default(),
-        ))
-    }
-}
-
 #[derive(Default, Debug)]
 pub struct SceneManager {
-    entities: FxHashMap32<EntityId, Entity>,
-    components: [UntypedVec; ComponentDataType::COUNT],
-    free_ids: VecDeque<EntityId>,
-    id_counter: u32,
+    entities: FxHashMap32<u32, Entity>,
+    components: [TypelessVec; ComponentDataType::COUNT],
+    mutated_transform: Vec<usize>,
+    available_indecies: VecDeque<usize>,
+    instance_counter: u32,
+    // loaded_scenes: HashMap<SceneId, Vec<InstanceId>>
 }
 
 impl SceneManager {
-    pub fn from_scene_index(
+    pub fn load_scene(
+        &mut self,
         index: usize,
         resource_manager: &mut ResourceManager,
         scripting: &Scripting,
-    ) -> Option<Self> {
-        let scene = resource_manager.scenes().get(index)?;
+    ) {
+        let scene = resource_manager.scenes().get(index).unwrap();
         let entities = scene.load_entities();
         let mut scene_manager = Self::default();
         scene_manager.components[ComponentDataType::Transform.usize()] =
-            UntypedVec::init::<Transform>(entities.len());
+            TypelessVec::init::<Transform>(entities.len());
 
-        Self::create_entities(
-            None,
-            entities,
-            &mut scene_manager,
-            resource_manager,
-            scripting,
-        );
-
-        Some(scene_manager)
+        self.create_entities(None, entities, resource_manager, scripting);
     }
 
     fn create_entities(
-        parent_id: Option<&EntityId>,
+        &mut self,
+        parent_id: Option<u32>,
         entities: Vec<serializable::Entity>,
-        scene_manager: &mut SceneManager,
         resource_manager: &mut ResourceManager,
         scripting: &Scripting,
     ) {
         for entity in entities {
-            let id = scene_manager.create_entity().clone();
+            let id = self.create_entity();
 
-            scene_manager.entities.get_mut(&id).unwrap().name = entity.name.clone();
-
+            let ent = self.entities.get_mut(&id).unwrap();
+            ent.name = entity.name.clone();
             let transform: Transform = entity.transform.into();
-            _ = scene_manager.components[ComponentDataType::Transform.usize()]
-                .rewrite(id.0 as usize, transform);
+            _ = self.components[ComponentDataType::Transform.usize()]
+                .rewrite(ent.record.transform_index, transform);
 
-            scene_manager.attach_components(&id, utils::into_vec::<_, Camera>(entity.cameras));
-            scene_manager
-                .attach_components(&id, utils::into_vec::<_, LightSource>(entity.light_sources));
-            scene_manager.attach_components(
-                &id,
+            self.attach_components(id, utils::convert_vec::<_, Camera>(entity.cameras));
+            self.attach_components(
+                id,
+                utils::convert_vec::<_, LightSource>(entity.light_sources),
+            );
+            self.attach_components(
+                id,
                 entity
                     .meshes
                     .iter()
                     .map(|item| resource_manager.get_mesh_lazily(&item.path))
                     .collect::<Vec<Mesh>>(),
             );
-            scene_manager.attach_components(
-                &id,
+            self.attach_components(
+                id,
                 entity
                     .scripts
                     .iter()
-                    .map(|item| scripting.create_script_object(&id, item, resource_manager))
+                    .map(|item| scripting.create_script_object(id, item, resource_manager))
                     .collect::<Vec<ScriptObject>>(),
             );
 
-            scene_manager.set_parent(&id, parent_id);
+            self.set_parent(id, parent_id);
 
-            Self::create_entities(
-                Some(&id),
-                entity.children,
-                scene_manager,
-                resource_manager,
-                scripting,
-            );
+            self.create_entities(Some(id), entity.children, resource_manager, scripting);
         }
     }
 
-    pub fn create_entity(&mut self) -> &EntityId {
-        let id = self.free_ids.pop_front().unwrap_or_else(|| {
-            let res = EntityId(self.id_counter);
-            self.id_counter += 1;
-            res
+    pub fn create_entity(&mut self) -> u32 {
+        let mut rewrite = true;
+        let instance_id = self.instance_counter;
+        let transform_index = self.available_indecies.pop_front().unwrap_or_else(|| {
+            rewrite = false;
+            self.instance_counter as usize
         });
-        let entity = Entity::new(id.clone());
+        self.instance_counter = self.instance_counter.checked_add(1).unwrap(); // panic if overflows
 
-        assert!(
-            self.entities.insert(entity.id.clone(), entity).is_none(),
-            "Entity id wasn't free"
-        );
+        let entity = Entity::new(EntityRecord {
+            transform_index,
+            instance_id,
+        });
 
         let transform = Transform::new();
-        if (id.0 as usize)
-            < self.components[ComponentDataType::Transform.usize()].len::<Transform>()
-        {
+        if rewrite {
             _ = self.components[ComponentDataType::Transform.usize()]
-                .rewrite(id.0 as usize, transform); // rewriting unused item
+                .rewrite(transform_index, transform); // rewriting unused item
         } else {
-            let re = self.components[ComponentDataType::Transform.usize()].push(transform); // pushing new item
-            if let Reallocated::Yes = re {
+            let reallocated = self.components[ComponentDataType::Transform.usize()].push(transform); // pushing new item
+            if let Reallocated::Yes = reallocated {
                 // update pointers
                 self.update_transform_pointers_on_reallocation();
             }
         }
 
-        &self.entities[&id].id
+        instance_id
     }
 
-    pub fn set_parent(&mut self, child: &EntityId, parent: Option<&EntityId>) {
+    pub fn set_parent(&mut self, child: u32, parent: Option<u32>) {
         match parent {
             Some(parent) => {
-                if !self.entities[parent].children.contains(&child) {
+                if !self.entities[&parent].children.contains(&child) {
                     self.set_parent(child, None);
-                    self.entities
-                        .get_mut(parent)
-                        .unwrap()
-                        .children
-                        .push(child.clone());
-                    self.entities.get_mut(child).unwrap().parent = Some(parent.clone());
+                    self.entities.get_mut(&parent).unwrap().children.push(child);
+                    self.entities.get_mut(&child).unwrap().parent = Some(parent);
 
+                    let parent_transform =
+                        self.entities.get(&parent).unwrap().record.transform_index;
                     let parent_transform = self.components[ComponentDataType::Transform.usize()]
-                        .get::<Transform>(parent.0 as usize)
+                        .get::<Transform>(parent_transform)
                         as *const _;
 
                     self.components[ComponentDataType::Transform.usize()]
@@ -225,7 +159,7 @@ impl SceneManager {
         todo!()
     }
 
-    pub fn attach_component<T>(&mut self, target: &EntityId, data: T)
+    pub fn attach_component<T>(&mut self, target: u32, data: T)
     where
         T: ComponentData,
     {
@@ -244,7 +178,7 @@ impl SceneManager {
         self.components[T::data_type().usize()].push(component);
     }
 
-    pub fn attach_components<T>(&mut self, target: &EntityId, data: Vec<T>)
+    pub fn attach_components<T>(&mut self, target: u32, data: Vec<T>)
     where
         T: ComponentData,
     {
@@ -253,7 +187,7 @@ impl SceneManager {
         }
     }
 
-    pub fn get_component<T>(&self, owner_id: &EntityId) -> Option<&ComponentRecord>
+    pub fn get_component<T>(&self, owner_id: u32) -> Option<&ComponentRecord>
     where
         T: ComponentData,
     {
@@ -263,7 +197,7 @@ impl SceneManager {
             .find(|record| record.data_type == T::data_type())
     }
 
-    pub fn get_components<T>(&self, owner_id: &EntityId) -> impl Iterator<Item = &ComponentRecord>
+    pub fn get_components<T>(&self, owner_id: u32) -> impl Iterator<Item = &ComponentRecord>
     where
         T: ComponentData,
     {
@@ -284,17 +218,15 @@ impl SceneManager {
     where
         T: ComponentData,
     {
-        self.components[T::data_type().usize()].mut_slice()
+        self.components[T::data_type().usize()].slice_mut()
     }
 
-    // This optimization requires entities' ids to directly
-    // correlate with their transforms' positions in the array
-    pub fn get_transform(&self, entity_id: &EntityId) -> &Transform {
-        self.components[ComponentDataType::Transform.usize()].get(entity_id.0 as usize)
+    pub fn get_transform(&self, record: &EntityRecord) -> &Transform {
+        self.components[ComponentDataType::Transform.usize()].get(record.transform_index)
     }
 
-    pub fn get_transform_mut(&mut self, entity_id: &EntityId) -> &mut Transform {
-        self.components[ComponentDataType::Transform.usize()].get_mut(entity_id.0 as usize)
+    pub fn get_transform_mut(&mut self, record: &EntityRecord) -> &mut Transform {
+        self.components[ComponentDataType::Transform.usize()].get_mut(record.transform_index)
     }
 
     pub fn delete_unmanaged_component<T>(&mut self, record: &ComponentRecord)
@@ -361,7 +293,7 @@ impl SceneManager {
         data
     }
 
-    pub fn delete_entity(&mut self, id: &EntityId, scripting: &Scripting) {
+    pub fn delete_entity(&mut self, id: u32, scripting: &Scripting) {
         let records = self.entities[id]
             .components
             .iter()
@@ -383,23 +315,30 @@ impl SceneManager {
         }
 
         _ = self.entities.remove(&id).unwrap();
-        self.free_ids.push_back(id.clone());
+        self.available_indecies.push_back(id.clone());
     }
 }
 
 #[derive(Debug)]
+struct EntityRecord {
+    transform_index: usize,
+    instance_id: u32,
+}
+
+#[derive(Debug)]
 pub struct Entity {
-    pub id: EntityId,
+    record: EntityRecord,
     pub name: String,
     pub components: Vec<ComponentRecord>,
-    children: Vec<EntityId>,
-    parent: Option<EntityId>,
+    children: Vec<u32>,
+    parent: Option<u32>,
+    // loaded from scene: u32
 }
 
 impl Entity {
-    fn new(id: EntityId) -> Self {
+    fn new(record: EntityRecord) -> Self {
         Self {
-            id,
+            record,
             name: "".to_string(),
             components: vec![],
             children: vec![],
@@ -445,9 +384,8 @@ enum ComponentDataType {
 }
 
 impl ComponentDataType {
-    fn usize(&self) -> usize {
-        // todo!();
-        *self as usize // TEST IF CONVERTING A REFERENCE
+    const fn usize(&self) -> usize {
+        *self as usize
     }
 }
 
@@ -490,7 +428,7 @@ trait Managed {}
 impl Managed for ScriptObject {}
 
 pub struct Component<T: ComponentData> {
-    owner_id: EntityId,
+    owner_id: EntityRecord,
     pub data: T,
 }
 
