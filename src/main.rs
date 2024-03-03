@@ -1,7 +1,7 @@
 #![deny(rust_2018_compatibility)]
 // #![windows_subsystem = "windows"]
 #![allow(unused)]
-#![allow(private_bounds)]
+
 
 extern crate nalgebra_glm as glm;
 

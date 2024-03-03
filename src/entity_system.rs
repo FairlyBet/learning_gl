@@ -57,7 +57,7 @@ impl SceneManager {
             ent.name = entity.name.clone();
             let transform: Transform = entity.transform.into();
             _ = self.components[ComponentDataType::Transform.usize()]
-                .rewrite(ent.record.transform_index, transform);
+                .rewrite(ent.transform_index, transform);
 
             self.attach_components(id, utils::convert_vec::<_, Camera>(entity.cameras));
             self.attach_components(
@@ -121,11 +121,11 @@ impl SceneManager {
             Some(parent) => {
                 if !self.entities[&parent].children.contains(&child) {
                     self.set_parent(child, None);
+
                     self.entities.get_mut(&parent).unwrap().children.push(child);
                     self.entities.get_mut(&child).unwrap().parent = Some(parent);
 
-                    let parent_transform =
-                        self.entities.get(&parent).unwrap().record.transform_index;
+                    let parent_transform = self.entities.get(&parent).unwrap().transform_index;
                     let parent_transform = self.components[ComponentDataType::Transform.usize()]
                         .get::<Transform>(parent_transform)
                         as *const _;
@@ -191,7 +191,8 @@ impl SceneManager {
     where
         T: ComponentData,
     {
-        self.entities[owner_id]
+        self.entities
+            .get(&owner_id)?
             .components
             .iter()
             .find(|record| record.data_type == T::data_type())
@@ -259,7 +260,7 @@ impl SceneManager {
 
         let index_of_deleting = record.array_index;
         let owner_id = self.component_slice::<T>()[record.array_index]
-            .owner_id
+            .owner_record
             .clone();
 
         self.entities
@@ -276,7 +277,7 @@ impl SceneManager {
         if index_of_deleting < len {
             let affected_entities = (&self.component_slice::<T>()[index_of_deleting..len])
                 .iter()
-                .map(|component| component.owner_id.clone())
+                .map(|component| component.owner_record.clone())
                 .collect::<Vec<EntityId>>();
 
             for id in affected_entities {
@@ -320,25 +321,37 @@ impl SceneManager {
 }
 
 #[derive(Debug)]
-struct EntityRecord {
+pub struct EntityRecord {
     transform_index: usize,
     instance_id: u32,
 }
 
+impl EntityRecord {
+    pub fn transform_index(&self) -> usize {
+        self.transform_index
+    }
+
+    pub fn instance_id(&self) -> u32 {
+        self.instance_id
+    }
+}
+
 #[derive(Debug)]
 pub struct Entity {
-    record: EntityRecord,
+    instance_id: u32,
+    transform_index: usize,
     pub name: String,
     pub components: Vec<ComponentRecord>,
     children: Vec<u32>,
     parent: Option<u32>,
-    // loaded from scene: u32
+    // loaded_from_scene: u32
 }
 
 impl Entity {
-    fn new(record: EntityRecord) -> Self {
+    fn new(instance_id: u32, transform_index: usize) -> Self {
         Self {
-            record,
+            instance_id,
+            transform_index,
             name: "".to_string(),
             components: vec![],
             children: vec![],
@@ -373,8 +386,8 @@ impl ComponentRecord {
     }
 }
 
-#[derive(EnumCount, PartialEq, Eq, Clone, Copy, Debug)]
 #[repr(u32)]
+#[derive(EnumCount, PartialEq, Eq, Clone, Copy, Debug)]
 enum ComponentDataType {
     Transform,
     Camera,
@@ -389,6 +402,7 @@ impl ComponentDataType {
     }
 }
 
+#[allow(private_bounds)]
 trait ComponentData {
     fn data_type() -> ComponentDataType;
 }
@@ -428,16 +442,16 @@ trait Managed {}
 impl Managed for ScriptObject {}
 
 pub struct Component<T: ComponentData> {
-    owner_id: EntityRecord,
+    owner_record: EntityRecord,
     pub data: T,
 }
 
 impl<T: ComponentData> Component<T> {
-    pub fn new(owner_id: EntityId, data: T) -> Self {
-        Self { owner_id, data }
+    pub fn new(owner_record: EntityRecord, data: T) -> Self {
+        Self { owner_record, data }
     }
 
-    pub fn owner_id(&self) -> &EntityId {
-        &self.owner_id
+    pub fn owner_record(&self) -> &EntityRecord {
+        &self.owner_record
     }
 }
