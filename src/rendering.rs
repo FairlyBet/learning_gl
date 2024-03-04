@@ -109,8 +109,8 @@ impl Renderer {
             None => return,
         };
 
-        let camera_transform = scene_manager.get_transform(&camera.owner_record());
-        let light_transform = scene_manager.get_transform(light.owner_record());
+        let camera_transform = scene_manager.get_transform(camera.owner_id());
+        let light_transform = scene_manager.get_transform(light.owner_id());
 
         let lighting_data = LightingData {
             light_data: light.data.get_data(&light_transform),
@@ -129,7 +129,7 @@ impl Renderer {
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
         for mesh in scene_manager.component_slice::<Mesh>() {
-            let mesh_transform = scene_manager.get_transform(mesh.owner_record());
+            let mesh_transform = scene_manager.get_transform(mesh.owner_id());
 
             let matrix_data = MatrixData {
                 mvp: camera.data.projection_view(camera_transform) * mesh_transform.model(),

@@ -58,7 +58,7 @@ impl Scripting {
 
     pub fn create_script_object(
         &self,
-        owner_id: u32,
+        owner_id: usize,
         script: &serializable::Script,
         resource_manager: &ResourceManager,
     ) -> ScriptObject {
