@@ -1,8 +1,5 @@
 use crate::{
-    entity_system::{EntityId, RefEntityId, SceneManager},
-    resources::ResourceManager,
-    runtime::WindowEvents,
-    serializable,
+    entity_system::SceneManager, resources::ResourceManager, runtime::WindowEvents, serializable,
 };
 use glfw::{Action, Key, Modifiers, PWindow};
 use glm::Vec3;
@@ -121,7 +118,7 @@ impl Scripting {
         let updates = LightUserData(&self.updates.0 as *const _ as *mut c_void);
 
         InputApi::create_wrappers(&self.lua, window_events, window);
-        TransformApi::create_wrappers(&self.lua, object_owners, scene_manager);
+        // TransformApi::create_wrappers(&self.lua, object_owners, scene_manager);
 
         let frame_time = self
             .lua
@@ -131,13 +128,13 @@ impl Scripting {
             .unwrap();
         self.lua.globals().set("FrameTime", frame_time).unwrap();
 
-        let delete_script = self
-            .lua
-            .create_function(ScriptingApi::delete_script)
-            .unwrap()
-            .bind((scripting, scene_manager))
-            .unwrap();
-        self.lua.globals().set("DeleteScript", delete_script);
+        // let delete_script = self
+        //     .lua
+        //     .create_function(ScriptingApi::delete_script)
+        //     .unwrap()
+        //     .bind((scripting, scene_manager))
+        //     .unwrap();
+        // self.lua.globals().set("DeleteScript", delete_script);
 
         // let delete_entity = self.lua.create_function()
     }
@@ -158,193 +155,193 @@ impl Scripting {
 
 struct TransformApi;
 
-impl TransformApi {
-    fn create_wrappers(lua: &Lua, object_owners: LightUserData, scene_manager: LightUserData) {
-        let transform_move = lua
-            .create_function(TransformApi::transform_move)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_move_local = lua
-            .create_function(TransformApi::transform_move_local)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_rotate = lua
-            .create_function(TransformApi::transform_rotate)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_rotate_local = lua
-            .create_function(TransformApi::transform_rotate_local)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_get_position = lua
-            .create_function(TransformApi::transform_get_position)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_get_global_position = lua
-            .create_function(TransformApi::transform_get_global_position)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_get_orientation = lua
-            .create_function(TransformApi::transform_get_orientation)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_set_position = lua
-            .create_function(TransformApi::transform_set_position)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
-        let transform_set_orientation = lua
-            .create_function(TransformApi::transform_set_orientation)
-            .unwrap()
-            .bind((object_owners, scene_manager))
-            .unwrap();
+// impl TransformApi {
+//     fn create_wrappers(lua: &Lua, object_owners: LightUserData, scene_manager: LightUserData) {
+//         let transform_move = lua
+//             .create_function(TransformApi::transform_move)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_move_local = lua
+//             .create_function(TransformApi::transform_move_local)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_rotate = lua
+//             .create_function(TransformApi::transform_rotate)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_rotate_local = lua
+//             .create_function(TransformApi::transform_rotate_local)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_get_position = lua
+//             .create_function(TransformApi::transform_get_position)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_get_global_position = lua
+//             .create_function(TransformApi::transform_get_global_position)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_get_orientation = lua
+//             .create_function(TransformApi::transform_get_orientation)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_set_position = lua
+//             .create_function(TransformApi::transform_set_position)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
+//         let transform_set_orientation = lua
+//             .create_function(TransformApi::transform_set_orientation)
+//             .unwrap()
+//             .bind((object_owners, scene_manager))
+//             .unwrap();
 
-        let transform = lua.create_table().unwrap();
-        transform.set("move", transform_move).unwrap();
-        transform.set("moveLocal", transform_move_local).unwrap();
-        transform.set("rotate", transform_rotate).unwrap();
-        transform
-            .set("rotateLocal", transform_rotate_local)
-            .unwrap();
-        transform
-            .set("getPosition", transform_get_position)
-            .unwrap();
-        transform
-            .set("getGlobalPosition", transform_get_global_position)
-            .unwrap();
-        transform
-            .set("getOrientation", transform_get_orientation)
-            .unwrap();
-        transform
-            .set("setPosition", transform_set_position)
-            .unwrap();
-        transform
-            .set("setOrientation", transform_set_orientation)
-            .unwrap();
-        lua.globals().set("Transform", transform).unwrap();
+//         let transform = lua.create_table().unwrap();
+//         transform.set("move", transform_move).unwrap();
+//         transform.set("moveLocal", transform_move_local).unwrap();
+//         transform.set("rotate", transform_rotate).unwrap();
+//         transform
+//             .set("rotateLocal", transform_rotate_local)
+//             .unwrap();
+//         transform
+//             .set("getPosition", transform_get_position)
+//             .unwrap();
+//         transform
+//             .set("getGlobalPosition", transform_get_global_position)
+//             .unwrap();
+//         transform
+//             .set("getOrientation", transform_get_orientation)
+//             .unwrap();
+//         transform
+//             .set("setPosition", transform_set_position)
+//             .unwrap();
+//         transform
+//             .set("setOrientation", transform_set_orientation)
+//             .unwrap();
+//         lua.globals().set("Transform", transform).unwrap();
 
-        let vec3_type = lua.create_proxy::<LuaVec3>().unwrap();
-        lua.globals().set("Vec3", vec3_type).unwrap();
-    }
+//         let vec3_type = lua.create_proxy::<LuaVec3>().unwrap();
+//         lua.globals().set("Vec3", vec3_type).unwrap();
+//     }
 
-    fn transform_move(
-        lua: &Lua,
-        args: (LightUserData, LightUserData, Table, LuaVec3),
-    ) -> Result<()> {
-        let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
-        scene_manager.get_transform_mut(&id).move_(&vector);
-        Ok(())
-    }
+//     fn transform_move(
+//         lua: &Lua,
+//         args: (LightUserData, LightUserData, Table, LuaVec3),
+//     ) -> Result<()> {
+//         let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
+//         scene_manager.get_transform_mut(&id).move_(&vector);
+//         Ok(())
+//     }
 
-    fn transform_move_local(
-        lua: &Lua,
-        args: (LightUserData, LightUserData, Table, LuaVec3),
-    ) -> Result<()> {
-        let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
-        scene_manager.get_transform_mut(&id).move_local(&vector);
-        Ok(())
-    }
+//     fn transform_move_local(
+//         lua: &Lua,
+//         args: (LightUserData, LightUserData, Table, LuaVec3),
+//     ) -> Result<()> {
+//         let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
+//         scene_manager.get_transform_mut(&id).move_local(&vector);
+//         Ok(())
+//     }
 
-    fn transform_rotate(
-        lua: &Lua,
-        args: (LightUserData, LightUserData, Table, LuaVec3),
-    ) -> Result<()> {
-        let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
-        scene_manager.get_transform_mut(&id).rotate(&vector);
-        Ok(())
-    }
+//     fn transform_rotate(
+//         lua: &Lua,
+//         args: (LightUserData, LightUserData, Table, LuaVec3),
+//     ) -> Result<()> {
+//         let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
+//         scene_manager.get_transform_mut(&id).rotate(&vector);
+//         Ok(())
+//     }
 
-    fn transform_rotate_local(
-        lua: &Lua,
-        args: (LightUserData, LightUserData, Table, LuaVec3),
-    ) -> Result<()> {
-        let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
-        scene_manager.get_transform_mut(&id).rotate_local(&vector);
-        Ok(())
-    }
+//     fn transform_rotate_local(
+//         lua: &Lua,
+//         args: (LightUserData, LightUserData, Table, LuaVec3),
+//     ) -> Result<()> {
+//         let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
+//         scene_manager.get_transform_mut(&id).rotate_local(&vector);
+//         Ok(())
+//     }
 
-    fn transform_get_position<'lua>(
-        lua: &'lua Lua,
-        args: (LightUserData, LightUserData, Table<'lua>),
-    ) -> Result<LuaVec3> {
-        let (scene_manager, id) = Self::extract_args_no_vec(lua, args)?;
-        Ok(LuaVec3(scene_manager.get_transform(&id).position))
-    }
+//     fn transform_get_position<'lua>(
+//         lua: &'lua Lua,
+//         args: (LightUserData, LightUserData, Table<'lua>),
+//     ) -> Result<LuaVec3> {
+//         let (scene_manager, id) = Self::extract_args_no_vec(lua, args)?;
+//         Ok(LuaVec3(scene_manager.get_transform(&id).position))
+//     }
 
-    fn transform_get_global_position<'lua>(
-        lua: &'lua Lua,
-        args: (LightUserData, LightUserData, Table<'lua>),
-    ) -> Result<LuaVec3> {
-        let (scene_manager, id) = Self::extract_args_no_vec(lua, args)?;
-        Ok(LuaVec3(scene_manager.get_transform(&id).global_position()))
-    }
+//     fn transform_get_global_position<'lua>(
+//         lua: &'lua Lua,
+//         args: (LightUserData, LightUserData, Table<'lua>),
+//     ) -> Result<LuaVec3> {
+//         let (scene_manager, id) = Self::extract_args_no_vec(lua, args)?;
+//         Ok(LuaVec3(scene_manager.get_transform(&id).global_position()))
+//     }
 
-    fn transform_get_orientation<'lua>(
-        lua: &'lua Lua,
-        args: (LightUserData, LightUserData, Table<'lua>),
-    ) -> Result<LuaVec3> {
-        let (scene_manager, id) = Self::extract_args_no_vec(lua, args)?;
-        Ok(LuaVec3(glm::degrees(&glm::quat_euler_angles(
-            &scene_manager.get_transform(&id).orientation,
-        ))))
-    }
+//     fn transform_get_orientation<'lua>(
+//         lua: &'lua Lua,
+//         args: (LightUserData, LightUserData, Table<'lua>),
+//     ) -> Result<LuaVec3> {
+//         let (scene_manager, id) = Self::extract_args_no_vec(lua, args)?;
+//         Ok(LuaVec3(glm::degrees(&glm::quat_euler_angles(
+//             &scene_manager.get_transform(&id).orientation,
+//         ))))
+//     }
 
-    fn transform_set_position(
-        lua: &Lua,
-        args: (LightUserData, LightUserData, Table, LuaVec3),
-    ) -> Result<()> {
-        let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
-        scene_manager.get_transform_mut(&id).position = *vector;
-        Ok(())
-    }
+//     fn transform_set_position(
+//         lua: &Lua,
+//         args: (LightUserData, LightUserData, Table, LuaVec3),
+//     ) -> Result<()> {
+//         let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
+//         scene_manager.get_transform_mut(&id).position = *vector;
+//         Ok(())
+//     }
 
-    fn transform_set_orientation(
-        lua: &Lua,
-        args: (LightUserData, LightUserData, Table, LuaVec3),
-    ) -> Result<()> {
-        let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
-        scene_manager
-            .get_transform_mut(&id)
-            .set_orientation(&vector);
-        Ok(())
-    }
+//     fn transform_set_orientation(
+//         lua: &Lua,
+//         args: (LightUserData, LightUserData, Table, LuaVec3),
+//     ) -> Result<()> {
+//         let (mut scene_manager, vector, id) = Self::extract_args_vec(lua, args)?;
+//         scene_manager
+//             .get_transform_mut(&id)
+//             .set_orientation(&vector);
+//         Ok(())
+//     }
 
-    fn extract_args_vec<'lua>(
-        lua: &'lua Lua,
-        args: (LightUserData, LightUserData, Table<'lua>, LuaVec3),
-    ) -> Result<(&'lua mut SceneManager, LuaVec3, RefEntityId<'lua>)> {
-        let object_owners = unsafe {
-            lua.registry_value::<Table>(&*args.0 .0.cast::<RegistryKey>())
-                .unwrap()
-        };
-        let scene_manager = unsafe { &mut *args.1 .0.cast::<SceneManager>() };
-        let object = args.2;
-        let vector = args.3;
-        let id = object_owners.get::<_, RefEntityId>(object)?;
-        Ok((scene_manager, vector, id))
-    }
+//     fn extract_args_vec<'lua>(
+//         lua: &'lua Lua,
+//         args: (LightUserData, LightUserData, Table<'lua>, LuaVec3),
+//     ) -> Result<(&'lua mut SceneManager, LuaVec3, RefEntityId<'lua>)> {
+//         let object_owners = unsafe {
+//             lua.registry_value::<Table>(&*args.0 .0.cast::<RegistryKey>())
+//                 .unwrap()
+//         };
+//         let scene_manager = unsafe { &mut *args.1 .0.cast::<SceneManager>() };
+//         let object = args.2;
+//         let vector = args.3;
+//         let id = object_owners.get::<_, RefEntityId>(object)?;
+//         Ok((scene_manager, vector, id))
+//     }
 
-    fn extract_args_no_vec<'lua>(
-        lua: &'lua Lua,
-        args: (LightUserData, LightUserData, Table<'lua>),
-    ) -> Result<(&'lua mut SceneManager, RefEntityId<'lua>)> {
-        let object_owners = unsafe {
-            lua.registry_value::<Table>(&*args.0 .0.cast::<RegistryKey>())
-                .unwrap()
-        };
-        let scene_manager = unsafe { &mut *args.1 .0.cast::<SceneManager>() };
-        let object = args.2;
-        let id = object_owners.get::<_, RefEntityId>(object)?;
-        Ok((scene_manager, id))
-    }
-}
+//     fn extract_args_no_vec<'lua>(
+//         lua: &'lua Lua,
+//         args: (LightUserData, LightUserData, Table<'lua>),
+//     ) -> Result<(&'lua mut SceneManager, RefEntityId<'lua>)> {
+//         let object_owners = unsafe {
+//             lua.registry_value::<Table>(&*args.0 .0.cast::<RegistryKey>())
+//                 .unwrap()
+//         };
+//         let scene_manager = unsafe { &mut *args.1 .0.cast::<SceneManager>() };
+//         let object = args.2;
+//         let id = object_owners.get::<_, RefEntityId>(object)?;
+//         Ok((scene_manager, id))
+//     }
+// }
 
 struct InputApi;
 
@@ -690,68 +687,68 @@ impl ApplicationApi {
 
 struct ScriptingApi;
 
-impl ScriptingApi {
-    fn delete_script(lua: &Lua, args: (LightUserData, LightUserData, Table)) -> Result<()> {
-        let scripting = unsafe { &*args.0 .0.cast::<Scripting>() };
-        let scene_manager = unsafe { &mut *(args.1 .0.cast::<SceneManager>()) };
-        let object = args.2;
+// impl ScriptingApi {
+//     fn delete_script(lua: &Lua, args: (LightUserData, LightUserData, Table)) -> Result<()> {
+//         let scripting = unsafe { &*args.0 .0.cast::<Scripting>() };
+//         let scene_manager = unsafe { &mut *(args.1 .0.cast::<SceneManager>()) };
+//         let object = args.2;
 
-        let object_owners = scripting.object_owners.as_table(lua).unwrap();
-        let updates = scripting.updates.as_table(lua).unwrap();
-        let owner_id = object_owners.get::<_, RefEntityId>(object.clone())?;
+//         let object_owners = scripting.object_owners.as_table(lua).unwrap();
+//         let updates = scripting.updates.as_table(lua).unwrap();
+//         let owner_id = object_owners.get::<_, RefEntityId>(object.clone())?;
 
-        object_owners.set(object.clone(), Value::Nil).unwrap();
-        updates.set(object.clone(), Value::Nil).unwrap();
+//         object_owners.set(object.clone(), Value::Nil).unwrap();
+//         updates.set(object.clone(), Value::Nil).unwrap();
 
-        let target = scene_manager
-            .get_components::<ScriptObject>(&owner_id)
-            .find(|item| {
-                let key = &scene_manager.component_slice::<ScriptObject>()[item.array_index()]
-                    .data
-                    .0;
-                let o = lua.registry_value::<Table>(key).unwrap();
-                o == object
-            })
-            .unwrap();
+//         let target = scene_manager
+//             .get_components::<ScriptObject>(&owner_id)
+//             .find(|item| {
+//                 let key = &scene_manager.component_slice::<ScriptObject>()[item.array_index()]
+//                     .data
+//                     .0;
+//                 let o = lua.registry_value::<Table>(key).unwrap();
+//                 o == object
+//             })
+//             .unwrap();
 
-        // scene_manager.delete_managed_component::<ScriptObject>(target, scripting);
-        println!("Object is removed");
+//         // scene_manager.delete_managed_component::<ScriptObject>(target, scripting);
+//         println!("Object is removed");
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    fn delete_entity(
-        lua: &Lua,
-        args: (LightUserData, LightUserData, LightUserData, Table),
-    ) -> Result<()> {
-        let object_owners = unsafe { &*args.0 .0.cast::<RegistryKey>() };
-        let updates = unsafe { &*args.1 .0.cast::<RegistryKey>() };
-        let scene_manager = unsafe { &mut *(args.2 .0.cast::<SceneManager>()) };
-        let object = args.3;
+//     fn delete_entity(
+//         lua: &Lua,
+//         args: (LightUserData, LightUserData, LightUserData, Table),
+//     ) -> Result<()> {
+//         let object_owners = unsafe { &*args.0 .0.cast::<RegistryKey>() };
+//         let updates = unsafe { &*args.1 .0.cast::<RegistryKey>() };
+//         let scene_manager = unsafe { &mut *(args.2 .0.cast::<SceneManager>()) };
+//         let object = args.3;
 
-        let object_owners = lua.registry_value::<Table>(&object_owners).unwrap();
-        let updates = lua.registry_value::<Table>(updates).unwrap();
+//         let object_owners = lua.registry_value::<Table>(&object_owners).unwrap();
+//         let updates = lua.registry_value::<Table>(updates).unwrap();
 
-        let owner_id = object_owners.get::<_, RefEntityId>(object.clone())?;
+//         let owner_id = object_owners.get::<_, RefEntityId>(object.clone())?;
 
-        let (index, _) = &scene_manager
-            .component_slice::<ScriptObject>()
-            .iter()
-            .enumerate()
-            .find(|(_, item)| {
-                let o = lua.registry_value::<Table>(&item.data.0).unwrap();
-                o == object
-            })
-            .unwrap();
+//         let (index, _) = &scene_manager
+//             .component_slice::<ScriptObject>()
+//             .iter()
+//             .enumerate()
+//             .find(|(_, item)| {
+//                 let o = lua.registry_value::<Table>(&item.data.0).unwrap();
+//                 o == object
+//             })
+//             .unwrap();
 
-        object_owners.set(object.clone(), Value::Nil).unwrap();
-        updates.set(object, Value::Nil).unwrap();
-        // scene_manager.delete_script(&owner_id, *index);
-        println!("Object is removed");
+//         object_owners.set(object.clone(), Value::Nil).unwrap();
+//         updates.set(object, Value::Nil).unwrap();
+//         // scene_manager.delete_script(&owner_id, *index);
+//         println!("Object is removed");
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
 #[derive(Debug)]
 pub struct CustomError(String);

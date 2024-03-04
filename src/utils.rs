@@ -141,12 +141,13 @@ impl TypelessVec {
     }
 
     pub fn clear<T>(&mut self) {
+        todo!()
         // test when ptr is null
-        let slice = self.slice_mut::<T>();
-        self.len = 0;
-        unsafe {
-            ptr::drop_in_place(slice);
-        }
+        // let slice = self.slice_mut::<T>();
+        // self.len = 0;
+        // unsafe {
+            // ptr::drop_in_place(slice);
+        // }
     }
 }
 

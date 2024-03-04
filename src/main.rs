@@ -2,7 +2,6 @@
 // #![windows_subsystem = "windows"]
 #![allow(unused)]
 
-
 extern crate nalgebra_glm as glm;
 
 mod application;
@@ -19,14 +18,31 @@ mod scene;
 mod scripting;
 mod serializable;
 mod shader;
-mod utils;
 mod static_runtime;
+mod utils;
 
 // use runtime::Runtime;
-use scene::Scene;
-use utils::TypelessVec;
+// use scene::Scene;
+// use utils::TypelessVec;
 
 fn main() {
+    let lua = mlua::Lua::new();
+    lua.load(
+        "
+        local object = {}
+        print(tostring(object))
+        local table = {}
+        object[table] = 12
+        
+        for key, value in pairs(object) do
+            print(\"Key: \" .. tostring(key) .. \"\t\tValue: \" .. tostring(value))
+        end
+        
+    ",
+    )
+    .exec()
+    .unwrap();
+
     // let mut v = UntypedVec::default();
     // v.push(10);
     // v.push(20);
@@ -48,5 +64,5 @@ fn main() {
 
     // let r = Runtime::new();
     // r.run();
-    static_runtime::start();
+    // static_runtime::start();
 }
