@@ -122,14 +122,14 @@ impl SceneManager {
                 }
             }
             None => {
-                if self.entities[&child_id].parent.is_some() {
-                    let parent_id = self.entities[&child_id].parent.unwrap();
-                    let parent = self
-                        .entities
-                        .get_mut(&parent_id)
-                        .unwrap()
+                if let Some(parent_id) = self.entities[&child_id].parent {
+                    let parent = self.entities.get_mut(&parent_id).unwrap();
+                    let index = parent
                         .children
-                        .retain(|item| *item != child_id);
+                        .iter()
+                        .position(|item| *item == child_id)
+                        .unwrap();
+                    parent.children.remove(index);
 
                     let child = self.entities.get_mut(&child_id).unwrap();
                     child.parent = None;
@@ -219,6 +219,13 @@ impl SceneManager {
         self.components[T::data_type().usize()].slice_mut()
     }
 
+    fn components<T>(&self) -> &TypelessVec
+    where
+        T: ComponentData,
+    {
+        &self.components[T::data_type().usize()]
+    }
+
     fn components_mut<T>(&mut self) -> &mut TypelessVec
     where
         T: ComponentData,
@@ -245,89 +252,102 @@ impl SceneManager {
     #[allow(private_bounds)]
     pub fn delete_unmanaged_component<T>(&mut self, target_id: usize, index: usize)
     where
-        T: ComponentData + Unmanaged,
+        T: Unmanaged,
     {
-        let f = self.entities[&target_id]
-            .components
-            .iter()
-            .filter(|item| item.data_type == T::data_type());
-    }
-
-    #[allow(private_bounds)]
-    pub fn delete_managed_component<T>(&mut self, index: usize, scripting: &Scripting)
-    where
-        T: ComponentData + Managed,
-    {
-        match T::data_type() {
-            ComponentDataType::ScriptObject => {}
-            _ => {
-                unreachable!()
-            }
+        let opt = self.find_by_index::<T>(target_id, index);
+        if let Some(record) = opt {
+            _ = self.delete_component::<T>(target_id, record.copy());
         }
     }
 
-    fn delete_component<T>(&mut self, record: &ComponentRecord) -> T
-    where
-        T: ComponentData,
+    #[allow(private_bounds)]
+    pub fn delete_managed_component<T>(
+        &mut self,
+        target_id: usize,
+        index: usize,
+        scripting: &Scripting,
+    ) where
+        T: Managed,
     {
-        assert_eq!(T::data_type(), record.data_type);
+        let opt = self.find_by_index::<T>(target_id, index);
+        if let Some(record) = opt {
+            let data = self.delete_component::<T>(target_id, record.copy());
+            Self::delete_managed_stuff(data);
+        }
+    }
 
-        let index_of_deleting = record.array_index;
-        let owner_id = self.component_slice::<T>()[record.array_index].owner_id;
-
-        self.entities
-            .get_mut(&owner_id)
-            .unwrap()
-            .components
-            .retain(|item| item != record);
-
-        // let data = self.components[T::data_type().usize()]
-        //     .take_at::<Component<T>>(index_of_deleting)
-        //     .data;
-
-        // let len = self.component_slice::<T>().len();
-        // if index_of_deleting < len {
-        //     let affected_entities = (&self.component_slice::<T>()[index_of_deleting..len])
-        //         .iter()
-        //         .map(|component| component.owner_record.clone())
-        //         .collect::<Vec<EntityId>>();
-
-        //     for id in affected_entities {
-        //         let entity = self.entities.get_mut(&id).unwrap();
-        //         entity
-        //             .components
-        //             .iter_mut()
-        //             .filter(|record| {
-        //                 record.data_type == T::data_type() && record.array_index > index_of_deleting
-        //             })
-        //             .for_each(|record| record.array_index -= 1);
-        //     }
-        // }
-        // data
+    fn delete_managed_stuff<T>(data: T)
+    where
+        T: Managed,
+    {
         todo!()
     }
 
+    fn find_by_index<T>(&self, target_id: usize, index: usize) -> Option<&ComponentRecord>
+    where
+        T: ComponentData,
+    {
+        self.entities[&target_id]
+            .components
+            .iter()
+            .filter(|item| item.data_type == T::data_type())
+            .nth(index)
+    }
+
+    fn delete_component<T>(&mut self, owner_id: usize, record: ComponentRecord) -> T
+    where
+        T: ComponentData,
+    {
+        let index_of_deleting = record.array_index;
+
+        let owner = self.entities.get_mut(&owner_id).unwrap();
+        let index = owner
+            .components
+            .iter()
+            .position(|item| *item == record)
+            .unwrap();
+        owner.components.remove(index);
+
+        let index_of_last = self.components::<T>().len::<Component<T>>() - 1;
+        let owner_id_of_last = self.component_slice::<T>().last().unwrap().owner_id;
+        let owner_of_last = self.entities.get_mut(&owner_id_of_last).unwrap();
+        let index = owner_of_last
+            .components
+            .iter()
+            .position(|item| item.data_type == T::data_type() && item.array_index == index_of_last)
+            .unwrap();
+        owner_of_last.components[index].array_index = index_of_deleting;
+
+        self.components_mut::<T>()
+            .swap_take::<Component<T>>(index_of_deleting)
+            .data
+    }
+
     pub fn delete_entity(&mut self, target_id: usize, scripting: &Scripting) {
-        // let records = self.entities[id]
-        //     .components
-        //     .iter()
-        //     .map(|item| item.clone())
-        //     .collect::<Vec<ComponentRecord>>();
+        let records = self.entities[&target_id]
+            .components
+            .iter()
+            .map(|item| item.copy())
+            .collect::<Vec<ComponentRecord>>();
 
-        // for record in records {
-        //     match record.data_type {
-        //         ComponentDataType::Camera => self.delete_unmanaged_component::<Camera>(&record),
-        //         ComponentDataType::LightSource => {
-        //             self.delete_unmanaged_component::<LightSource>(&record)
-        //         }
-        //         ComponentDataType::Mesh => self.delete_unmanaged_component::<Mesh>(&record),
-        //         ComponentDataType::ScriptObject => {
-        //             self.delete_managed_component::<ScriptObject>(&record, scripting)
-        //         }
-        //         _ => unreachable!(),
-        //     }
-        // }
+        for record in records {
+            match record.data_type {
+                ComponentDataType::Camera => {
+                    _ = self.delete_component::<Camera>(target_id, record);
+                }
+                ComponentDataType::LightSource => {
+                    _ = self.delete_component::<LightSource>(target_id, record);
+                }
+                ComponentDataType::Mesh => _ = self.delete_component::<Mesh>(target_id, record),
+                ComponentDataType::ScriptObject => {
+                    let data = self.delete_component::<ScriptObject>(target_id, record);
+                    Self::delete_managed_stuff(data);
+                }
+                ComponentDataType::Transform => unreachable!(),
+            }
+        }
 
+        self.get_transform_mut(target_id).parent = None // Important!
         // _ = self.entities.remove(&id).unwrap();
         // self.available_indecies.push_back(id.clone());
     }
@@ -378,7 +398,7 @@ impl ComponentRecord {
         self.array_index
     }
 
-    fn clone(&self) -> Self {
+    fn copy(&self) -> Self {
         Self {
             array_index: self.array_index,
             data_type: self.data_type,
@@ -430,13 +450,13 @@ impl ComponentData for ScriptObject {
     }
 }
 
-trait Unmanaged {}
+trait Unmanaged: ComponentData {}
 
 impl Unmanaged for Mesh {}
 impl Unmanaged for Camera {}
 impl Unmanaged for LightSource {}
 
-trait Managed {}
+trait Managed: ComponentData {}
 
 impl Managed for ScriptObject {}
 

@@ -36,11 +36,11 @@ impl TypelessVec {
         }
     }
 
-    fn empty() -> Self {
+    const fn empty() -> Self {
         Self {
             buf: ptr::null_mut(),
             layout: Layout::new::<()>(),
-            len: Default::default(),
+            len: 0,
         }
     }
 
@@ -108,14 +108,6 @@ impl TypelessVec {
         }
     }
 
-    pub fn iter<T>(&self) -> Iter<'_, T> {
-        Iter {
-            data: self,
-            index: 0,
-            phantom: PhantomData::<T> {},
-        }
-    }
-
     pub fn slice<T>(&self) -> &[T] {
         unsafe { slice::from_raw_parts(self.buf as *const T, self.len::<T>()) }
     }
@@ -140,13 +132,27 @@ impl TypelessVec {
         }
     }
 
+    pub fn swap_take<T>(&mut self, index: usize) -> T {
+        assert!(index < self.len::<T>(), "Index is out of bounds");
+        unsafe {
+            let last_index = self.len::<T>() - 1;
+            let ptr = self.buf.cast::<T>();
+            let value = ptr.add(index).read();
+            if last_index > 0 {
+                ptr.add(index).copy_from(ptr.add(last_index), 1);
+            }
+            self.len -= size_of::<T>();
+            value
+        }
+    }
+
     pub fn clear<T>(&mut self) {
         todo!()
         // test when ptr is null
         // let slice = self.slice_mut::<T>();
         // self.len = 0;
         // unsafe {
-            // ptr::drop_in_place(slice);
+        // ptr::drop_in_place(slice);
         // }
     }
 }
@@ -178,26 +184,6 @@ pub enum Reallocated {
     #[default]
     No,
     Yes,
-}
-
-pub struct Iter<'a, T> {
-    data: &'a TypelessVec,
-    index: usize,
-    phantom: PhantomData<T>,
-}
-
-impl<'a, T: 'a> Iterator for Iter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.data.len::<T>() {
-            let result = Some(self.data.get(self.index));
-            self.index += 1;
-            result
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug)]
