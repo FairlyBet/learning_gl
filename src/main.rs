@@ -26,22 +26,22 @@ mod utils;
 // use utils::TypelessVec;
 
 fn main() {
-    let lua = mlua::Lua::new();
-    lua.load(
-        "
-        local object = {}
-        print(tostring(object))
-        local table = {}
-        object[table] = 12
-        
-        for key, value in pairs(object) do
-            print(\"Key: \" .. tostring(key) .. \"\t\tValue: \" .. tostring(value))
-        end
-        
-    ",
-    )
-    .exec()
-    .unwrap();
+    // let lua = mlua::Lua::new();
+    // lua.load(
+    //     "
+    //     local object = {}
+    //     print(tostring(object))
+    //     local table = {}
+    //     object[table] = 12
+
+    //     for key, value in pairs(object) do
+    //         print(\"Key: \" .. tostring(key) .. \"\t\tValue: \" .. tostring(value))
+    //     end
+
+    // ",
+    // )
+    // .exec()
+    // .unwrap();
 
     // let mut v = UntypedVec::default();
     // v.push(10);
@@ -64,5 +64,5 @@ fn main() {
 
     // let r = Runtime::new();
     // r.run();
-    // static_runtime::start();
+    static_runtime::start();
 }

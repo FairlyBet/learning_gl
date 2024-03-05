@@ -28,9 +28,10 @@ impl ScriptObject {
 
 #[derive(Debug)]
 pub struct Scripting {
-    pub lua: Lua,
-    object_owners: ScriptObject,
-    updates: ScriptObject,
+    lua: Lua,
+    object_owners: RegistryKey,
+    starts: RegistryKey,
+    updates: RegistryKey,
 }
 
 impl Scripting {
@@ -41,18 +42,25 @@ impl Scripting {
         let metatable = lua.create_table().unwrap();
         metatable.set("__mode", "k").unwrap();
         table.set_metatable(Some(metatable));
-        let object_owners_key = lua.create_registry_value(table).unwrap();
+        let object_owners = lua.create_registry_value(table).unwrap();
 
         let table = lua.create_table().unwrap();
         let metatable = lua.create_table().unwrap();
         metatable.set("__mode", "kv").unwrap();
         table.set_metatable(Some(metatable));
-        let updates_key = lua.create_registry_value(table).unwrap();
+        let starts = lua.create_registry_value(table).unwrap();
+
+        let table = lua.create_table().unwrap();
+        let metatable = lua.create_table().unwrap();
+        metatable.set("__mode", "kv").unwrap();
+        table.set_metatable(Some(metatable));
+        let updates = lua.create_registry_value(table).unwrap();
 
         Self {
             lua,
-            object_owners: ScriptObject(object_owners_key),
-            updates: ScriptObject(updates_key),
+            object_owners,
+            starts,
+            updates,
         }
     }
 
@@ -62,95 +70,53 @@ impl Scripting {
         script: &serializable::Script,
         resource_manager: &ResourceManager,
     ) -> ScriptObject {
-        let object = self
-            .lua
-            .load(&resource_manager.compiled_scripts()[&script.script_path].0)
-            .eval::<Table>()
-            .unwrap();
+        // let object = self
+        //     .lua
+        //     .load(&resource_manager.compiled_scripts()[&script.script_path].0)
+        //     .eval::<Table>()
+        //     .unwrap();
 
-        if let Ok(fun) = object.get::<_, Function>("update") {
-            let updates = self.updates.as_table(&self.lua).unwrap();
-            updates.set(object.clone(), fun).unwrap();
-        }
+        // if let Ok(fun) = object.get::<_, Function>("update") {
+        //     let updates = self.updates.as_table(&self.lua).unwrap();
+        //     updates.set(object.clone(), fun).unwrap();
+        // }
 
-        self.object_owners
-            .as_table(&self.lua)
-            .unwrap()
-            .set(object.clone(), owner_id)
-            .unwrap();
+        // self.object_owners
+        //     .as_table(&self.lua)
+        //     .unwrap()
+        //     .set(object.clone(), owner_id)
+        //     .unwrap();
 
-        let key = self.lua.create_registry_value(object).unwrap();
+        // let key = self.lua.create_registry_value(object).unwrap();
 
-        ScriptObject(key)
+        // ScriptObject(key)
+        todo!()
     }
 
-    pub fn run_updates(&self) {
-        let updates = self.updates.as_table(&self.lua).unwrap();
-        updates
-            .for_each(|k: Table, v: Function| v.call::<_, ()>(k))
-            .unwrap();
-    }
-
-    fn gc_collect(&self) {
-        self.lua.expire_registry_values();
-        self.lua.gc_collect();
-    }
+    // pub fn run_updates(&self) {
+    //     let updates = self.updates.as_table(&self.lua).unwrap();
+    //     updates
+    //         .for_each(|k: Table, v: Function| v.call::<_, ()>(k))
+    //         .unwrap();
+    // }
 
     pub fn compile_script(&self, src: &str, name: &str) -> Result<CompiledScript> {
         let chunk = self.lua.load(src).set_name(name);
         let dumped = chunk.into_function()?.dump(false);
         Ok(CompiledScript(dumped))
     }
-
-    pub fn create_wrappers<'a>(
-        &'a self,
-        scene_manager: &'a SceneManager,
-        events: &'a WindowEvents,
-        window: &'a PWindow,
-        frame_time: &'a f64,
-    ) {
-        let scene_manager = LightUserData(scene_manager as *const _ as *mut c_void);
-        let window_events = LightUserData(events as *const _ as *mut c_void);
-        let window = LightUserData(window as *const _ as *mut c_void);
-        let frame_time = LightUserData(frame_time as *const _ as *mut c_void);
-        let scripting = LightUserData(self as *const _ as *mut c_void);
-        let object_owners = LightUserData(&self.object_owners.0 as *const _ as *mut c_void);
-        let updates = LightUserData(&self.updates.0 as *const _ as *mut c_void);
-
-        InputApi::create_wrappers(&self.lua, window_events, window);
-        // TransformApi::create_wrappers(&self.lua, object_owners, scene_manager);
-
-        let frame_time = self
-            .lua
-            .create_function(ApplicationApi::frame_time)
-            .unwrap()
-            .bind(frame_time)
-            .unwrap();
-        self.lua.globals().set("FrameTime", frame_time).unwrap();
-
-        // let delete_script = self
-        //     .lua
-        //     .create_function(ScriptingApi::delete_script)
-        //     .unwrap()
-        //     .bind((scripting, scene_manager))
-        //     .unwrap();
-        // self.lua.globals().set("DeleteScript", delete_script);
-
-        // let delete_entity = self.lua.create_function()
-    }
-
-    pub fn delete_script_object(&self, script_object: ScriptObject) {
-        let object = self.lua.registry_value::<Table>(&script_object.0).unwrap();
-        self.object_owners
-            .as_table(&self.lua)
-            .unwrap()
-            .set(object.clone(), Value::Nil);
-        self.updates
-            .as_table(&self.lua)
-            .unwrap()
-            .set(object.clone(), Value::Nil);
-        self.lua.remove_registry_value(script_object.0);
-    }
+    // pub fn delete_script_object(&self, script_object: ScriptObject) {
+    //     let object = self.lua.registry_value::<Table>(&script_object.0).unwrap();
+    //     self.object_owners
+    //         .as_table(&self.lua)
+    //         .unwrap()
+    //         .set(object.clone(), Value::Nil);
+    //     self.updates
+    //         .as_table(&self.lua)
+    //         .unwrap()
+    //         .set(object.clone(), Value::Nil);
+    //     self.lua.remove_registry_value(script_object.0);
+    // }
 }
 
 struct TransformApi;

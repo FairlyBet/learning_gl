@@ -95,11 +95,12 @@ pub fn start() {
 
 fn main_loop() {
     while !window().should_close() {
-        poll_events(&mut vec![renderer(), screen()]);
+        process_events(&mut vec![renderer(), screen()]);
+        render_iteration();
     }
 }
 
-fn poll_events(framebuffer_size_callbacks: &mut Vec<&mut dyn FramebufferSizeCallback>) {
+fn process_events(framebuffer_size_callbacks: &mut Vec<&mut dyn FramebufferSizeCallback>) {
     window().glfw.poll_events();
     events().clear_events();
     for (_, event) in glfw::flush_messages(receiver()) {

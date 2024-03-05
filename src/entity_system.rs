@@ -17,7 +17,7 @@ pub struct SceneManager {
     entities: FxHashMap<usize, Entity>,
     components: [TypelessVec; ComponentDataType::COUNT],
     available_ids: VecDeque<usize>,
-    instance_counter: usize,
+    id_counter: usize,
     // mutated_transforms: Vec<usize>,
     // loaded_scenes: HashMap<SceneId, Vec<InstanceId>>
 }
@@ -82,8 +82,8 @@ impl SceneManager {
         let mut rewrite = true;
         let instance_id = self.available_ids.pop_front().unwrap_or_else(|| {
             rewrite = false;
-            let id = self.instance_counter;
-            self.instance_counter = self.instance_counter.checked_add(1).unwrap(); // panic if overflows
+            let id = self.id_counter;
+            self.id_counter = self.id_counter.checked_add(1).unwrap(); // panic if overflows
             id
         });
 
@@ -174,11 +174,11 @@ impl SceneManager {
             array_index: self.components_mut::<T>().len::<Component<T>>(),
             data_type: T::data_type(),
         };
-        let entity = self.entities.get_mut(&target_id).unwrap();
-        entity.components.push(component_record);
+        let target = self.entities.get_mut(&target_id).unwrap();
+        target.components.push(component_record);
 
         let component = Component::new(target_id, data);
-        self.components_mut::<T>().push(component);
+        _ = self.components_mut::<T>().push(component);
     }
 
     #[allow(private_bounds)]
@@ -209,14 +209,14 @@ impl SceneManager {
     where
         T: ComponentData,
     {
-        self.components[T::data_type().usize()].slice()
+        self.components::<T>().slice()
     }
 
     fn component_slice_mut<T>(&mut self) -> &mut [Component<T>]
     where
         T: ComponentData,
     {
-        self.components[T::data_type().usize()].slice_mut()
+        self.components_mut::<T>().slice_mut()
     }
 
     fn components<T>(&self) -> &TypelessVec
@@ -247,6 +247,41 @@ impl SceneManager {
 
     fn tranforms_mut(&mut self) -> &mut TypelessVec {
         &mut self.components[ComponentDataType::Transform.usize()]
+    }
+
+    pub fn delete_entity(&mut self, target_id: usize, scripting: &Scripting) {
+        let children = self.entities[&target_id].children.clone();
+        children
+            .iter()
+            .for_each(|child| self.delete_entity(*child, scripting));
+
+        let records = self.entities[&target_id]
+            .components
+            .iter()
+            .map(|item| item.copy())
+            .collect::<Vec<ComponentRecord>>();
+
+        for record in records {
+            match record.data_type {
+                ComponentDataType::Camera => {
+                    _ = self.delete_component::<Camera>(target_id, record);
+                }
+                ComponentDataType::LightSource => {
+                    _ = self.delete_component::<LightSource>(target_id, record);
+                }
+                ComponentDataType::Mesh => _ = self.delete_component::<Mesh>(target_id, record),
+                ComponentDataType::ScriptObject => {
+                    let data = self.delete_component::<ScriptObject>(target_id, record);
+                    Self::delete_managed_stuff(data);
+                }
+                ComponentDataType::Transform => unreachable!(),
+            }
+        }
+
+        self.get_transform_mut(target_id).parent = None; // Important!
+
+        _ = self.entities.remove(&target_id).unwrap();
+        self.available_ids.push_back(target_id);
     }
 
     #[allow(private_bounds)]
@@ -321,35 +356,6 @@ impl SceneManager {
         self.components_mut::<T>()
             .swap_take::<Component<T>>(index_of_deleting)
             .data
-    }
-
-    pub fn delete_entity(&mut self, target_id: usize, scripting: &Scripting) {
-        let records = self.entities[&target_id]
-            .components
-            .iter()
-            .map(|item| item.copy())
-            .collect::<Vec<ComponentRecord>>();
-
-        for record in records {
-            match record.data_type {
-                ComponentDataType::Camera => {
-                    _ = self.delete_component::<Camera>(target_id, record);
-                }
-                ComponentDataType::LightSource => {
-                    _ = self.delete_component::<LightSource>(target_id, record);
-                }
-                ComponentDataType::Mesh => _ = self.delete_component::<Mesh>(target_id, record),
-                ComponentDataType::ScriptObject => {
-                    let data = self.delete_component::<ScriptObject>(target_id, record);
-                    Self::delete_managed_stuff(data);
-                }
-                ComponentDataType::Transform => unreachable!(),
-            }
-        }
-
-        self.get_transform_mut(target_id).parent = None // Important!
-        // _ = self.entities.remove(&id).unwrap();
-        // self.available_indecies.push_back(id.clone());
     }
 }
 
