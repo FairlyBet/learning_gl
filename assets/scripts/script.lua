@@ -1,7 +1,7 @@
 ObjectPool = {}
 
-function ObjectPool:__newindex(k, v)
-
+function ObjectPool:__newindex(_, v)
+    ObjectPool[v] = true
 end
 
 function ObjectPool:update()

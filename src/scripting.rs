@@ -5,7 +5,8 @@ use glfw::{Action, Key, Modifiers, PWindow};
 use glm::Vec3;
 use mlua::{
     prelude::{LuaUserDataFields, LuaUserDataMethods},
-    Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value,
+    Error, FromLua, Function, LightUserData, Lua, LuaOptions, RegistryKey, Result, Table, UserData,
+    Value,
 };
 use std::{
     cell::Cell,
@@ -29,6 +30,7 @@ impl ScriptObject {
 #[derive(Debug)]
 pub struct Scripting {
     lua: Lua,
+    creation_functions: RegistryKey,
     object_owners: RegistryKey,
     starts: RegistryKey,
     updates: RegistryKey,
@@ -38,30 +40,29 @@ impl Scripting {
     pub fn new() -> Self {
         let lua = Lua::new();
 
-        let table = lua.create_table().unwrap();
-        let metatable = lua.create_table().unwrap();
-        metatable.set("__mode", "k").unwrap();
-        table.set_metatable(Some(metatable));
-        let object_owners = lua.create_registry_value(table).unwrap();
-
-        let table = lua.create_table().unwrap();
-        let metatable = lua.create_table().unwrap();
-        metatable.set("__mode", "kv").unwrap();
-        table.set_metatable(Some(metatable));
-        let starts = lua.create_registry_value(table).unwrap();
-
-        let table = lua.create_table().unwrap();
-        let metatable = lua.create_table().unwrap();
-        metatable.set("__mode", "kv").unwrap();
-        table.set_metatable(Some(metatable));
-        let updates = lua.create_registry_value(table).unwrap();
+        let creation_functions = Self::create_table(&lua, None);
+        let object_owners = Self::create_table(&lua, Some("k"));
+        let starts = Self::create_table(&lua, Some("kv"));
+        let updates = Self::create_table(&lua, Some("kv"));
 
         Self {
             lua,
+            creation_functions,
             object_owners,
             starts,
             updates,
         }
+    }
+
+    fn create_table(lua: &Lua, mode: Option<&str>) -> RegistryKey {
+        let table = lua.create_table().unwrap();
+        let metatable = lua.create_table().unwrap();
+        if let Some(mode) = mode {
+            metatable.set("__mode", mode).unwrap();
+        }
+        // metatable.set("__metatable", "this is a weak table").unwrap();
+        table.set_metatable(Some(metatable));
+        lua.create_registry_value(table).unwrap()
     }
 
     pub fn create_script_object(
@@ -70,41 +71,34 @@ impl Scripting {
         script: &serializable::Script,
         resource_manager: &ResourceManager,
     ) -> ScriptObject {
-        // let object = self
-        //     .lua
-        //     .load(&resource_manager.compiled_scripts()[&script.script_path].0)
-        //     .eval::<Table>()
-        //     .unwrap();
-
-        // if let Ok(fun) = object.get::<_, Function>("update") {
-        //     let updates = self.updates.as_table(&self.lua).unwrap();
-        //     updates.set(object.clone(), fun).unwrap();
-        // }
-
-        // self.object_owners
-        //     .as_table(&self.lua)
-        //     .unwrap()
-        //     .set(object.clone(), owner_id)
-        //     .unwrap();
-
-        // let key = self.lua.create_registry_value(object).unwrap();
-
-        // ScriptObject(key)
         todo!()
     }
 
-    // pub fn run_updates(&self) {
-    //     let updates = self.updates.as_table(&self.lua).unwrap();
-    //     updates
-    //         .for_each(|k: Table, v: Function| v.call::<_, ()>(k))
-    //         .unwrap();
-    // }
+    pub fn load_api(&self) {
+        let vec = self.lua.create_proxy::<LuaVec3>().unwrap();
+        let key = self.lua.create_proxy::<LuaKey>().unwrap();
+        let action = self.lua.create_proxy::<LuaAction>().unwrap();
+        let modifiers = self.lua.create_proxy::<LuaModifiers>().unwrap();
+
+        self.lua.globals().set("Vec3", vec).unwrap();
+        self.lua.globals().set("Keys", key).unwrap();
+        self.lua.globals().set("Actions", action).unwrap();
+        self.lua.globals().set("Modifiers", modifiers).unwrap();
+    }
+
+    pub fn run_updates(&self) {
+        let updates = self.lua.registry_value::<Table>(&self.updates).unwrap();
+        updates
+            .for_each(|k: Table, v: Function| v.call::<_, ()>(k))
+            .unwrap();
+    }
 
     pub fn compile_script(&self, src: &str, name: &str) -> Result<CompiledScript> {
         let chunk = self.lua.load(src).set_name(name);
         let dumped = chunk.into_function()?.dump(false);
         Ok(CompiledScript(dumped))
     }
+
     // pub fn delete_script_object(&self, script_object: ScriptObject) {
     //     let object = self.lua.registry_value::<Table>(&script_object.0).unwrap();
     //     self.object_owners
@@ -118,8 +112,6 @@ impl Scripting {
     //     self.lua.remove_registry_value(script_object.0);
     // }
 }
-
-struct TransformApi;
 
 // impl TransformApi {
 //     fn create_wrappers(lua: &Lua, object_owners: LightUserData, scene_manager: LightUserData) {

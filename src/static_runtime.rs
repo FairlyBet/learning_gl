@@ -19,14 +19,14 @@ const MODE: WindowMode<'_> = WindowMode::Windowed;
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
-static mut WINDOW: MaybeUninit<PWindow> = MaybeUninit::uninit();
-static mut RECEIVER: MaybeUninit<GlfwReceiver<(f64, WindowEvent)>> = MaybeUninit::uninit();
-static mut SCREEN: MaybeUninit<Screen> = MaybeUninit::uninit();
-static mut RENDERER: MaybeUninit<Renderer> = MaybeUninit::uninit();
-static mut RESOURCE_MANAGER: MaybeUninit<ResourceManager> = MaybeUninit::uninit();
-static mut SCENE_MANAGER: MaybeUninit<SceneManager> = MaybeUninit::uninit();
-static mut SCRIPTING: MaybeUninit<Scripting> = MaybeUninit::uninit();
-static mut WINDOW_EVENTS: WindowEvents = WindowEvents::new();
+static mut WINDOW:              MaybeUninit<PWindow>                            = MaybeUninit::uninit();
+static mut RECEIVER:            MaybeUninit<GlfwReceiver<(f64, WindowEvent)>>   = MaybeUninit::uninit();
+static mut SCREEN:              MaybeUninit<Screen>                             = MaybeUninit::uninit();
+static mut RENDERER:            MaybeUninit<Renderer>                           = MaybeUninit::uninit();
+static mut RESOURCE_MANAGER:    MaybeUninit<ResourceManager>                    = MaybeUninit::uninit();
+static mut SCENE_MANAGER:       MaybeUninit<SceneManager>                       = MaybeUninit::uninit();
+static mut SCRIPTING:           MaybeUninit<Scripting>                          = MaybeUninit::uninit();
+static mut WINDOW_EVENTS:       WindowEvents                                    = WindowEvents::new();
 
 fn window() -> &'static mut PWindow {
     unsafe { WINDOW.assume_init_mut() }
@@ -81,6 +81,8 @@ pub fn start() {
         RESOURCE_MANAGER.write(ResourceManager::new());
         SCENE_MANAGER.write(SceneManager::default());
     }
+
+    scripting().load_api();
 
     main_loop();
 
