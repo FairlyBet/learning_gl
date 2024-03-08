@@ -83,6 +83,7 @@ pub fn start() {
     }
 
     scripting().load_api();
+    resource_manager().load_scripts(scripting());
 
     main_loop();
 

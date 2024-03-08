@@ -60,7 +60,6 @@ impl Scripting {
         if let Some(mode) = mode {
             metatable.set("__mode", mode).unwrap();
         }
-        // metatable.set("__metatable", "this is a weak table").unwrap();
         table.set_metatable(Some(metatable));
         lua.create_registry_value(table).unwrap()
     }
@@ -97,6 +96,15 @@ impl Scripting {
         let chunk = self.lua.load(src).set_name(name);
         let dumped = chunk.into_function()?.dump(false);
         Ok(CompiledScript(dumped))
+    }
+
+    pub fn load_script(&self, src: &str, name: &str) {
+        let function = self.lua.load(src).eval::<Function>().unwrap();
+        let creation_functions = self
+            .lua
+            .registry_value::<Table>(&self.creation_functions)
+            .unwrap();
+        creation_functions.set(name, function).unwrap();
     }
 
     // pub fn delete_script_object(&self, script_object: ScriptObject) {

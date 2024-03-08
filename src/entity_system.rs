@@ -63,14 +63,14 @@ impl SceneManager {
                     .map(|item| resource_manager.get_mesh_lazily(&item.path))
                     .collect::<Vec<Mesh>>(),
             );
-            self.attach_components(
-                id,
-                entity
-                    .scripts
-                    .iter()
-                    .map(|item| scripting.create_script_object(id, item, resource_manager))
-                    .collect::<Vec<ScriptObject>>(),
-            );
+            // self.attach_components(
+            //     id,
+            //     entity
+            //         .scripts
+            //         .iter()
+            //         .map(|item| scripting.create_script_object(id, item, resource_manager))
+            //         .collect::<Vec<ScriptObject>>(),
+            // );
 
             self.set_parent(id, parent_id);
 

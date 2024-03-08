@@ -259,9 +259,7 @@ impl ResourceManager {
         let paths = get_paths::<CompiledScript>();
         for path in paths {
             let src = fs::read_to_string(&path).unwrap();
-            let script = scripting.compile_script(&src, &path).unwrap();
-
-            self.scripts.insert(path, script);
+            scripting.load_script(&src, &path);
         }
     }
 
