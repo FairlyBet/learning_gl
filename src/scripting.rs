@@ -5,7 +5,7 @@ use glfw::{Action, Key, Modifiers, PWindow};
 use glm::Vec3;
 use mlua::{
     prelude::{LuaUserDataFields, LuaUserDataMethods},
-    Error, FromLua, Function, LightUserData, Lua, LuaOptions, RegistryKey, Result, Table, UserData,
+    Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData,
     Value,
 };
 use std::{
