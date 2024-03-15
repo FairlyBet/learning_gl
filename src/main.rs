@@ -4,7 +4,6 @@
 
 extern crate nalgebra_glm as glm;
 
-mod application;
 mod camera;
 mod data_3d;
 mod entity_system;
@@ -18,7 +17,6 @@ mod scene;
 mod scripting;
 mod serializable;
 mod shader;
-mod static_runtime;
 mod utils;
 
 fn main() {
@@ -39,5 +37,10 @@ fn main() {
     // v.slice::<i32>().iter().for_each(|item| println!("Item {}", *item));
     // Scene::sample();
 
-    static_runtime::start();
+    // let src = std::fs::read_to_string("assets\\scripts\\api\\gameobject.lua").unwrap();
+    // let lua = mlua::Lua::new();
+    // lua.load(&src).exec().unwrap();
+    // lua.gc_collect().unwrap();
+    // lua.load("print(WeakRef.value)").exec().unwrap();
+    runtime::run();
 }

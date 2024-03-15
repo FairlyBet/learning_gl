@@ -1,126 +1,133 @@
 use crate::{
-    application::Application,
     entity_system::SceneManager,
-    gl_wrappers,
+    gl_wrappers::Gl,
     rendering::{Renderer, Screen},
     resources::ResourceManager,
     scripting::Scripting,
 };
-use glfw::{Action, Context as _, Key, Modifiers, MouseButton, PWindow, WindowEvent};
+use glfw::{
+    fail_on_errors, init, Action, Context, GlfwReceiver, Key, Modifiers, MouseButton,
+    OpenGlProfileHint, PWindow, SwapInterval, WindowEvent, WindowHint, WindowMode,
+};
 
-// #[derive(Debug)]
-// pub struct Runtime;
+const MAJOR: u32 = 4;
+const MINOR: u32 = 3;
+const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(MAJOR, MINOR);
+const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
+const MODE: WindowMode<'_> = WindowMode::Windowed;
+const SWAP_INTERVAL: SwapInterval = SwapInterval::Sync(1);
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 600;
 
-// impl Runtime {
-//     pub fn new() -> Self {
-//         Self {}
-//     }
+pub fn run() {
+    let mut glfw = init(fail_on_errors!()).unwrap();
+    glfw.window_hint(OPENGL_PROFILE);
+    glfw.window_hint(CONTEXT_VERSION);
+    let (mut window, receiver) = glfw.create_window(WIDTH, HEIGHT, "", MODE).unwrap();
+    window.make_current();
+    enable_polling(&mut window);
+    glfw.set_swap_interval(SWAP_INTERVAL);
 
-//     pub fn run(self) {
-//         let mut app = Application::new();
-//         let mut resource_manager = ResourceManager::new();
-//         let mut scene_manager = SceneManager::default();
-//         let mut renderer = Renderer::new(
-//             app.window.get_framebuffer_size(),
-//             app.window.get_context_version(),
-//         );
-//         let mut screen = Screen::new(
-//             app.window.get_framebuffer_size(),
-//             app.window.get_context_version(),
-//         );
-//         let mut events = WindowEvents::default();
-//         let mut frame_time = 0.0;
-//         let scripting = Scripting::new();
+    let gl = Gl::load();
 
-//         resource_manager.load_scripts(&scripting);
-//         scripting.create_wrappers(&scene_manager, &events, &app.window, &frame_time);
-//         scene_manager =
-//             SceneManager::from_scene_index(0, &mut resource_manager, &scripting).unwrap();
+    let mut renderer = Renderer::new(
+        window.get_framebuffer_size(),
+        window.get_context_version(),
+        &gl,
+    );
+    let mut screen = Screen::new(
+        window.get_framebuffer_size(),
+        window.get_context_version(),
+        &gl,
+    );
+    let scripting = Scripting::new();
+    let mut resource_manager = ResourceManager::new();
+    let mut scene_manager = SceneManager::default();
+    let mut events = WindowEvents::new();
+    let mut frametime = 0.0;
 
-//         let mut collect_time = 0.0;
-//         while !app.window.should_close() {
-//             app.window.glfw.set_time(0.0);
+    scripting.load_api(&mut scene_manager, &events);
+    resource_manager.load_scripts(&scripting);
 
-//             Self::update_events(&mut app, &mut events, &mut vec![&mut renderer, &mut screen]);
-//             Self::script_iteration(&scripting);
-//             Self::render_iteration(
-//                 &mut app,
-//                 &renderer,
-//                 &scene_manager,
-//                 &resource_manager,
-//                 &screen,
-//             );
+    while !window.should_close() {
+        window.glfw.set_time(0.0);
+        process_events(
+            &mut window,
+            &receiver,
+            &mut events,
+            &mut vec![&mut renderer, &mut screen],
+        );
+        render_iteration(&mut window, &screen, &renderer);
+        frametime = window.glfw.get_time();
+    }
+}
 
-//             frame_time = app.window.glfw.get_time();
-//         }
-//     }
+fn process_events(
+    window: &mut PWindow,
+    receiver: &GlfwReceiver<(f64, WindowEvent)>,
+    events: &mut WindowEvents,
+    framebuffer_size_callbacks: &mut Vec<&mut dyn FramebufferSizeCallback>,
+) {
+    window.glfw.poll_events();
+    events.clear_events();
+    for (_, event) in glfw::flush_messages(receiver) {
+        match event {
+            WindowEvent::Key(Key::Enter, _, Action::Repeat, _) => {
+                events.char_input.push('\n');
+            }
+            WindowEvent::Key(key, _, action @ (Action::Press | Action::Release), modifiers) => {
+                events.key_input.push((key, action, modifiers));
+                if key == Key::V && action == Action::Press && modifiers == Modifiers::Control {
+                    if let Some(string) = window.get_clipboard_string() {
+                        events.char_input.push_str(&string);
+                    }
+                }
+                if key == Key::Enter && action == Action::Press {
+                    events.char_input.push('\n');
+                }
+            }
+            WindowEvent::Char(char_) => {
+                events.char_input.push(char_);
+            }
+            WindowEvent::CursorPos(x, y) => {
+                events.update_cursor_pos((x, y));
+                print!("{}:{} ", x, y);
+            }
+            WindowEvent::MouseButton(button, action, modifiers) => {
+                events.mouse_button_input.push((button, action, modifiers));
+            }
+            WindowEvent::Scroll(x, y) => {}
+            WindowEvent::FramebufferSize(w, h) if w != 0 && h != 0 => {
+                for callback in framebuffer_size_callbacks.iter_mut() {
+                    callback.framebuffer_size((w, h));
+                }
+            }
+            WindowEvent::Focus(focused) => {}
+            WindowEvent::FileDrop(paths) => {}
+            _ => {}
+        }
+    }
+}
 
-//     fn update_events(
-//         app: &mut Application,
-//         events: &mut WindowEvents,
-//         framebuffer_size_callbacks: &mut Vec<&mut dyn FramebufferSizeCallback>,
-//     ) {
-//         app.window.glfw.poll_events();
-//         events.clear_events();
-//         for (_, event) in glfw::flush_messages(&app.receiver) {
-//             match event {
-//                 WindowEvent::Key(Key::Enter, _, Action::Repeat, _) => {
-//                     events.char_input.push('\n');
-//                 }
-//                 WindowEvent::Key(key, _, action @ (Action::Press | Action::Release), modifiers) => {
-//                     events.key_input.push((key, action, modifiers));
-//                     if key == Key::V && action == Action::Press && modifiers == Modifiers::Control {
-//                         if let Some(string) = app.window.get_clipboard_string() {
-//                             events.char_input.push_str(&string);
-//                         }
-//                     }
-//                     if key == Key::Enter && action == Action::Press {
-//                         events.char_input.push('\n');
-//                     }
-//                 }
-//                 WindowEvent::Char(char_) => {
-//                     events.char_input.push(char_);
-//                 }
-//                 WindowEvent::CursorPos(x, y) => {
-//                     events.update_cursor_pos((x, y));
-//                 }
-//                 WindowEvent::MouseButton(button, action, modifiers) => {
-//                     events.mouse_button_input.push((button, action, modifiers));
-//                 }
-//                 WindowEvent::Scroll(x, y) => {}
-//                 WindowEvent::FramebufferSize(w, h) => {
-//                     if w == 0 || h == 0 {
-//                         continue;
-//                     }
-//                     for callback in framebuffer_size_callbacks.iter_mut() {
-//                         callback.framebuffer_size((w, h));
-//                     }
-//                 }
-//                 WindowEvent::Focus(focused) => {}
-//                 WindowEvent::FileDrop(paths) => {}
-//                 _ => {}
-//             }
-//         }
-//     }
+fn render_iteration(window: &mut PWindow, screen: &Screen, renderer: &Renderer) {
+    screen.render_offscreen(renderer.framebuffer());
+    window.swap_buffers();
+}
 
-//     fn script_iteration(scripting: &Scripting) {
-//         scripting.run_updates();
-//     }
+fn script_iteration() {}
 
-//     fn render_iteration(
-//         app: &mut Application,
-//         renderer: &Renderer,
-//         scene_manager: &SceneManager,
-//         resource_manager: &ResourceManager,
-//         screen: &Screen,
-//     ) {
-//         renderer.render(scene_manager, resource_manager);
-//         screen.render_offscreen(renderer.framebuffer());
-//         app.window.swap_buffers();
-//     }
-// }
+fn enable_polling(window: &mut PWindow) {
+    window.set_key_polling(true);
+    window.set_char_polling(true);
+    window.set_cursor_pos_polling(true);
+    window.set_mouse_button_polling(true);
+    window.set_scroll_polling(true);
+    window.set_framebuffer_size_polling(true);
+    window.set_focus_polling(true);
+    window.set_drag_and_drop_polling(true);
+}
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct WindowEvents {
     key_input: Vec<(Key, Action, Modifiers)>,
     char_input: String,
@@ -130,6 +137,16 @@ pub struct WindowEvents {
 }
 
 impl WindowEvents {
+    pub const fn new() -> Self {
+        Self {
+            key_input: Vec::new(),
+            char_input: String::new(),
+            mouse_button_input: Vec::new(),
+            cursor_offset: (0.0, 0.0),
+            cursor_pos: (0.0, 0.0),
+        }
+    }
+
     fn update_cursor_pos(&mut self, cursor_pos: (f64, f64)) {
         self.cursor_offset.0 = self.cursor_pos.0 - cursor_pos.0;
         self.cursor_offset.1 = self.cursor_pos.1 - cursor_pos.1;

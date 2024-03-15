@@ -9,7 +9,7 @@ use crate::{
         self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
         ScreenShaderFrag, ScreenShaderVert,
     },
-    static_runtime::FramebufferSizeCallback,
+    runtime::FramebufferSizeCallback,
 };
 use gl::types::GLenum;
 use glfw::Version;

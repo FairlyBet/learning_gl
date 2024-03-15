@@ -40,8 +40,14 @@ impl Gl {
         Self {}
     }
 
-    pub fn unload(self) {
+    fn unload() {
         gl_loader::end_gl();
+    }
+}
+
+impl Drop for Gl {
+    fn drop(&mut self) {
+        Self::unload();
     }
 }
 

@@ -1,5 +1,5 @@
 ---@meta _
-
+---@class Transform
 Transform = {}
 
 ---@param component table
