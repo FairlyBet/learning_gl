@@ -14,7 +14,7 @@ pub struct Entity {
     pub meshes: Vec<MeshData>,
     pub cameras: Vec<Camera>,
     pub light_sources: Vec<LightSource>,
-    pub scripts: Vec<Script>,
+    pub scripts: Vec<ScriptObject>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
@@ -117,6 +117,6 @@ impl Into<lighting::LightSource> for LightSource {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Script {
+pub struct ScriptObject {
     pub script_path: String,
 }

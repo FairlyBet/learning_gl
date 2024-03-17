@@ -23,8 +23,10 @@ pub fn run() {
     let mut glfw = init(fail_on_errors!()).unwrap();
     glfw.window_hint(OPENGL_PROFILE);
     glfw.window_hint(CONTEXT_VERSION);
-    let (mut window, receiver) = glfw.create_window(WIDTH, HEIGHT, "", MODE).unwrap();
+    let (mut window, receiver) = glfw.create_window(WIDTH, HEIGHT, "v0.0.1", MODE).unwrap();
     window.make_current();
+    window.set_cursor_mode(glfw::CursorMode::Disabled);
+    window.set_cursor_pos(0.0, 0.0);
     enable_polling(&mut window);
     glfw.set_swap_interval(SWAP_INTERVAL);
 
@@ -46,8 +48,9 @@ pub fn run() {
     let mut events = WindowEvents::new();
     let mut frametime = 0.0;
 
-    scripting.load_api(&mut scene_manager, &events);
-    resource_manager.load_scripts(&scripting);
+    scripting.load_api(&mut scene_manager, &events, &window, &frametime);
+    scene_manager.load_scene(0, &mut resource_manager, &scripting);
+    scene_manager.framebuffer_size(window.get_framebuffer_size());
 
     while !window.should_close() {
         window.glfw.set_time(0.0);
@@ -55,9 +58,16 @@ pub fn run() {
             &mut window,
             &receiver,
             &mut events,
-            &mut vec![&mut renderer, &mut screen],
+            &mut vec![&mut renderer, &mut screen, &mut scene_manager],
         );
-        render_iteration(&mut window, &screen, &renderer);
+        script_iteration(&scripting);
+        render_iteration(
+            &mut window,
+            &screen,
+            &renderer,
+            &scene_manager,
+            &resource_manager,
+        );
         frametime = window.glfw.get_time();
     }
 }
@@ -91,7 +101,6 @@ fn process_events(
             }
             WindowEvent::CursorPos(x, y) => {
                 events.update_cursor_pos((x, y));
-                print!("{}:{} ", x, y);
             }
             WindowEvent::MouseButton(button, action, modifiers) => {
                 events.mouse_button_input.push((button, action, modifiers));
@@ -109,12 +118,21 @@ fn process_events(
     }
 }
 
-fn render_iteration(window: &mut PWindow, screen: &Screen, renderer: &Renderer) {
+fn render_iteration(
+    window: &mut PWindow,
+    screen: &Screen,
+    renderer: &Renderer,
+    scene_manager: &SceneManager,
+    resource_manager: &ResourceManager,
+) {
+    renderer.render(scene_manager, resource_manager);
     screen.render_offscreen(renderer.framebuffer());
     window.swap_buffers();
 }
 
-fn script_iteration() {}
+fn script_iteration(scripting: &Scripting) {
+    scripting.run_updates();
+}
 
 fn enable_polling(window: &mut PWindow) {
     window.set_key_polling(true);
@@ -173,10 +191,19 @@ impl WindowEvents {
         }
     }
 
-    pub fn clear_events(&mut self) {
+    pub fn get_cursor_pos(&self) -> (f64, f64) {
+        self.cursor_pos
+    }
+
+    pub fn get_cursor_offset(&self) -> (f64, f64) {
+        self.cursor_offset
+    }
+
+    fn clear_events(&mut self) {
         self.key_input.clear();
         self.char_input.clear();
         self.mouse_button_input.clear();
+        self.cursor_offset = (0.0, 0.0);
     }
 }
 

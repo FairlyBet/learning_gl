@@ -1,4 +1,4 @@
-use crate::serializable::{Camera, Entity, LightSource, MeshData, Script, Transform, Vec3};
+use crate::serializable::{Camera, Entity, LightSource, MeshData, ScriptObject, Transform, Vec3};
 use serde::Serialize;
 use std::fs;
 
@@ -36,7 +36,7 @@ impl Scene {
             meshes: vec![],
             cameras: vec![Camera::default()],
             light_sources: vec![],
-            scripts: vec![Script {
+            scripts: vec![ScriptObject {
                 script_path: "assets\\scripts\\camera-controller.lua".to_string(),
             }],
         };
@@ -62,7 +62,7 @@ impl Scene {
                 outer_cutoff: 0.0,
                 shadow_distance: 100.0,
             }],
-            scripts: vec![Script {
+            scripts: vec![ScriptObject {
                 script_path: "assets\\scripts\\sample.lua".to_string(),
             }],
         };

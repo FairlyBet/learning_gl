@@ -1,16 +1,27 @@
 use crate::{
-    entity_system::SceneManager, resources::ResourceManager, serializable, runtime::WindowEvents,
+    entity_system::SceneManager, resources::ResourceManager, runtime::WindowEvents, serializable,
 };
 use glfw::{Action, Key, Modifiers, MouseButton, PWindow};
 use glm::Vec3;
 use mlua::{
     prelude::{LuaUserDataFields, LuaUserDataMethods},
-    Error, FromLua, Function, LightUserData, Lua, RegistryKey, Result, Table, UserData, Value,
+    Error, FromLua, Function, IntoLua, LightUserData, Lua, RegistryKey, Result, Table, UserData,
+    Value::{self, Nil},
 };
-use std::{
-    cell::{RefCell, RefMut},
-    ops::Deref,
-};
+use std::ops::Deref;
+
+#[repr(i32)]
+enum Indecies {
+    Id,
+    EntityHandler,
+    EntityWeakRef,
+}
+
+impl<'lua> IntoLua<'lua> for Indecies {
+    fn into_lua(self, lua: &'lua Lua) -> Result<Value<'lua>> {
+        Ok(Value::Integer(self as i64))
+    }
+}
 
 #[derive(Debug)]
 pub struct CompiledScript(Vec<u8>);
@@ -22,7 +33,7 @@ pub struct ScriptObject(RegistryKey);
 pub struct Scripting {
     lua: Lua,
     creation_functions: RegistryKey,
-    object_handlers: RegistryKey,
+    entity_handlers: RegistryKey,
     starts: RegistryKey,
     updates: RegistryKey,
 }
@@ -32,14 +43,14 @@ impl Scripting {
         let lua = Lua::new();
 
         let creation_functions = Self::create_table(&lua, None);
-        let object_handlers = Self::create_table(&lua, None);
+        let entity_handlers = Self::create_table(&lua, None);
         let starts = Self::create_table(&lua, Some("kv"));
         let updates = Self::create_table(&lua, Some("kv"));
 
         Self {
             lua,
             creation_functions,
-            object_handlers,
+            entity_handlers,
             starts,
             updates,
         }
@@ -58,25 +69,91 @@ impl Scripting {
     pub fn create_script_object(
         &self,
         owner_id: usize,
-        script: &serializable::Script,
+        script: &serializable::ScriptObject,
         resource_manager: &ResourceManager,
     ) -> ScriptObject {
         let creation_functions = self
             .lua
             .registry_value::<Table>(&self.creation_functions)
             .unwrap();
-        let function = creation_functions
-            .get::<&str, Function>(&script.script_path)
-            .unwrap();
+        let function = match creation_functions.get::<&str, Function>(&script.script_path) {
+            Ok(function) => function,
+            Err(_) => {
+                let src = resource_manager.get_script(script);
+                self.load_script_object(&src, &script.script_path)
+            }
+        };
 
         let object = function.call::<_, Table>(()).unwrap();
-        // entity_table[id] = 0
-        // weakref
-        todo!()
+
+        let entity_handlers = self
+            .lua
+            .registry_value::<Table>(&self.entity_handlers)
+            .unwrap();
+        let handler = entity_handlers.get::<_, Table>(owner_id).unwrap();
+        let weak_ref = handler.get::<_, Table>(Indecies::EntityWeakRef).unwrap();
+        object.set("_entity", weak_ref).unwrap();
+
+        if let Ok(update) = object.get::<_, Function>("update") {
+            let updates = self.lua.registry_value::<Table>(&self.updates).unwrap();
+            updates.set(object.clone(), update).unwrap();
+        }
+        if let Ok(start) = object.get::<_, Function>("start") {
+            let starts = self.lua.registry_value::<Table>(&self.starts).unwrap();
+            starts.set(object.clone(), start).unwrap();
+        }
+
+        let key = self.lua.create_registry_value(object).unwrap();
+
+        ScriptObject(key)
     }
 
-    pub fn load_api(&self, scene_manager: &mut SceneManager, events: &WindowEvents) {
+    pub fn register_entity(&self, id: usize) {
+        let handler = self.lua.create_table().unwrap();
+        handler.set(Indecies::Id, IdWrapper(id)).unwrap();
+
+        let weak_ref_metatable = self.lua.create_table().unwrap();
+        weak_ref_metatable
+            .set(Indecies::EntityHandler, handler.clone())
+            .unwrap();
+        weak_ref_metatable
+            .set("__metatable", "this metatable is private")
+            .unwrap();
+        weak_ref_metatable.set("__mode", "v").unwrap();
+        weak_ref_metatable.set_metatable(Some(weak_ref_metatable.clone()));
+
+        let weak_ref = self.lua.create_table().unwrap();
+        weak_ref.set_metatable(Some(weak_ref_metatable));
+
+        let table = self.lua.create_table().unwrap();
+        table.set(Indecies::EntityWeakRef, weak_ref).unwrap();
+        table.set(Indecies::EntityHandler, handler).unwrap();
+
+        let entity_handlers = self
+            .lua
+            .registry_value::<Table>(&self.entity_handlers)
+            .unwrap();
+        entity_handlers.set(id, table).unwrap();
+    }
+
+    pub fn expire_entity(&self, id: usize) {
+        let entity_handlers = self
+            .lua
+            .registry_value::<Table>(&self.entity_handlers)
+            .unwrap();
+        entity_handlers.set(id, Nil);
+    }
+
+    pub fn load_api(
+        &self,
+        scene_manager: &mut SceneManager,
+        events: &WindowEvents,
+        window: &PWindow,
+        frametime: &f64,
+    ) {
         TransformApi::create_wrappers(&self.lua, scene_manager);
+        InputApi::create_wrappers(&self.lua, events, window);
+        OtherApi::create_wrappers(&self.lua, frametime);
     }
 
     pub fn run_updates(&self) {
@@ -92,13 +169,14 @@ impl Scripting {
         Ok(CompiledScript(dumped))
     }
 
-    pub fn load_script(&self, src: &str, name: &str) {
+    fn load_script_object(&self, src: &str, name: &str) -> Function {
         let function = self.lua.load(src).eval::<Function>().unwrap();
         let creation_functions = self
             .lua
             .registry_value::<Table>(&self.creation_functions)
             .unwrap();
-        creation_functions.set(name, function).unwrap();
+        creation_functions.set(name, function.clone()).unwrap();
+        function
     }
 
     // pub fn delete_script_object(&self, script_object: ScriptObject) {
@@ -163,8 +241,8 @@ impl TransformApi {
         move |lua: &Lua, weak_ref: Table| {
             let scene_manager = unsafe { &*scene_manager };
             let metatable = Self::get_metatable(weak_ref)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
 
             Ok(LuaVec3(scene_manager.get_transform(id).position))
         }
@@ -176,8 +254,8 @@ impl TransformApi {
         move |lua: &Lua, weak_ref: Table| {
             let scene_manager = unsafe { &*scene_manager };
             let metatable = Self::get_metatable(weak_ref)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
 
             Ok(LuaVec3(scene_manager.get_transform(id).global_position()))
         }
@@ -189,8 +267,8 @@ impl TransformApi {
         move |lua: &Lua, args: (Table, LuaVec3)| {
             let scene_manager = unsafe { &mut *scene_manager };
             let metatable = Self::get_metatable(args.0)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
             scene_manager.get_transform_mut(id).position = args.1 .0;
 
             Ok(())
@@ -203,8 +281,8 @@ impl TransformApi {
         move |lua: &Lua, args: (Table, LuaVec3)| {
             let scene_manager = unsafe { &mut *scene_manager };
             let metatable = Self::get_metatable(args.0)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
             scene_manager.get_transform_mut(id).move_(&args.1 .0);
 
             Ok(())
@@ -217,8 +295,8 @@ impl TransformApi {
         move |lua: &Lua, args: (Table, LuaVec3)| {
             let scene_manager = unsafe { &mut *scene_manager };
             let metatable = Self::get_metatable(args.0)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
             scene_manager.get_transform_mut(id).move_local(&args.1 .0);
 
             Ok(())
@@ -231,8 +309,8 @@ impl TransformApi {
         move |lua: &Lua, weak_ref: Table| {
             let scene_manager = unsafe { &*scene_manager };
             let metatable = Self::get_metatable(weak_ref)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
 
             Ok(LuaVec3(glm::quat_euler_angles(
                 &scene_manager.get_transform(id).orientation,
@@ -246,8 +324,8 @@ impl TransformApi {
         move |lua: &Lua, args: (Table, LuaVec3)| {
             let scene_manager = unsafe { &mut *scene_manager };
             let metatable = Self::get_metatable(args.0)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
             scene_manager
                 .get_transform_mut(id)
                 .set_orientation(&args.1 .0);
@@ -262,8 +340,8 @@ impl TransformApi {
         move |lua: &Lua, args: (Table, LuaVec3)| {
             let scene_manager = unsafe { &mut *scene_manager };
             let metatable = Self::get_metatable(args.0)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
             scene_manager.get_transform_mut(id).rotate(&args.1 .0);
 
             Ok(())
@@ -276,8 +354,8 @@ impl TransformApi {
         move |lua: &Lua, args: (Table, LuaVec3)| {
             let scene_manager = unsafe { &mut *scene_manager };
             let metatable = Self::get_metatable(args.0)?;
-            let entity = metatable.get::<_, Table>("__index")?;
-            let id = entity.get::<_, IdWrapper>(entity.clone())?.0;
+            let entity = metatable.get::<_, Table>(Indecies::EntityHandler)?;
+            let id = entity.get::<_, IdWrapper>(Indecies::Id)?.0;
             scene_manager.get_transform_mut(id).rotate_local(&args.1 .0);
 
             Ok(())
@@ -436,11 +514,19 @@ impl InputApi {
         let get_mouse_button = lua
             .create_function_mut(Self::get_mouse_button(events))
             .unwrap();
+        let get_cursor_pos = lua
+            .create_function_mut(Self::get_cursor_pos(events))
+            .unwrap();
+        let get_cursor_offset = lua
+            .create_function_mut(Self::get_cursor_offset(events))
+            .unwrap();
 
         let input = lua.create_table().unwrap();
         input.set("getKey", get_key).unwrap();
         input.set("getKeyHeld", get_key_held).unwrap();
         input.set("getMouseButton", get_mouse_button).unwrap();
+        input.set("getCursorPosition", get_cursor_pos).unwrap();
+        input.set("getCursorOffset", get_cursor_offset).unwrap();
         lua.globals().set("Input", input).unwrap();
 
         // Test later
@@ -455,19 +541,19 @@ impl InputApi {
             .iter()
             .map(|item| (Self::key_to_str(*item), LuaKey(*item)));
         let keys = lua.create_table_from(keys).unwrap();
-        lua.globals().set("Keys", keys);
+        lua.globals().set("Keys", keys).unwrap();
 
         let action = Self::ACTIONS
             .iter()
             .map(|item| (Self::action_to_str(*item), LuaAction(*item)));
         let action = lua.create_table_from(action).unwrap();
-        lua.globals().set("Actions", action);
+        lua.globals().set("Actions", action).unwrap();
 
         let modifiers = Self::MODIFIERS
             .iter()
             .map(|item| (Self::modifier_to_str(*item), LuaModifiers(*item)));
         let modifiers = lua.create_table_from(modifiers).unwrap();
-        lua.globals().set("Modifiers", modifiers);
+        lua.globals().set("Modifiers", modifiers).unwrap();
     }
 
     const fn get_key(
@@ -494,6 +580,28 @@ impl InputApi {
             let events = unsafe { &*events };
             let modifiers = args.2.unwrap_or(LuaModifiers(Modifiers::empty()));
             Ok(events.get_mouse_button((args.0 .0, args.1 .0, modifiers.0)))
+        }
+    }
+
+    const fn get_mouse_button_held() {
+        todo!()
+    }
+
+    const fn get_cursor_pos(
+        events: *const WindowEvents,
+    ) -> impl Fn(&Lua, ()) -> Result<(f64, f64)> {
+        move |_: &Lua, _: ()| {
+            let events = unsafe { &*events };
+            Ok(events.get_cursor_pos())
+        }
+    }
+
+    const fn get_cursor_offset(
+        events: *const WindowEvents,
+    ) -> impl Fn(&Lua, ()) -> Result<(f64, f64)> {
+        move |_: &Lua, _: ()| {
+            let events = unsafe { &*events };
+            Ok(events.get_cursor_offset())
         }
     }
 
@@ -644,15 +752,18 @@ impl InputApi {
     }
 }
 
-struct ApplicationApi;
+struct OtherApi;
 
-impl ApplicationApi {
-    fn frame_time(_: &Lua, args: LightUserData) -> Result<f64> {
-        unsafe { Ok(*args.0.cast::<f64>()) }
+impl OtherApi {
+    fn create_wrappers(lua: &Lua, frametime: &f64) {
+        let frametime = lua.create_function(Self::frametime(frametime)).unwrap();
+        lua.globals().set("FrameTime", frametime).unwrap();
+    }
+
+    fn frametime(frametime: *const f64) -> impl Fn(&Lua, ()) -> Result<f64> {
+        move |_: &Lua, ()| Ok(unsafe { *frametime })
     }
 }
-
-struct ScriptingApi;
 
 // impl ScriptingApi {
 //     fn delete_script(lua: &Lua, args: (LightUserData, LightUserData, Table)) -> Result<()> {
@@ -776,7 +887,15 @@ impl UserData for LuaVec3 {
         methods.add_function("new", |_, args: (f32, f32, f32)| {
             Ok(LuaVec3(glm::vec3(args.0, args.1, args.2)))
         });
-        methods.add_function("zeros", |_, args: ()| Ok(LuaVec3(glm::Vec3::zeros())));
+        methods.add_function("zeros", |_, args: ()| Ok(LuaVec3(glm::zero())));
+        methods.add_method("normalize", |_, self_, args: ()| {
+            let res = glm::normalize(&self_);
+            Ok(LuaVec3(if (res.x + res.y + res.z).is_nan() {
+                glm::zero()
+            } else {
+                res
+            }))
+        });
     }
 }
 

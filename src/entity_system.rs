@@ -4,6 +4,7 @@ use crate::{
     lighting::LightSource,
     linear::Transform,
     resources::ResourceManager,
+    runtime::FramebufferSizeCallback,
     scripting::{ScriptObject, Scripting},
     serializable,
     utils::{self, Reallocated, TypelessVec},
@@ -42,7 +43,7 @@ impl SceneManager {
         scripting: &Scripting,
     ) {
         for entity in entities {
-            let id = self.create_entity();
+            let id = self.create_entity(&scripting);
 
             let ent = self.entities.get_mut(&id).unwrap();
             ent.name = entity.name.clone();
@@ -63,14 +64,14 @@ impl SceneManager {
                     .map(|item| resource_manager.get_mesh_lazily(&item.path))
                     .collect::<Vec<Mesh>>(),
             );
-            // self.attach_components(
-            //     id,
-            //     entity
-            //         .scripts
-            //         .iter()
-            //         .map(|item| scripting.create_script_object(id, item, resource_manager))
-            //         .collect::<Vec<ScriptObject>>(),
-            // );
+            self.attach_components(
+                id,
+                entity
+                    .scripts
+                    .iter()
+                    .map(|item| scripting.create_script_object(id, item, resource_manager))
+                    .collect::<Vec<ScriptObject>>(),
+            );
 
             self.set_parent(id, parent_id);
 
@@ -78,7 +79,7 @@ impl SceneManager {
         }
     }
 
-    pub fn create_entity(&mut self) -> usize {
+    pub fn create_entity(&mut self, scripting: &Scripting) -> usize {
         let mut rewrite = true;
         let instance_id = self.available_ids.pop_front().unwrap_or_else(|| {
             rewrite = false;
@@ -101,6 +102,7 @@ impl SceneManager {
             }
         }
         assert!(self.entities.insert(instance_id, entity).is_none());
+        scripting.register_entity(instance_id);
         instance_id
     }
 
@@ -280,6 +282,8 @@ impl SceneManager {
 
         self.get_transform_mut(target_id).parent = None; // Important!
 
+        scripting.expire_entity(target_id);
+
         _ = self.entities.remove(&target_id).unwrap();
         self.available_ids.push_back(target_id);
     }
@@ -356,6 +360,14 @@ impl SceneManager {
         self.components_mut::<T>()
             .swap_take::<Component<T>>(index_of_deleting)
             .data
+    }
+}
+
+impl FramebufferSizeCallback for SceneManager {
+    fn framebuffer_size(&mut self, size: (i32, i32)) {
+        for camera in self.component_slice_mut::<Camera>() {
+            camera.data.update_aspect(size);
+        }
     }
 }
 
@@ -450,6 +462,7 @@ impl ComponentData for LightSource {
     }
 }
 
+// Consider moving responsibility for Script managing to Scripting system
 impl ComponentData for ScriptObject {
     fn data_type() -> ComponentDataType {
         ComponentDataType::ScriptObject

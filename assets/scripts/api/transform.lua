@@ -2,38 +2,38 @@
 ---@class Transform
 Transform = {}
 
----@param component table
+---@param entity table
 ---@param delta Vec3
-function Transform.move(component, delta) end
+function Transform.move(entity, delta) end
 
----@param component table
+---@param entity table
 ---@param delta Vec3
-function Transform.moveLocal(component, delta) end
+function Transform.moveLocal(entity, delta) end
 
----@param component table
+---@param entity table
 ---@return Vec3
-function Transform.getPosition(component) end
+function Transform.getPosition(entity) end
 
----@param component table
+---@param entity table
 ---@return Vec3
-function Transform.getGlobalPosition(component) end
+function Transform.getGlobalPosition(entity) end
 
----@param component table
+---@param entity table
 ---@param position Vec3
-function Transform.setPosition(component, position) end
+function Transform.setPosition(entity, position) end
 
----@param component table
+---@param entity table
 ---@param euler Vec3
-function Transform.rotate(component, euler) end
+function Transform.rotate(entity, euler) end
 
----@param component table
+---@param entity table
 ---@param euler Vec3
-function Transform.rotateLocal(component, euler) end
+function Transform.rotateLocal(entity, euler) end
 
----@param component table
+---@param entity table
 ---@return Vec3
-function Transform.getOrientation(component) end
+function Transform.getOrientation(entity) end
 
----@param component table
+---@param entity table
 ---@param position Vec3
-function Transform.setOrientation(component, position) end
+function Transform.setOrientation(entity, position) end

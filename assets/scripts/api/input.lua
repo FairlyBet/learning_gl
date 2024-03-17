@@ -13,6 +13,12 @@ function Input.getKey(key, action, modifiers) end
 ---@return boolean
 function Input.getKeyHeld(key) end
 
+---@return number, number
+function Input.getCursorPosition() end
+
+---@return number, number
+function Input.getCursorOffset() end
+
 ---@class Keys
 ---@field Space userdata
 ---@field Apostrophe userdata
@@ -149,5 +155,5 @@ Actions = {}
 ---@field NumLock userdata
 ---@field Shift userdata
 ---@field Super userdata
----@operator bor(userdata):userdata 
+---@operator bor(userdata):userdata
 Modifiers = {}

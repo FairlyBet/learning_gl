@@ -19,6 +19,9 @@ function Vec3.zeros() end
 ---@return Vec3
 function Vec3.new(x, y, z) end
 
+---@return Vec3
+function Vec3:normalize() end
+
 ---@param self Vec3
 ---@return string
 function Vec3.__tostring(self) end

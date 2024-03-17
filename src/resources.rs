@@ -2,6 +2,7 @@ use crate::{
     data_3d::{Mesh, MeshData, Model3d, VertexData},
     scene::Scene,
     scripting::{CompiledScript, Scripting},
+    serializable::ScriptObject,
 };
 use fxhash::FxHashMap;
 use russimp::{
@@ -20,8 +21,7 @@ where
     T: Resource,
 {
     const ASSETS_DIR: &str = "assets";
-    let result = fs::create_dir_all(ASSETS_DIR);
-    result.unwrap();
+    fs::create_dir_all(ASSETS_DIR).unwrap();
     let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
     path.push(T::folder_name());
 
@@ -40,10 +40,9 @@ where
                     result.push(entry.path().into_os_string().into_string().unwrap());
                     continue;
                 }
-
-                if entry.file_type().unwrap().is_dir() {
-                    result.append(&mut search::<T>(&path));
-                }
+            }
+            if entry.file_type().unwrap().is_dir() {
+                result.append(&mut search::<T>(&entry.path()));
             }
         }
         result
@@ -255,12 +254,9 @@ impl ResourceManager {
         }
     }
 
-    pub fn load_scripts(&mut self, scripting: &Scripting) {
-        let paths = get_paths::<CompiledScript>();
-        for path in paths {
-            let src = fs::read_to_string(&path).unwrap();
-            scripting.load_script(&src, &path);
-        }
+    pub fn get_script(&self, script: &ScriptObject) -> String {
+        // will be replaced later with some binary storing logic
+        fs::read_to_string(&script.script_path).unwrap()
     }
 
     pub fn compiled_scripts(&self) -> &FxHashMap<ResourcePath, CompiledScript> {

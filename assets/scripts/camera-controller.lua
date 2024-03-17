@@ -1,7 +1,5 @@
-CameraController = { velocity = 3 }
-
-CameraController.__index = Transform
-setmetatable(CameraController, CameraController)
+CameraController = { velocity = 3, shift = 2, sensitivity = 0.025 }
+CameraController.__index = CameraController
 
 function CameraController:update()
     local movement = Vec3:zeros()
@@ -17,34 +15,23 @@ function CameraController:update()
     if Input.getKeyHeld(Keys.D) then
         movement.x = movement.x + 1
     end
-    self:moveLocal(movement * FrameTime() * self.velocity)
+    movement = movement:normalize()
+    if Input.getKeyHeld(Keys.LeftShift) then
+        movement = movement * self.shift
+    end
+    Transform.moveLocal(self._entity, movement * self.velocity * FrameTime())
 
-    local rotationY = Vec3.zeros()
-    local rotationX = Vec3.zeros()
-    if Input.getKeyHeld(Keys.Up) then
-        rotationX.x = movement.x + 60
-    end
-    if Input.getKeyHeld(Keys.Down) then
-        rotationX.x = movement.z - 60
-    end
-    if Input.getKeyHeld(Keys.Right) then
-        rotationY.y = movement.y - 60
-    end
-    if Input.getKeyHeld(Keys.Left) then
-        rotationY.y = movement.y + 60
-    end
-    self:rotate(rotationY * FrameTime())
-    self:rotateLocal(rotationX * FrameTime())
-
-    if Input.getKey(Keys.Tab, Actions.Press) then
-        print(tostring(self:getPosition()))
-        print(tostring(self:getOrientation()))
-    end
+    local x, y = Input.getCursorOffset()
+    local yRotation = Vec3.zeros()
+    yRotation.y = x;
+    local xRotation = Vec3.zeros()
+    xRotation.x = y;
+    Transform.rotate(self._entity, yRotation * self.sensitivity)
+    Transform.rotateLocal(self._entity, xRotation * self.sensitivity)
 end
 
-local object = {}
-object.__index = CameraController
-
-setmetatable(object, object)
-
-return object
+return function()
+    local object = {}
+    setmetatable(object, CameraController)
+    return object
+end

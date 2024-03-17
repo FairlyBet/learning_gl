@@ -2,6 +2,8 @@
 // #![windows_subsystem = "windows"]
 #![allow(unused)]
 
+use scripting::CompiledScript;
+
 extern crate nalgebra_glm as glm;
 
 mod camera;
@@ -41,6 +43,12 @@ fn main() {
     // let lua = mlua::Lua::new();
     // lua.load(&src).exec().unwrap();
     // lua.gc_collect().unwrap();
-    // lua.load("print(WeakRef.value)").exec().unwrap();
+    // lua.load("
+    // print \"After GC\"
+    // print(WeakRefCopy.value)").exec().unwrap();
+
+    // for item in resources::get_paths::<CompiledScript>() {
+    //     println!("{}", item);
+    // }
     runtime::run();
 }

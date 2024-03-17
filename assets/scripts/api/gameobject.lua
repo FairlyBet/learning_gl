@@ -1,19 +1,25 @@
-Object = {}
-Object.value = 10
-Object[Object] = 0
+local entity = {}
+entity.value = {}
+entity[entity] = 0
 
-WeakRefMetatable = {}
-WeakRefMetatable.__index = Object
-WeakRefMetatable.__metatable = "the metatable is private"
-WeakRefMetatable.__mode = "v"
-setmetatable(WeakRefMetatable, WeakRefMetatable)
-WeakRef = {}
-setmetatable(WeakRef, WeakRefMetatable)
+local weakRefMetatable = {}
+weakRefMetatable.__index = entity
+weakRefMetatable.__metatable = "this metatable is private"
+weakRefMetatable.__mode = "v"
+setmetatable(weakRefMetatable, weakRefMetatable)
+local weakRef = {}
+setmetatable(weakRef, weakRefMetatable)
 
-print(WeakRef.value)
-print(getmetatable(WeakRef))
-Object = nil
+Entities = {}
+Entities[0] = { object = entity, weakRef = weakRef }
 
----@class Entity
----@field public transform Transform
-Entity = {}
+WeakRefCopy = Entities[0].weakRef
+
+print(WeakRefCopy.value)
+print(getmetatable(WeakRefCopy))
+
+Entities[0] = nil
+
+print "After nil"
+print(WeakRefCopy.value)
+print(getmetatable(WeakRefCopy))

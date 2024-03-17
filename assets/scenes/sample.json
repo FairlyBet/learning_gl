@@ -26,11 +26,7 @@
         ],
         "cameras": [],
         "light_sources": [],
-        "scripts": [
-            {
-                "script_path": "assets\\scripts\\delete.lua"
-            }
-        ]
+        "scripts": []
     },
     {
         "name": "Camera",
