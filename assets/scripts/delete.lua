@@ -3,7 +3,7 @@ Delete.__index = Delete
 
 function Delete:update()
     if Input.getKey(Keys.Delete, Actions.Press) then
-        DeleteScript(self)
+        -- DeleteScript(self)
     end
 end
 

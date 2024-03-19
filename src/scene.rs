@@ -53,13 +53,6 @@ impl Scene {
                     z: 1.0,
                 },
                 type_: crate::lighting::LightType::Directional,
-                position: Vec3::default(),
-                constant: 0.0,
-                direction: Vec3::default(),
-                linear: 0.0,
-                quadratic: 0.0,
-                inner_cutoff: 0.0,
-                outer_cutoff: 0.0,
                 shadow_distance: 100.0,
             }],
             scripts: vec![ScriptObject {

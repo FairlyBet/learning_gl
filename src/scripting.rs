@@ -179,6 +179,10 @@ impl Scripting {
         function
     }
 
+    pub fn gc_collect(&self) {
+        self.lua.gc_collect();
+    }
+
     // pub fn delete_script_object(&self, script_object: ScriptObject) {
     //     let object = self.lua.registry_value::<Table>(&script_object.0).unwrap();
     //     self.object_owners

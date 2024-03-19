@@ -72,9 +72,9 @@
         "name": "Light",
         "transform": {
             "position": {
-                "x": 0.0,
+                "x": 2.0,
                 "y": 0.0,
-                "z": 0.0
+                "z": -1.5
             },
             "orientation": {
                 "x": 0.0,
@@ -93,33 +93,14 @@
         "light_sources": [
             {
                 "color": {
-                    "x": 0.7,
-                    "y": 0.7,
-                    "z": 0.7
+                    "x": 5.0,
+                    "y": 5.0,
+                    "z": 5.0
                 },
-                "type_": "Directional",
-                "position": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "constant": 0.0,
-                "direction": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "linear": 0.0,
-                "quadratic": 0.0,
-                "inner_cutoff": 0.0,
-                "outer_cutoff": 0.0,
+                "type_": "Point",
                 "shadow_distance": 100.0
             }
         ],
-        "scripts": [
-            {
-                "script_path": "assets\\scripts\\sample.lua"
-            }
-        ]
+        "scripts": []
     }
 ]

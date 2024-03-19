@@ -83,13 +83,6 @@ impl Into<camera::Camera> for Camera {
 pub struct LightSource {
     pub color: Vec3,
     pub type_: LightType,
-    pub position: Vec3,
-    pub constant: f32,
-    pub direction: Vec3,
-    pub linear: f32,
-    pub quadratic: f32,
-    pub inner_cutoff: f32,
-    pub outer_cutoff: f32,
     pub shadow_distance: f32,
 }
 
@@ -97,20 +90,8 @@ impl Into<lighting::LightSource> for LightSource {
     fn into(self) -> lighting::LightSource {
         let light_data = match self.type_ {
             LightType::Directional => LightData::new_directional(self.color.into()),
-            LightType::Point => LightData::new_point(
-                self.color.into(),
-                self.constant,
-                self.linear,
-                self.quadratic,
-            ),
-            LightType::Spot => LightData::new_spot(
-                self.color.into(),
-                self.constant,
-                self.linear,
-                self.quadratic,
-                self.inner_cutoff,
-                self.outer_cutoff,
-            ),
+            LightType::Point => LightData::new_point(self.color.into()),
+            LightType::Spot => LightData::new_spot(self.color.into()),
         };
         lighting::LightSource::new(light_data, self.shadow_distance)
     }

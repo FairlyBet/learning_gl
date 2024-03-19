@@ -4,6 +4,6 @@
 ---@return number
 function FrameTime() end
 
----Deletes script component
----@param object table
-function DeleteScript(object) end
+-- ---Deletes script component
+-- ---@param object table
+-- function DeleteScript(object) end

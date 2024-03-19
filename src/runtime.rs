@@ -21,8 +21,11 @@ const HEIGHT: u32 = 600;
 
 pub fn run() {
     let mut glfw = init(fail_on_errors!()).unwrap();
+    glfw.window_hint(WindowHint::ClientApi(glfw::ClientApiHint::OpenGl));
     glfw.window_hint(OPENGL_PROFILE);
     glfw.window_hint(CONTEXT_VERSION);
+    glfw.window_hint(WindowHint::Resizable(false));
+
     let (mut window, receiver) = glfw.create_window(WIDTH, HEIGHT, "v0.0.1", MODE).unwrap();
     window.make_current();
     window.set_cursor_mode(glfw::CursorMode::Disabled);
@@ -61,6 +64,7 @@ pub fn run() {
             &mut vec![&mut renderer, &mut screen, &mut scene_manager],
         );
         script_iteration(&scripting);
+        scripting.gc_collect();
         render_iteration(
             &mut window,
             &screen,

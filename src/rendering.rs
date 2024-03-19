@@ -4,12 +4,13 @@ use crate::{
     entity_system::SceneManager,
     gl_wrappers::{self, BufferObject, Gl, Renderbuffer, ShaderProgram, Texture},
     lighting::{LightData, LightSource},
+    main,
     resources::ResourceManager,
-    shader::{
-        self, DefaultLightShader, MainFragmentShader, MainShader, MainVertexShader,
-        ScreenShaderFrag, ScreenShaderVert,
-    },
     runtime::FramebufferSizeCallback,
+    shader::{
+        self, BlinnPhongLighting, DirectPBR, FragShader, MainShader, ScreenShaderFrag,
+        ScreenShaderVert, VertShader,
+    },
 };
 use gl::types::GLenum;
 use glfw::Version;
@@ -68,22 +69,22 @@ impl Renderer {
     pub fn new(size: (i32, i32), context_version: Version, _: &Gl) -> Self {
         let framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
 
-        let main_vert = MainShader::<MainVertexShader>::new();
+        let main_vert = MainShader::<VertShader>::new();
+        let mut main_frag = MainShader::<FragShader>::new();
+        let lighting_shader = DirectPBR::new();
+        main_frag.attach_shader(&lighting_shader);
+        
         let main_vert = shader::build_shader(&main_vert, context_version);
-
-        let mut main_frag = MainShader::<MainFragmentShader>::new();
-        let light_shader = DefaultLightShader::new();
-        main_frag.attach_shader(&light_shader);
-        let light_shader = shader::build_shader(&light_shader, context_version);
         let main_frag = shader::build_shader(&main_frag, context_version);
+        let lighting_shader = shader::build_shader(&lighting_shader, context_version);
 
         let program = ShaderProgram::new().unwrap();
         program.attach_shader(&main_vert);
         program.attach_shader(&main_frag);
-        program.attach_shader(&light_shader);
+        program.attach_shader(&lighting_shader);
         program.link();
+        println!("{}", program.info_log());
         assert!(program.link_success());
-
         let matrix_buffer = matrix_data_buffer();
         let lighting_buffer = lighting_data_buffer();
 
@@ -183,7 +184,7 @@ pub struct Screen {
     size: (i32, i32),
     program: ShaderProgram,
     quad: MeshData,
-    gamma_correction: f32,
+    gamma: f32,
 }
 
 impl Screen {
@@ -198,7 +199,8 @@ impl Screen {
         program.use_();
         let gamma = 2.2f32;
         unsafe {
-            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
+            gl::Uniform1f(ScreenShaderFrag::GAMMA_LOCATION, 1.0 / gamma);
+            gl::Uniform1f(ScreenShaderFrag::EXPOSURE_LOCATION, 2.0);
         }
         let quad = MeshData::new(
             6,
@@ -214,7 +216,7 @@ impl Screen {
             size,
             program,
             quad,
-            gamma_correction: gamma,
+            gamma,
         }
     }
 
@@ -231,10 +233,17 @@ impl Screen {
     }
 
     pub fn set_gamma(&mut self, gamma: f32) {
-        self.gamma_correction = gamma;
+        self.gamma = gamma;
         self.program.use_();
         unsafe {
-            gl::Uniform1f(ScreenShaderFrag::GAMMA_CORRECTION_LOCATION, 1.0 / gamma);
+            gl::Uniform1f(ScreenShaderFrag::GAMMA_LOCATION, 1.0 / gamma);
+        }
+    }
+
+    pub fn set_exposure(&self, exposure: f32) {
+        self.program.use_();
+        unsafe {
+            gl::Uniform1f(ScreenShaderFrag::EXPOSURE_LOCATION, exposure);
         }
     }
 
@@ -263,7 +272,7 @@ impl Framebuffer {
     pub fn new(size: (i32, i32), mag: GLenum, min: GLenum) -> Self {
         let sampler_buffer = Texture::new(gl::TEXTURE_2D).unwrap();
         sampler_buffer.bind();
-        sampler_buffer.texture_data(size, ptr::null(), gl::UNSIGNED_BYTE, gl::RGB, gl::RGB);
+        sampler_buffer.texture_data(size, ptr::null(), gl::FLOAT, gl::RGBA, gl::RGBA16F);
         sampler_buffer.parameter(gl::TEXTURE_MIN_FILTER, min);
         sampler_buffer.parameter(gl::TEXTURE_MAG_FILTER, mag);
 

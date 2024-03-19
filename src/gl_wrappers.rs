@@ -1,4 +1,4 @@
-use gl::types::{GLboolean, GLenum, GLint, GLsizei, GLuint};
+use gl::types::{GLbitfield, GLboolean, GLenum, GLint, GLsizei, GLuint};
 use std::{
     ffi::{c_void, CString},
     fs::File,
@@ -25,7 +25,7 @@ pub fn enable_attribute(index: GLuint) {
     }
 }
 
-pub fn clear(mask: GLuint) {
+pub fn clear(mask: GLbitfield) {
     unsafe {
         gl::Clear(mask);
     }

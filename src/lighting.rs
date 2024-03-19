@@ -2,7 +2,7 @@ use crate::{
     linear::{self, Projection, Transform},
     utils::ArrayVec,
 };
-use nalgebra_glm::{Mat4, Vec3};
+use nalgebra_glm::{vec3_to_vec4, Mat4, Vec3, Vec4};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
@@ -20,13 +20,8 @@ pub enum LightType {
 pub struct LightData {
     color: Vec3,
     type_: LightType,
-    position: Vec3,
-    constant: f32,
-    direction: Vec3,
-    linear: f32,
-    quadratic: f32,
-    inner_cutoff: f32,
-    outer_cutoff: f32,
+    position: Vec4,
+    direction: Vec4,
 }
 
 impl LightData {
@@ -37,31 +32,16 @@ impl LightData {
         source
     }
 
-    pub fn new_point(color: Vec3, constant: f32, linear: f32, quadratic: f32) -> Self {
+    pub fn new_point(color: Vec3) -> Self {
         let mut source: LightData = Default::default();
         source.color = color;
-        source.constant = constant;
-        source.linear = linear;
-        source.quadratic = quadratic;
         source.type_ = LightType::Point;
         source
     }
 
-    pub fn new_spot(
-        color: Vec3,
-        constant: f32,
-        linear: f32,
-        quadratic: f32,
-        inner_cutoff: f32,
-        outer_cutoff: f32,
-    ) -> Self {
+    pub fn new_spot(color: Vec3) -> Self {
         let mut source: LightData = Default::default();
         source.color = color;
-        source.constant = constant;
-        source.linear = linear;
-        source.quadratic = quadratic;
-        source.inner_cutoff = inner_cutoff.to_radians().cos();
-        source.outer_cutoff = outer_cutoff.to_radians().cos();
         source.type_ = LightType::Spot;
         source
     }
@@ -86,8 +66,11 @@ impl LightSource {
 
     pub fn get_data(&self, transform: &Transform) -> LightData {
         let mut data = self.light_data;
-        data.position = transform.position;
-        data.direction = glm::quat_rotate_vec3(&transform.orientation, &Vec3::z_axis());
+        data.position = vec3_to_vec4(&transform.position);
+        data.direction = vec3_to_vec4(&glm::quat_rotate_vec3(
+            &transform.orientation,
+            &Vec3::z_axis(),
+        ));
         data
     }
 }
