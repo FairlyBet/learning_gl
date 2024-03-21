@@ -1,5 +1,5 @@
 ---@class CameraController: Component
-CameraController = { velocity = 3, shift = 3, sensitivity = 0.025 }
+CameraController = { velocity = 3, shift = 5, sensitivity = 0.08 }
 CameraController.__index = CameraController
 
 function CameraController:update()

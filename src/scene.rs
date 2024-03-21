@@ -54,6 +54,8 @@ impl Scene {
                 },
                 type_: crate::lighting::LightType::Directional,
                 shadow_distance: 100.0,
+                inner: 0.0,
+                outer: 0.0,
             }],
             scripts: vec![ScriptObject {
                 script_path: "assets\\scripts\\sample.lua".to_string(),

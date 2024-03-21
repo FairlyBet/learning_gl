@@ -16,19 +16,20 @@ const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(MAJOR, MINOR);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
 const MODE: WindowMode<'_> = WindowMode::Windowed;
 const SWAP_INTERVAL: SwapInterval = SwapInterval::Sync(1);
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 600;
+const WIDTH: u32 = 1280;
+const HEIGHT: u32 = 720;
 
 pub fn run() {
     let mut glfw = init(fail_on_errors!()).unwrap();
     glfw.window_hint(WindowHint::ClientApi(glfw::ClientApiHint::OpenGl));
     glfw.window_hint(OPENGL_PROFILE);
     glfw.window_hint(CONTEXT_VERSION);
-    glfw.window_hint(WindowHint::Resizable(false));
+    // glfw.window_hint(WindowHint::Resizable(false));
 
     let (mut window, receiver) = glfw.create_window(WIDTH, HEIGHT, "v0.0.1", MODE).unwrap();
     window.make_current();
     window.set_cursor_mode(glfw::CursorMode::Disabled);
+    window.set_raw_mouse_motion(true);
     window.set_cursor_pos(0.0, 0.0);
     enable_polling(&mut window);
     glfw.set_swap_interval(SWAP_INTERVAL);

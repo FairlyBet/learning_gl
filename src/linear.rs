@@ -159,7 +159,7 @@ impl Default for Projection {
 }
 
 pub fn view_matrix(transform: &Transform) -> Mat4 {
-    let translation = glm::translation(&(-transform.position));
+    let translation = glm::translation(&(-&transform.global_position()));
     let rotation = glm::inverse(&glm::quat_to_mat4(&transform.orientation));
 
     rotation * translation // applying quat rotation after translation makes object rotate

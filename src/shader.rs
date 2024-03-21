@@ -1,4 +1,8 @@
-use crate::{gl_wrappers::Shader, rendering::BindingPoints};
+use crate::{
+    gl_wrappers::Shader,
+    rendering::{self, BindingPoints},
+};
+use gl::types::GLenum;
 use glfw::Version;
 use std::{cell::RefCell, marker::PhantomData};
 
@@ -63,17 +67,21 @@ layout (std140, binding = {}) uniform MatrixData {{
             "
 struct LightSource {{
     vec3 color;
-    int type;
+    uint type;
     vec3 pos;
+    float inner_cutoff;
     vec3 dir;
+    float outer_cutoff;
 }};
 
 layout(std140, binding = {}) uniform LightingData {{
-    LightSource light_source;
+    LightSource sources[{}];
     vec3 viewer_pos;
+    uint source_count;
 }};
 ",
-            BindingPoints::LightingData as u32
+            BindingPoints::LightingData as u32,
+            rendering::MAX_SOURCES_PER_FRAME
         )
     }
 
@@ -82,7 +90,7 @@ layout(std140, binding = {}) uniform LightingData {{
 layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 normal;
 layout (location = 2) in vec2 tex_coord;
-        "
+"
         .to_string()
     }
 
@@ -142,8 +150,7 @@ void main() {
 
     fn frag_src() -> &'static str {
         "
-void main() {
-"
+void main() {"
     }
 
     pub fn new() -> Self {
@@ -161,15 +168,11 @@ void main() {
 
     fn build_source(&self, src: &str) -> String {
         let mut source = String::new();
-        for signature in &self.signatures {
-            source.push_str(&signature);
-        }
-        let mut calls = String::new();
-        for call in &self.call_symbols {
-            calls.push_str(&call);
-        }
+        source.extend(self.signatures.iter().map(|item| item.as_str()));
         source.push_str(src);
-        source.push_str(&format!("{calls}\n}}\n"));
+        source.extend(self.call_symbols.iter().map(|item| item.as_str()));
+        source.push_str(&"}\n".to_string());
+
         source
     }
 }
@@ -319,10 +322,12 @@ impl DirectPBR {
     fn src() -> String {
         "
 #define PI 3.14159265358979323846264338327950288
-vec3 albedo = vec3(0.5, 0.4, 0.3);
-float metallic = 0.7;
-float roughness = 0.4;
-float ao = 0.05;
+#define AMBIENT 0.03
+
+vec3 albedo = vec3(0.4, 0.37, 0.25);
+float metallic = 0.1;
+float roughness = 0.6;
+float ao = 0.08;
 
 float distribution_GGX(vec3 N, vec3 H, float roughness) {
     float a = roughness * roughness;
@@ -356,64 +361,86 @@ float geometry_smith(vec3 N, vec3 V, vec3 L, float roughness) {
     return ggx1 * ggx2;
 }
 
-vec3 fresnel_schlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+vec3 fresnel_schlick(float cos_theta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
 vec3 pbr(vec3 light, vec3 light_color, float attenuation) {
     vec3 viewer = normalize(viewer_pos - fragment.pos);
     vec3 halfway = normalize(viewer + light);
-
     vec3 radiance = light_color * attenuation;
 
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
-    vec3 F = fresnel_schlick(max(dot(halfway, viewer), 0.0), F0);
 
+    // Cook-Torrance BRDF
     float NDF = distribution_GGX(fragment.normal, halfway, roughness);
     float G = geometry_smith(fragment.normal, viewer, light, roughness);
+    vec3 F = fresnel_schlick(max(dot(halfway, viewer), 0.0), F0);
+
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallic;
 
     vec3 numerator = NDF * G * F;
     float denominator = 4.0 * max(dot(fragment.normal, viewer), 0.0) * max(dot(fragment.normal, light), 0.0) + 0.0001;
     vec3 specular = numerator / denominator;
 
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-
-    kD *= 1.0 - metallic;
-
     float NdotL = max(dot(fragment.normal, light), 0.0);
-    vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
 
-    vec3 ambient = vec3(0.03) * albedo * ao;
-
-    vec3 color = ambient + Lo;
-    return color;
+    return (kD * albedo / PI + specular) * radiance * NdotL;
 }
 
-void directional() {
+vec3 directional(LightSource light_source) {
+    return pbr(-light_source.dir, light_source.color, 1.0);
 }
 
-void point() {
+vec3 point(LightSource light_source) {
     vec3 light = normalize(light_source.pos - fragment.pos);
     float distance = length(light_source.pos - fragment.pos);
     float attenuation = 1.0 / (distance * distance);
-    frag_color = vec4(pbr(light, light_source.color, attenuation), 1.0);
+
+    return pbr(light, light_source.color, attenuation);
 }
 
-void spot() {
+float scale01(float a, float b, float x) {
+    return (x - a) / (b - a);
+}
+
+float edge_fade(float x) {
+    return (1 + sqrt(500)) / (500 * x + sqrt(500)) - inversesqrt(500);
+}
+
+vec3 spot(LightSource light_source) {
+    vec3 light = normalize(light_source.pos - fragment.pos);
+    float distance = length(light_source.pos - fragment.pos);
+    float attenuation = 1.0 / (distance * distance);
+    float cos_theta = max(dot(light_source.dir, -light), 0.0);
+    cos_theta = clamp(cos_theta, light_source.outer_cutoff, light_source.inner_cutoff);
+    float fade = edge_fade(scale01(light_source.inner_cutoff, light_source.outer_cutoff, cos_theta));
+    vec3 color = light_source.color * fade;
+
+    return pbr(light, color, attenuation);
 }
 
 void do_light() {
-    if(light_source.type == 0) {
-        directional();
+    vec3 Lo = vec3(0.0);
+
+    for(int i = 0; i < source_count; i++) {
+        if(sources[i].type == 0) {
+            Lo += directional(sources[i]);
+        }
+        else if(sources[i].type == 1) {
+            Lo += point(sources[i]);
+        }
+        else if(sources[i].type == 2) {
+            Lo += spot(sources[i]);
+        }
     }
-    if(light_source.type == 1) {
-        point();
-    }
-    if(light_source.type == 2) {
-        spot();
-    }
+
+    vec3 ambient = vec3(AMBIENT) * albedo * ao;
+    vec3 color = Lo + ambient;
+    frag_color = vec4(color, 1.0);
 }
 ".to_string()
     }
@@ -445,14 +472,14 @@ impl SubShaderSource for DirectPBR {
     fn signature(&self) -> String {
         "
 void do_light();
-        "
+"
         .to_string()
     }
 
     fn call_symbol(&self) -> String {
         "
-do_light();
-        "
+    do_light();
+"
         .to_string()
     }
 }
@@ -545,7 +572,7 @@ impl ShaderSource for ScreenShaderFrag {
 }
 
 pub fn build_shader(shader_source: &impl ShaderSource, context_version: Version) -> Shader {
-    let shader = Shader::new(shader_source.type_() as u32).unwrap();
+    let shader = Shader::new(shader_source.type_() as GLenum).unwrap();
     let mut source = format!(
         "#version {}{}0 core\n",
         context_version.major, context_version.minor

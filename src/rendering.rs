@@ -16,7 +16,7 @@ use gl::types::GLenum;
 use glfw::Version;
 use nalgebra_glm::{Mat4, Vec3};
 use std::{
-    mem::{size_of, size_of_val},
+    mem::{size_of, size_of_val, MaybeUninit},
     ptr,
 };
 
@@ -35,10 +35,24 @@ pub struct MatrixData {
     pub light_space: Mat4,
 }
 
+pub const MAX_SOURCES_PER_FRAME: usize = 16;
+
+#[derive(Debug)]
 #[repr(C)]
 pub struct LightingData {
-    pub light_data: LightData,
+    pub light_sources: [MaybeUninit<LightData>; MAX_SOURCES_PER_FRAME],
     pub viewer_position: Vec3,
+    pub source_count: u32,
+}
+
+impl LightingData {
+    fn new() -> Self {
+        Self {
+            light_sources: [MaybeUninit::zeroed(); MAX_SOURCES_PER_FRAME],
+            viewer_position: Default::default(),
+            source_count: Default::default(),
+        }
+    }
 }
 
 fn matrix_data_buffer() -> BufferObject {
@@ -73,7 +87,7 @@ impl Renderer {
         let mut main_frag = MainShader::<FragShader>::new();
         let lighting_shader = DirectPBR::new();
         main_frag.attach_shader(&lighting_shader);
-        
+
         let main_vert = shader::build_shader(&main_vert, context_version);
         let main_frag = shader::build_shader(&main_frag, context_version);
         let lighting_shader = shader::build_shader(&lighting_shader, context_version);
@@ -83,7 +97,6 @@ impl Renderer {
         program.attach_shader(&main_frag);
         program.attach_shader(&lighting_shader);
         program.link();
-        println!("{}", program.info_log());
         assert!(program.link_success());
         let matrix_buffer = matrix_data_buffer();
         let lighting_buffer = lighting_data_buffer();
@@ -111,12 +124,21 @@ impl Renderer {
         };
 
         let camera_transform = scene_manager.get_transform(camera.owner_id());
-        let light_transform = scene_manager.get_transform(light.owner_id());
 
-        let lighting_data = LightingData {
-            light_data: light.data.get_data(&light_transform),
-            viewer_position: camera_transform.global_position(),
-        };
+        let mut lighting_data = LightingData::new();
+        let lights = scene_manager.component_slice::<LightSource>();
+        let mut i = 0;
+        for light_source in lights {
+            if i == MAX_SOURCES_PER_FRAME {
+                break;
+            }
+            let light_transform = scene_manager.get_transform(light_source.owner_id());
+            lighting_data.light_sources[i].write(light_source.data.get_data(&light_transform));
+            i += 1;
+        }
+        lighting_data.source_count = i as u32;
+        lighting_data.viewer_position = camera_transform.global_position();
+
         self.lighting_buffer.bind();
         self.lighting_buffer.buffer_subdata(
             size_of::<LightingData>(),
@@ -131,7 +153,6 @@ impl Renderer {
 
         for mesh in scene_manager.component_slice::<Mesh>() {
             let mesh_transform = scene_manager.get_transform(mesh.owner_id());
-
             let matrix_data = MatrixData {
                 mvp: camera.data.projection_view(camera_transform) * mesh_transform.model(),
                 model: mesh_transform.model(),
@@ -228,6 +249,7 @@ impl Screen {
         offscreen.sampler_buffer.bind();
         unsafe {
             gl::Disable(gl::DEPTH_TEST);
+            gl::Disable(gl::STENCIL_TEST);
             gl::DrawArrays(gl::TRIANGLES, 0, self.quad.vertex_count);
         }
     }

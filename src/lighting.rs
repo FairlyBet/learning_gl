@@ -6,12 +6,12 @@ use nalgebra_glm::{vec3_to_vec4, Mat4, Vec3, Vec4};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
-#[repr(i32)]
+#[repr(u32)]
 pub enum LightType {
     #[default]
-    Directional = 0,
-    Point = 1,
-    Spot = 2,
+    Directional,
+    Point,
+    Spot,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -20,8 +20,10 @@ pub enum LightType {
 pub struct LightData {
     color: Vec3,
     type_: LightType,
-    position: Vec4,
-    direction: Vec4,
+    position: Vec3,
+    cos_inner: f32,
+    direction: Vec3,
+    cos_outer: f32,
 }
 
 impl LightData {
@@ -39,10 +41,12 @@ impl LightData {
         source
     }
 
-    pub fn new_spot(color: Vec3) -> Self {
+    pub fn new_spot(color: Vec3, inner: f32, outer: f32) -> Self {
         let mut source: LightData = Default::default();
         source.color = color;
         source.type_ = LightType::Spot;
+        source.cos_inner = inner.to_radians().cos();
+        source.cos_outer = outer.to_radians().cos();
         source
     }
 }
@@ -66,11 +70,8 @@ impl LightSource {
 
     pub fn get_data(&self, transform: &Transform) -> LightData {
         let mut data = self.light_data;
-        data.position = vec3_to_vec4(&transform.position);
-        data.direction = vec3_to_vec4(&glm::quat_rotate_vec3(
-            &transform.orientation,
-            &Vec3::z_axis(),
-        ));
+        data.position = transform.global_position();
+        data.direction = glm::quat_rotate_vec3(&transform.orientation, &Vec3::z_axis());
         data
     }
 }

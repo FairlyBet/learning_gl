@@ -11,21 +11,26 @@ struct LightSource {
     vec3 color;
     int type;
     vec3 pos;
+    float inner_cutoff;
     vec3 dir;
+    float outer_cutoff;
 };
 
 layout(std140, binding = 1) uniform LightingData {
-    LightSource light_source;
+    LightSource sources[16];
     vec3 viewer_pos;
+    uint source_count;
 };
-out layout(location = 0) vec4 frag_color;
+
+layout(location = 0) out vec4 frag_color;
 
 #define PI 3.14159265358979323846264338327950288
-vec3 albedo = vec3(10.0, 10.0, 10.0);
+#define AMBIENT 0.03
+
+vec3 albedo = vec3(0.4, 0.35, 0.2);
 float metallic = 0.0;
 float roughness = 0.5;
-float ao = 1.0;
-
+float ao = 0.03;
 
 float distribution_GGX(vec3 N, vec3 H, float roughness) {
     float a = roughness * roughness;
@@ -41,7 +46,7 @@ float distribution_GGX(vec3 N, vec3 H, float roughness) {
 }
 
 float geometry_schlick_GGX(float NdotV, float roughness) {
-    float r = (roughness + 1.0);
+    float r = roughness + 1.0;
     float k = (r * r) / 8.0;
 
     float num = NdotV;
@@ -59,62 +64,82 @@ float geometry_smith(vec3 N, vec3 V, vec3 L, float roughness) {
     return ggx1 * ggx2;
 }
 
-vec3 fresnel_schlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+vec3 fresnel_schlick(float cos_theta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
 }
 
 vec3 pbr(vec3 light, vec3 light_color, float attenuation) {
     vec3 viewer = normalize(viewer_pos - fragment.pos);
     vec3 halfway = normalize(viewer + light);
-
     vec3 radiance = light_color * attenuation;
 
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
-    vec3 F = fresnel_schlick(max(dot(halfway, viewer), 0.0), F0);
 
+    // Cook-Torrance BRDF
     float NDF = distribution_GGX(fragment.normal, halfway, roughness);
     float G = geometry_smith(fragment.normal, viewer, light, roughness);
+    vec3 F = fresnel_schlick(max(dot(halfway, viewer), 0.0), F0);
+
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallic;
 
     vec3 numerator = NDF * G * F;
     float denominator = 4.0 * max(dot(fragment.normal, viewer), 0.0) * max(dot(fragment.normal, light), 0.0) + 0.0001;
     vec3 specular = numerator / denominator;
 
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-
-    kD *= 1.0 - metallic;
-
     float NdotL = max(dot(fragment.normal, light), 0.0);
-    vec3 Lo = (kD * albedo / PI + specular) * radiance * NdotL;
 
-    vec3 ambient = vec3(0.03) * albedo * ao;
-
-    vec3 color = ambient + Lo;
-    return color;
+    return (kD * albedo / PI + specular) * radiance * NdotL;
 }
 
-void directional() {
+vec3 directional(LightSource light_source) {
+    return pbr(-light_source.dir, light_source.color, 1.0);
 }
 
-void point() {
+vec3 point(LightSource light_source) {
     vec3 light = normalize(light_source.pos - fragment.pos);
     float distance = length(light_source.pos - fragment.pos);
     float attenuation = 1.0 / (distance * distance);
-    frag_color = vec4(pbr(light, light_source.color, attenuation), 1.0);
+
+    return pbr(light, light_source.color, attenuation);
 }
 
-void spot() {
+float scale01(float a, float b, float x) {
+    return (x - a) / (b - a);
+}
+
+float edge_fade(float x) {
+    // return -x + 1;
+    return (1 + sqrt(20)) / (20 * x + sqrt(20)) - inversesqrt(20);
+}
+
+vec3 spot(LightSource light_source) {
+    vec3 light = normalize(light_source.pos - fragment.pos);
+    float distance = length(light_source.pos - fragment.pos);
+    float attenuation = 1.0 / (distance * distance);
+    float cos_theta = clamp(dot(light_source.dir, -light), light_source.outer_cutoff, light_source.inner_cutoff);
+    float fade = edge_fade(scale01(light_source.inner_cutoff, light_source.outer_cutoff, cos_theta));
+    vec3 color = light_source.color * fade;
+
+    return pbr(light, color, attenuation);
 }
 
 void do_light() {
-    if(light_source.type == 0) {
-        directional();
+    vec3 Lo = vec3(0.0);
+
+    for(int i = 0; i < source_count; i++) {
+        if(sources[i].type == 0) {
+            Lo += directional(sources[i]);
+        } else if(sources[i].type == 1) {
+            Lo += point(sources[i]);
+        } else if(sources[i].type == 2) {
+            Lo += spot(sources[i]);
+        }
     }
-    if(light_source.type == 1) {
-        point();
-    }
-    if(light_source.type == 2) {
-        spot();
-    }
+
+    vec3 ambient = vec3(AMBIENT) * albedo * ao;
+    vec3 color = Lo + ambient;
+    frag_color = vec4(color, 1.0);
 }
