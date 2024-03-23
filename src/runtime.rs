@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     entity_system::SceneManager,
     gl_wrappers::Gl,
@@ -6,9 +8,10 @@ use crate::{
     scripting::Scripting,
 };
 use glfw::{
-    fail_on_errors, init, Action, Context, GlfwReceiver, Key, Modifiers, MouseButton,
-    OpenGlProfileHint, PWindow, SwapInterval, WindowEvent, WindowHint, WindowMode,
+    fail_on_errors, init, Action, ClientApiHint, Context, CursorMode, GlfwReceiver, Key, Modifiers,
+    MouseButton, OpenGlProfileHint, PWindow, SwapInterval, WindowEvent, WindowHint, WindowMode,
 };
+use spin_sleep::{SpinSleeper, SpinStrategy};
 
 const MAJOR: u32 = 4;
 const MINOR: u32 = 3;
@@ -16,22 +19,32 @@ const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(MAJOR, MINOR);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
 const MODE: WindowMode<'_> = WindowMode::Windowed;
 const SWAP_INTERVAL: SwapInterval = SwapInterval::Sync(1);
-const WIDTH: u32 = 1280;
-const HEIGHT: u32 = 720;
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 600;
 
 pub fn run() {
     let mut glfw = init(fail_on_errors!()).unwrap();
-    glfw.window_hint(WindowHint::ClientApi(glfw::ClientApiHint::OpenGl));
+    glfw.window_hint(WindowHint::ClientApi(ClientApiHint::OpenGl));
     glfw.window_hint(OPENGL_PROFILE);
     glfw.window_hint(CONTEXT_VERSION);
-    // glfw.window_hint(WindowHint::Resizable(false));
-
-    let (mut window, receiver) = glfw.create_window(WIDTH, HEIGHT, "v0.0.1", MODE).unwrap();
-    window.make_current();
-    window.set_cursor_mode(glfw::CursorMode::Disabled);
-    window.set_raw_mouse_motion(true);
-    window.set_cursor_pos(0.0, 0.0);
+    let (mut window, receiver) = glfw.with_primary_monitor(|glfw, monitor| match monitor {
+        Some(monitor) => {
+            let mode = monitor.get_video_mode().unwrap();
+            glfw.create_window(
+                mode.width,
+                mode.height,
+                "v0.0.1",
+                WindowMode::FullScreen(monitor),
+            )
+            .unwrap()
+        }
+        None => unreachable!(),
+    });
     enable_polling(&mut window);
+    window.set_cursor_mode(CursorMode::Disabled);
+    window.set_cursor_pos(0.0, 0.0);
+    window.set_raw_mouse_motion(true);
+    window.make_current();
     glfw.set_swap_interval(SWAP_INTERVAL);
 
     let gl = Gl::load();
@@ -51,27 +64,30 @@ pub fn run() {
     let mut scene_manager = SceneManager::default();
     let mut events = WindowEvents::new();
     let mut frametime = 0.0;
+    let mut sleep_period = Duration::ZERO;
 
     scripting.load_api(&mut scene_manager, &events, &window, &frametime);
     scene_manager.load_scene(0, &mut resource_manager, &scripting);
     scene_manager.framebuffer_size(window.get_framebuffer_size());
 
     while !window.should_close() {
+        // Consider moving cursor to (0, 0) as its movement is unlimited and possibly could reach f64 accuracy limit
         window.glfw.set_time(0.0);
         process_events(
             &mut window,
             &receiver,
             &mut events,
-            &mut vec![&mut renderer, &mut screen, &mut scene_manager],
+            &mut sleep_period,
+            &mut [&mut renderer, &mut screen, &mut scene_manager],
         );
         script_iteration(&scripting);
-        scripting.gc_collect();
         render_iteration(
             &mut window,
             &screen,
             &renderer,
             &scene_manager,
             &resource_manager,
+            &sleep_period,
         );
         frametime = window.glfw.get_time();
     }
@@ -81,10 +97,12 @@ fn process_events(
     window: &mut PWindow,
     receiver: &GlfwReceiver<(f64, WindowEvent)>,
     events: &mut WindowEvents,
-    framebuffer_size_callbacks: &mut Vec<&mut dyn FramebufferSizeCallback>,
+    sleep_period: &mut Duration,
+    framebuffer_size_callbacks: &mut [&mut dyn FramebufferSizeCallback],
 ) {
     window.glfw.poll_events();
     events.clear_events();
+
     for (_, event) in glfw::flush_messages(receiver) {
         match event {
             WindowEvent::Key(Key::Enter, _, Action::Repeat, _) => {
@@ -104,23 +122,29 @@ fn process_events(
             WindowEvent::Char(char_) => {
                 events.char_input.push(char_);
             }
-            WindowEvent::CursorPos(x, y) => {
-                events.update_cursor_pos((x, y));
-            }
             WindowEvent::MouseButton(button, action, modifiers) => {
                 events.mouse_button_input.push((button, action, modifiers));
             }
-            WindowEvent::Scroll(x, y) => {}
+            WindowEvent::Scroll(x, y) => {} // could be y, x
             WindowEvent::FramebufferSize(w, h) if w != 0 && h != 0 => {
                 for callback in framebuffer_size_callbacks.iter_mut() {
                     callback.framebuffer_size((w, h));
                 }
             }
-            WindowEvent::Focus(focused) => {}
             WindowEvent::FileDrop(paths) => {}
+            WindowEvent::Iconify(i) => {
+                *sleep_period = Duration::from_millis(33 * (i as u64));
+            }
             _ => {}
         }
     }
+
+    events.update_cursor_pos(window.get_cursor_pos());
+}
+
+fn script_iteration(scripting: &Scripting) {
+    scripting.run_updates();
+    scripting.gc_collect();
 }
 
 fn render_iteration(
@@ -129,14 +153,13 @@ fn render_iteration(
     renderer: &Renderer,
     scene_manager: &SceneManager,
     resource_manager: &ResourceManager,
+    sleep_period: &Duration,
 ) {
     renderer.render(scene_manager, resource_manager);
     screen.render_offscreen(renderer.framebuffer());
+    let sleeper = SpinSleeper::default().with_spin_strategy(SpinStrategy::YieldThread);
+    sleeper.sleep(sleep_period.clone());
     window.swap_buffers();
-}
-
-fn script_iteration(scripting: &Scripting) {
-    scripting.run_updates();
 }
 
 fn enable_polling(window: &mut PWindow) {
@@ -146,8 +169,8 @@ fn enable_polling(window: &mut PWindow) {
     window.set_mouse_button_polling(true);
     window.set_scroll_polling(true);
     window.set_framebuffer_size_polling(true);
-    window.set_focus_polling(true);
     window.set_drag_and_drop_polling(true);
+    window.set_iconify_polling(true);
 }
 
 #[derive(Debug)]
@@ -171,8 +194,8 @@ impl WindowEvents {
     }
 
     fn update_cursor_pos(&mut self, cursor_pos: (f64, f64)) {
-        self.cursor_offset.0 = self.cursor_pos.0 - cursor_pos.0;
-        self.cursor_offset.1 = self.cursor_pos.1 - cursor_pos.1;
+        self.cursor_offset.0 = cursor_pos.0 - self.cursor_pos.0;
+        self.cursor_offset.1 = cursor_pos.1 - self.cursor_pos.1;
         self.cursor_pos = cursor_pos;
     }
 

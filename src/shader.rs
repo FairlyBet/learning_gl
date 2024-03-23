@@ -322,7 +322,7 @@ impl DirectPBR {
     fn src() -> String {
         "
 #define PI 3.14159265358979323846264338327950288
-#define AMBIENT 0.03
+#define AMBIENT 0.1
 
 vec3 albedo = vec3(0.4, 0.37, 0.25);
 float metallic = 0.1;
@@ -408,7 +408,8 @@ float scale01(float a, float b, float x) {
 }
 
 float edge_fade(float x) {
-    return (1 + sqrt(500)) / (500 * x + sqrt(500)) - inversesqrt(500);
+    const float K = 500.0;
+    return (1 + sqrt(K)) / (K * x + sqrt(K)) - inversesqrt(K);
 }
 
 vec3 spot(LightSource light_source) {

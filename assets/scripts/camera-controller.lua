@@ -1,5 +1,5 @@
 ---@class CameraController: Component
-CameraController = { velocity = 3, shift = 5, sensitivity = 0.08 }
+CameraController = { velocity = 3, shift = 5, sensitivity = 0.05 }
 CameraController.__index = CameraController
 
 function CameraController:update()
@@ -24,9 +24,9 @@ function CameraController:update()
 
     local x, y = Input.getCursorOffset()
     local yRotation = Vec3.zeros()
-    yRotation.y = x;
+    yRotation.y = -x;
     local xRotation = Vec3.zeros()
-    xRotation.x = y;
+    xRotation.x = -y;
     Transform.rotate(self._entity, yRotation * self.sensitivity)
     Transform.rotateLocal(self._entity, xRotation * self.sensitivity)
 end

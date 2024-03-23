@@ -221,7 +221,7 @@ impl Screen {
         let gamma = 2.2f32;
         unsafe {
             gl::Uniform1f(ScreenShaderFrag::GAMMA_LOCATION, 1.0 / gamma);
-            gl::Uniform1f(ScreenShaderFrag::EXPOSURE_LOCATION, 2.0);
+            gl::Uniform1f(ScreenShaderFrag::EXPOSURE_LOCATION, 1.0);
         }
         let quad = MeshData::new(
             6,
@@ -246,7 +246,7 @@ impl Screen {
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
         self.program.use_();
         self.quad.bind();
-        offscreen.sampler_buffer.bind();
+        offscreen.color_buffer.bind();
         unsafe {
             gl::Disable(gl::DEPTH_TEST);
             gl::Disable(gl::STENCIL_TEST);
@@ -285,18 +285,18 @@ impl FramebufferSizeCallback for Screen {
 #[derive(Debug)]
 pub struct Framebuffer {
     framebuffer: gl_wrappers::Framebuffer,
-    pub sampler_buffer: Texture,
+    pub color_buffer: Texture,
     depth_stencil_buffer: Renderbuffer,
     pub size: (i32, i32),
 }
 
 impl Framebuffer {
     pub fn new(size: (i32, i32), mag: GLenum, min: GLenum) -> Self {
-        let sampler_buffer = Texture::new(gl::TEXTURE_2D).unwrap();
-        sampler_buffer.bind();
-        sampler_buffer.texture_data(size, ptr::null(), gl::FLOAT, gl::RGBA, gl::RGBA16F);
-        sampler_buffer.parameter(gl::TEXTURE_MIN_FILTER, min);
-        sampler_buffer.parameter(gl::TEXTURE_MAG_FILTER, mag);
+        let color_buffer = Texture::new(gl::TEXTURE_2D).unwrap();
+        color_buffer.bind();
+        color_buffer.texture_data(size, ptr::null(), gl::FLOAT, gl::RGBA, gl::RGBA16F);
+        color_buffer.parameter(gl::TEXTURE_MIN_FILTER, min);
+        color_buffer.parameter(gl::TEXTURE_MAG_FILTER, mag);
 
         let depth_stencil_buffer = Renderbuffer::new(gl::RENDERBUFFER).unwrap();
         depth_stencil_buffer.bind();
@@ -304,7 +304,7 @@ impl Framebuffer {
 
         let framebuffer = gl_wrappers::Framebuffer::new(gl::FRAMEBUFFER).unwrap();
         framebuffer.bind();
-        framebuffer.attach_texture2d(&sampler_buffer, gl::COLOR_ATTACHMENT0);
+        framebuffer.attach_texture2d(&color_buffer, gl::COLOR_ATTACHMENT0);
         framebuffer.attach_renderbuffer(&depth_stencil_buffer, gl::DEPTH_STENCIL_ATTACHMENT);
         assert!(gl_wrappers::Framebuffer::is_complete());
 
@@ -312,7 +312,7 @@ impl Framebuffer {
 
         Self {
             framebuffer,
-            sampler_buffer,
+            color_buffer,
             depth_stencil_buffer,
             size,
         }
@@ -344,7 +344,7 @@ impl Framebuffer {
 
         Self {
             framebuffer,
-            sampler_buffer,
+            color_buffer: sampler_buffer,
             depth_stencil_buffer: Renderbuffer::new(gl::RENDERBUFFER).unwrap(),
             size,
         }
