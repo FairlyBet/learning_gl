@@ -157,8 +157,7 @@ impl MeshData {
     }
 }
 
-pub type Model3d = Vec<MeshData>;
-
 pub struct Mesh {
-    pub index: RangedIndex,
+    pub mesh_index: RangedIndex,
+    pub material_index: usize,
 }

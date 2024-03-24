@@ -81,7 +81,8 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(size: (i32, i32), context_version: Version, _: &Gl) -> Self {
-        let framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
+        // let size = (size.0 / 4, size.1 / 4);
+        let framebuffer = Framebuffer::new(size, gl::NEAREST, gl::NEAREST);
 
         let main_vert = MainShader::<VertShader>::new();
         let mut main_frag = MainShader::<FragShader>::new();
@@ -166,7 +167,11 @@ impl Renderer {
                 0,
             );
 
-            Self::render_meshes(resource_manager.mesh_data().get_resource(&mesh.data.index));
+            Self::render_meshes(
+                resource_manager
+                    .mesh_data()
+                    .get_resource(&mesh.data.mesh_index),
+            );
         }
     }
 
@@ -243,7 +248,6 @@ impl Screen {
 
     pub fn render_offscreen(&self, offscreen: &Framebuffer) {
         Framebuffer::bind_default(self.size);
-        gl_wrappers::clear(gl::COLOR_BUFFER_BIT);
         self.program.use_();
         self.quad.bind();
         offscreen.color_buffer.bind();

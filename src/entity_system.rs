@@ -61,7 +61,7 @@ impl SceneManager {
                 entity
                     .meshes
                     .iter()
-                    .map(|item| resource_manager.get_mesh_lazily(&item.path))
+                    .map(|item| resource_manager.get_mesh_lazily(&item))
                     .collect::<Vec<Mesh>>(),
             );
             self.attach_components(

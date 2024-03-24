@@ -1,5 +1,6 @@
 #version 420 core
 
+out layout (location=0) vec4 frag_color;
 const float GRADE = 10;
 
 void color_grade() {

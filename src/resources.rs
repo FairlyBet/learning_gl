@@ -1,8 +1,8 @@
 use crate::{
-    data_3d::{Mesh, MeshData, Model3d, VertexData},
+    data_3d::{self, Mesh, MeshData, VertexData},
     scene::Scene,
-    scripting::{CompiledScript, Scripting},
-    serializable::ScriptObject,
+    scripting::CompiledScript,
+    serializable::{self, ScriptObject},
 };
 use fxhash::FxHashMap;
 use russimp::{
@@ -93,44 +93,6 @@ pub const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
     PostProcess::JoinIdenticalVertices,
     PostProcess::ImproveCacheLocality,
 ];
-
-pub fn load_model(path: &String, post_process: PostProcessSteps) -> Model3d {
-    let model = russimp::scene::Scene::from_file(path, post_process).unwrap();
-    let mut meshes = Model3d::with_capacity(model.meshes.len());
-    for mesh in &model.meshes {
-        let vertex_count = mesh.vertices.len();
-        let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
-        for i in 0..vertex_count {
-            let position = mesh.vertices[i];
-            let normal = mesh.normals[i];
-            let tex_coord: Vector2D;
-            if let Some(tex_coords) = &(mesh.texture_coords[0]) {
-                tex_coord = Vector2D {
-                    x: tex_coords[i].x,
-                    y: tex_coords[i].y,
-                };
-            } else {
-                tex_coord = Default::default();
-            }
-            let vertex = VertexData {
-                position,
-                normal,
-                tex_coord,
-            };
-            vertex_data.push(vertex);
-        }
-        // 1 face contains 3 indexes
-        let mut index_data = Vec::<u32>::with_capacity(mesh.faces.len() * 3);
-        for face in &mesh.faces {
-            for index in &face.0 {
-                index_data.push(*index);
-            }
-        }
-        let mesh = MeshData::from_vertex_index_data(&vertex_data, &index_data, gl::STATIC_DRAW);
-        meshes.push(mesh);
-    }
-    meshes
-}
 
 pub type ResourcePath = String;
 pub type RangedIndex = Range<usize>;
@@ -244,22 +206,67 @@ impl ResourceManager {
         &mut self.meshes
     }
 
-    pub fn get_mesh_lazily(&mut self, name: &ResourcePath) -> Mesh {
-        if !self.meshes.contains_resource(&name) {
-            let model_meshes = load_model(&name, DEFAULT_POSTPROCESS.into());
-            self.meshes.push_resources(name, model_meshes);
+    pub fn get_mesh_lazily(&mut self, mesh: &serializable::Mesh) -> data_3d::Mesh {
+        if !self.meshes.contains_resource(&mesh.path) {
+            self.load_mesh(&mesh, DEFAULT_POSTPROCESS.into());
         }
-        Mesh {
-            index: self.meshes.get_index(&name),
-        }
+        let mesh_index = self.meshes.get_index(&mesh.path);
+        todo!()
     }
+
+    fn load_mesh(&mut self, mesh: &serializable::Mesh, post_process: PostProcessSteps) {
+        let scene = russimp::scene::Scene::from_file(&mesh.path, post_process).unwrap();
+
+        let mut meshes = Vec::with_capacity(scene.meshes.len());
+        for submesh in &scene.meshes {
+            let vertex_count = submesh.vertices.len();
+            let mut vertex_data = Vec::<VertexData>::with_capacity(vertex_count);
+            for i in 0..vertex_count {
+                let position = submesh.vertices[i];
+                let normal = submesh.normals[i];
+                let tex_coord =
+                    submesh.texture_coords[0]
+                        .as_ref()
+                        .map_or(Vector2D::default(), |coords| Vector2D {
+                            x: coords[i].x,
+                            y: coords[i].y,
+                        });
+                let vertex = VertexData {
+                    position,
+                    normal,
+                    tex_coord,
+                };
+                vertex_data.push(vertex);
+            }
+
+            // 1 face contains 3 indexes
+            let mut index_data = Vec::<u32>::with_capacity(submesh.faces.len() * 3);
+            for face in &submesh.faces {
+                for index in &face.0 {
+                    index_data.push(*index);
+                }
+            }
+
+            let material_index = submesh.material_index as usize;
+
+            for info in mesh.material.iter() {
+                match info {
+                    serializable::MateialInfo::None => todo!(),
+                    serializable::MateialInfo::Default => {}
+                    serializable::MateialInfo::Custom(_) => todo!(),
+                }
+            }
+
+            let mesh = MeshData::from_vertex_index_data(&vertex_data, &index_data, gl::STATIC_DRAW);
+            meshes.push(mesh);
+        }
+        // meshes
+    }
+
+    fn load_mateials(&mut self) {}
 
     pub fn get_script(&self, script: &ScriptObject) -> String {
         // will be replaced later with some binary storing logic
         fs::read_to_string(&script.script_path).unwrap()
-    }
-
-    pub fn compiled_scripts(&self) -> &FxHashMap<ResourcePath, CompiledScript> {
-        &self.scripts
     }
 }

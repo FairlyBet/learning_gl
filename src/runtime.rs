@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::{
     entity_system::SceneManager,
     gl_wrappers::Gl,
@@ -8,23 +6,25 @@ use crate::{
     scripting::Scripting,
 };
 use glfw::{
-    fail_on_errors, init, Action, ClientApiHint, Context, CursorMode, GlfwReceiver, Key, Modifiers,
+    fail_on_errors, Action, ClientApiHint, Context, CursorMode, GlfwReceiver, Key, Modifiers,
     MouseButton, OpenGlProfileHint, PWindow, SwapInterval, WindowEvent, WindowHint, WindowMode,
 };
 use spin_sleep::{SpinSleeper, SpinStrategy};
+use std::time::{Duration, Instant};
 
 const MAJOR: u32 = 4;
 const MINOR: u32 = 3;
 const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(MAJOR, MINOR);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
+const CLIENT_API: WindowHint = WindowHint::ClientApi(ClientApiHint::OpenGl);
 const MODE: WindowMode<'_> = WindowMode::Windowed;
 const SWAP_INTERVAL: SwapInterval = SwapInterval::Sync(1);
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
 pub fn run() {
-    let mut glfw = init(fail_on_errors!()).unwrap();
-    glfw.window_hint(WindowHint::ClientApi(ClientApiHint::OpenGl));
+    let mut glfw = glfw::init(fail_on_errors!()).unwrap();
+    glfw.window_hint(CLIENT_API);
     glfw.window_hint(OPENGL_PROFILE);
     glfw.window_hint(CONTEXT_VERSION);
     let (mut window, receiver) = glfw.with_primary_monitor(|glfw, monitor| match monitor {
@@ -44,6 +44,7 @@ pub fn run() {
     window.set_cursor_mode(CursorMode::Disabled);
     window.set_cursor_pos(0.0, 0.0);
     window.set_raw_mouse_motion(true);
+    window.set_resizable(false);
     window.make_current();
     glfw.set_swap_interval(SWAP_INTERVAL);
 
@@ -157,9 +158,12 @@ fn render_iteration(
 ) {
     renderer.render(scene_manager, resource_manager);
     screen.render_offscreen(renderer.framebuffer());
+    window.swap_buffers();
+    unsafe {
+        gl::Finish();
+    }
     let sleeper = SpinSleeper::default().with_spin_strategy(SpinStrategy::YieldThread);
     sleeper.sleep(sleep_period.clone());
-    window.swap_buffers();
 }
 
 fn enable_polling(window: &mut PWindow) {

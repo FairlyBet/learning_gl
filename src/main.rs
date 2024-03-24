@@ -10,6 +10,7 @@ mod entity_system;
 mod gl_wrappers;
 mod lighting;
 mod linear;
+mod meterial;
 mod rendering;
 mod resources;
 mod runtime;

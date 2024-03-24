@@ -1,4 +1,4 @@
-use crate::serializable::{Camera, Entity, LightSource, MeshData, ScriptObject, Transform, Vec3};
+use crate::serializable::{Camera, Entity, LightSource, Mesh, ScriptObject, Transform, Vec3};
 use serde::Serialize;
 use std::fs;
 
@@ -22,8 +22,9 @@ impl Scene {
             name: "Object".to_string(),
             transform: Transform::default(),
             children: vec![],
-            meshes: vec![MeshData {
+            meshes: vec![Mesh {
                 path: "assets\\meshes\\cube.fbx".to_string(),
+                material: crate::serializable::Material::default(),
             }],
             cameras: vec![],
             light_sources: vec![],

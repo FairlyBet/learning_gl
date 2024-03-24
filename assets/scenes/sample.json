@@ -21,7 +21,8 @@
         "children": [],
         "meshes": [
             {
-                "path": "assets\\meshes\\vange_well.glb"
+                "path": "assets\\meshes\\vange_well.glb",
+                "material": "None"
             }
         ],
         "cameras": [],
@@ -73,7 +74,7 @@
         "transform": {
             "position": {
                 "x": 0.0,
-                "y": 0.0,
+                "y": 10.0,
                 "z": 0.0
             },
             "orientation": {
@@ -82,15 +83,16 @@
                 "z": 0.0
             },
             "scale": {
-                "x": 0.2,
-                "y": 0.2,
-                "z": 0.2
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
             }
         },
         "children": [],
         "meshes": [
             {
-                "path": "assets\\meshes\\cube.fbx"
+                "path": "assets\\meshes\\cube.fbx",
+                "material": "None"
             }
         ],
         "cameras": [],

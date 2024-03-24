@@ -11,7 +11,7 @@ pub struct Entity {
     pub name: String,
     pub transform: Transform,
     pub children: Vec<Entity>,
-    pub meshes: Vec<MeshData>,
+    pub meshes: Vec<Mesh>,
     pub cameras: Vec<Camera>,
     pub light_sources: Vec<LightSource>,
     pub scripts: Vec<ScriptObject>,
@@ -63,9 +63,40 @@ impl Into<glm::Vec3> for Vec3 {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct MeshData {
+#[derive(Serialize, Deserialize)]
+pub struct Mesh {
     pub path: ResourcePath,
+    pub material: Material,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct Material {
+    pub albedo: MateialInfo,
+    pub metalness: MateialInfo,
+    pub roughness: MateialInfo,
+    pub normal: MateialInfo,
+    pub ao: MateialInfo,
+}
+
+impl Material {
+    pub fn iter(&self) -> impl IntoIterator<Item = &MateialInfo> {
+        [
+            &self.albedo,
+            &self.metalness,
+            &self.roughness,
+            &self.normal,
+            &self.ao,
+        ]
+        .into_iter()
+    }
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub enum MateialInfo {
+    #[default]
+    None,
+    Default,
+    Custom(String),
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]
