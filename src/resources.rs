@@ -200,6 +200,9 @@ pub struct ResourceManager<'a> {
 
 impl<'a> ResourceManager<'a> {
     pub fn new(_: &'a Gl) -> Self {
+        let default_textures = Self::default_textures();
+        let tex_container =  SingleIndexContainer::new();
+        
         Self {
             meshes: RangeIndexContainer::new(),
             scripts: Default::default(),
