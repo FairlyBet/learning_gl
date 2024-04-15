@@ -106,6 +106,7 @@ pub type ResourcePath = String;
 pub type RangedIndex = Range<usize>;
 
 pub struct ResourceContainer<Resource, ResourceIndex: Clone> {
+    // Add resource releasing logic along with free indecies accounting logic
     table: FxHashMap<ResourcePath, ResourceIndex>,
     vec: Vec<Resource>,
 }
@@ -165,9 +166,9 @@ impl<Resource> RangeIndexContainer<Resource> {
     }
 }
 
-pub type IndexContainer<Resource> = ResourceContainer<Resource, usize>;
+pub type SingleIndexContainer<Resource> = ResourceContainer<Resource, usize>;
 
-impl<Resource> IndexContainer<Resource> {
+impl<Resource> SingleIndexContainer<Resource> {
     pub fn push_resource(&mut self, name: &ResourcePath, resource: Resource) -> usize {
         assert!(
             !self.table.contains_key(name),
@@ -184,16 +185,16 @@ impl<Resource> IndexContainer<Resource> {
     }
 }
 
+// Split logic into separate modules such as material manager or mesh manager
 #[rustfmt::skip]
 pub struct ResourceManager<'a> {
     pd:                 PhantomData<&'a ()>,
     meshes:             RangeIndexContainer<MeshData>,
-    textures:           FxHashMap<ResourcePath, Texture>,
-    // on reallocation references become invalid
-    materials:          Vec<Material<'a>>,
+    textures:           SingleIndexContainer<Texture>,
+    materials:          Vec<Material>,
     scripts:            FxHashMap<ResourcePath, CompiledScript>,
     scenes:             Vec<Scene>,
-                        // base_color, metalness, roughness, ao, normal, displacement
+    // base_color, metalness, roughness, ao, normal, displacement
     default_textures:   (Texture, Texture, Texture, Texture, Texture, Texture),
 }
 
@@ -206,7 +207,7 @@ impl<'a> ResourceManager<'a> {
                 .iter()
                 .map(|path| Scene::new(path))
                 .collect(),
-            textures: Default::default(),
+            textures: SingleIndexContainer::new(),
             pd: PhantomData::default(),
             default_textures: Self::default_textures(),
             materials: Vec::default(),
@@ -453,6 +454,15 @@ impl<'a> ResourceManager<'a> {
             if let Some(path) = &displacement_path {
                 displacement = self.get_tex_lazily(&Self::load_img(&path), &path)
             }
+
+            // let material = Material{
+            //     base_color,
+            //     metalness,
+            //     roughness,
+            //     ao,
+            //     normals,
+            //     displacement,
+            // };
         }
     }
 
@@ -497,9 +507,9 @@ impl<'a> ResourceManager<'a> {
         Image::new(img.width, img.height, img.depth, res)
     }
 
-    fn get_tex_lazily(&mut self, img: &Image<u8>, path: &str) -> &Texture {
-        if self.textures.contains_key(path) {
-            return &self.textures[path];
+    fn get_tex_lazily(&mut self, img: &Image<u8>, path: &str) -> usize {
+        if self.textures.contains_resource(&path.to_owned()) {
+            return &self.textures.get_index(&path.to_owned());
         }
 
         let channel_count = img.data.len() / img.width / img.height;

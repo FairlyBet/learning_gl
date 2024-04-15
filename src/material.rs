@@ -1,11 +1,11 @@
 use crate::gl_wrappers::Texture;
 
 #[rustfmt::skip]
-pub struct Material<'a> {
-    pub base_color:     &'a Texture,
-    pub metalness:      &'a Texture,
-    pub roughness:      &'a Texture,
-    pub ao:             &'a Texture,
-    pub normal:         &'a Texture,
-    pub displacement:   &'a Texture,
+pub struct Material {
+    pub base_color:     usize,
+    pub metalness:      usize,
+    pub roughness:      usize,
+    pub ao:             usize,
+    pub normals:        usize,
+    pub displacement:   usize,
 }
