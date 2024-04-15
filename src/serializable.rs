@@ -71,32 +71,77 @@ pub struct Mesh {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Material {
-    pub albedo: MateialInfo,
-    pub metalness: MateialInfo,
-    pub roughness: MateialInfo,
-    pub normal: MateialInfo,
-    pub ao: MateialInfo,
+    pub textures: Textures,
+    pub pbr_channels: PBRTextures,
 }
 
-impl Material {
-    pub fn iter(&self) -> impl IntoIterator<Item = &MateialInfo> {
-        [
-            &self.albedo,
-            &self.metalness,
-            &self.roughness,
-            &self.normal,
-            &self.ao,
-        ]
-        .into_iter()
-    }
+#[rustfmt::skip]
+#[derive(Serialize, Deserialize, Default)]
+pub enum Textures {
+    #[default]
+    Own,
+    Custom {
+        base_color:     Option<String>,
+        metalness:      Option<String>,
+        roughness:      Option<String>,
+        ao:             Option<String>,
+        normals:        Option<String>,
+        displacement:   Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub enum MateialInfo {
+// Metalness, Roughness, Ambient-occlusion channels in a pbr texture
+pub enum PBRTextures {
     #[default]
-    None,
-    Default,
-    Custom(String),
+    Separated,
+    Merged(PBRChannels),
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub enum PBRChannels {
+    #[default]
+    ARM,
+    AMR,
+    RMA,
+    RAM,
+    MRA,
+    MAR,
+}
+
+impl PBRChannels {
+    pub fn ao_offset(&self) -> usize {
+        match self {
+            PBRChannels::ARM => 0,
+            PBRChannels::AMR => 0,
+            PBRChannels::RMA => 2,
+            PBRChannels::RAM => 1,
+            PBRChannels::MRA => 2,
+            PBRChannels::MAR => 1,
+        }
+    }
+
+    pub fn metalness_offset(&self) -> usize {
+        match self {
+            PBRChannels::ARM => 2,
+            PBRChannels::AMR => 1,
+            PBRChannels::RMA => 1,
+            PBRChannels::RAM => 2,
+            PBRChannels::MRA => 0,
+            PBRChannels::MAR => 0,
+        }
+    }
+
+    pub fn roughness_offset(&self) -> usize {
+        match self {
+            PBRChannels::ARM => 1,
+            PBRChannels::AMR => 2,
+            PBRChannels::RMA => 0,
+            PBRChannels::RAM => 0,
+            PBRChannels::MRA => 1,
+            PBRChannels::MAR => 2,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Default)]

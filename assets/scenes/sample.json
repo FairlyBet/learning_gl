@@ -4,25 +4,28 @@
         "transform": {
             "position": {
                 "x": 0.0,
-                "y": -10.0,
-                "z": -25.0
+                "y": 0.0,
+                "z": 0.0
             },
             "orientation": {
-                "x": 180.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
             "scale": {
-                "x": 0.4,
-                "y": 0.4,
-                "z": 0.4
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
             }
         },
         "children": [],
         "meshes": [
             {
-                "path": "assets\\meshes\\vange_well.glb",
-                "material": "None"
+                "path": "assets\\meshes\\boulder_01.gltf",
+                "material": {
+                    "textures": "Own",
+                    "pbr_channel": "Arm"
+                }
             }
         ],
         "cameras": [],
@@ -74,11 +77,11 @@
         "transform": {
             "position": {
                 "x": 0.0,
-                "y": 10.0,
+                "y": 5.0,
                 "z": 0.0
             },
             "orientation": {
-                "x": 150.0,
+                "x": 0.0,
                 "y": 0.0,
                 "z": 0.0
             },
@@ -89,12 +92,7 @@
             }
         },
         "children": [],
-        "meshes": [
-            {
-                "path": "assets\\meshes\\cube.fbx",
-                "material": "None"
-            }
-        ],
+        "meshes": [],
         "cameras": [],
         "light_sources": [
             {
@@ -103,9 +101,9 @@
                     "y": 10.0,
                     "z": 10.0
                 },
-                "type_": "Directional",
+                "type_": "Point",
                 "inner": 0.0,
-                "outer": 25.0,
+                "outer": 0.0,
                 "shadow_distance": 100.0
             }
         ],

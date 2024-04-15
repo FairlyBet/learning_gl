@@ -16,6 +16,7 @@ use gl::types::GLenum;
 use glfw::Version;
 use nalgebra_glm::{Mat4, Vec3};
 use std::{
+    marker::PhantomData,
     mem::{size_of, size_of_val, MaybeUninit},
     ptr,
 };
@@ -72,15 +73,16 @@ fn lighting_data_buffer() -> BufferObject {
 }
 
 #[derive(Debug)]
-pub struct Renderer {
+pub struct Renderer<'a> {
+    pd: PhantomData<&'a ()>,
     framebuffer: Framebuffer,
     shader_program: ShaderProgram,
     matrix_buffer: BufferObject,
     lighting_buffer: BufferObject,
 }
 
-impl Renderer {
-    pub fn new(size: (i32, i32), context_version: Version, _: &Gl) -> Self {
+impl<'a> Renderer<'a> {
+    pub fn new(size: (i32, i32), context_version: Version, _: &'a Gl) -> Self {
         // let size = (size.0 / 4, size.1 / 4);
         let framebuffer = Framebuffer::new(size, gl::NEAREST, gl::NEAREST);
 
@@ -107,6 +109,7 @@ impl Renderer {
             shader_program: program,
             matrix_buffer,
             lighting_buffer,
+            pd: PhantomData::default(),
         }
     }
 
@@ -197,7 +200,7 @@ impl Renderer {
     }
 }
 
-impl FramebufferSizeCallback for Renderer {
+impl<'a> FramebufferSizeCallback for Renderer<'a> {
     fn framebuffer_size(&mut self, size: (i32, i32)) {
         if self.framebuffer.size != size {
             self.framebuffer = Framebuffer::new(size, gl::LINEAR, gl::LINEAR);
@@ -206,15 +209,16 @@ impl FramebufferSizeCallback for Renderer {
 }
 
 #[derive(Debug)]
-pub struct Screen {
+pub struct Screen<'a> {
+    pd: PhantomData<&'a ()>,
     size: (i32, i32),
     program: ShaderProgram,
     quad: MeshData,
     gamma: f32,
 }
 
-impl Screen {
-    pub fn new(size: (i32, i32), context_version: Version, gl: &Gl) -> Self {
+impl<'a> Screen<'a> {
+    pub fn new(size: (i32, i32), context_version: Version, _: &'a Gl) -> Self {
         let vert = shader::build_shader(&ScreenShaderVert::new(), context_version);
         let frag = shader::build_shader(&ScreenShaderFrag::new(), context_version);
         let program = ShaderProgram::new().unwrap();
@@ -243,6 +247,7 @@ impl Screen {
             program,
             quad,
             gamma,
+            pd: PhantomData::default(),
         }
     }
 
@@ -278,7 +283,7 @@ impl Screen {
     }
 }
 
-impl FramebufferSizeCallback for Screen {
+impl<'a> FramebufferSizeCallback for Screen<'a> {
     fn framebuffer_size(&mut self, size: (i32, i32)) {
         if self.size != size {
             self.set_size(size)

@@ -30,13 +30,8 @@ pub fn run() {
     let (mut window, receiver) = glfw.with_primary_monitor(|glfw, monitor| match monitor {
         Some(monitor) => {
             let mode = monitor.get_video_mode().unwrap();
-            glfw.create_window(
-                mode.width,
-                mode.height,
-                "v0.0.1",
-                WindowMode::FullScreen(monitor),
-            )
-            .unwrap()
+            glfw.create_window(WIDTH, HEIGHT, "v0.0.1", WindowMode::Windowed)
+                .unwrap()
         }
         None => unreachable!(),
     });
@@ -61,7 +56,7 @@ pub fn run() {
         &gl,
     );
     let scripting = Scripting::new();
-    let mut resource_manager = ResourceManager::new();
+    let mut resource_manager = ResourceManager::new(&gl);
     let mut scene_manager = SceneManager::default();
     let mut events = WindowEvents::new();
     let mut frametime = 0.0;

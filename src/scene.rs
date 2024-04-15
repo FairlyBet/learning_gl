@@ -1,4 +1,7 @@
-use crate::serializable::{Camera, Entity, LightSource, Mesh, ScriptObject, Transform, Vec3};
+use crate::{
+    lighting::LightType,
+    serializable::{Camera, Entity, LightSource, Mesh, PBRTextures, ScriptObject, Transform, Vec3},
+};
 use serde::Serialize;
 use std::fs;
 
@@ -23,7 +26,7 @@ impl Scene {
             transform: Transform::default(),
             children: vec![],
             meshes: vec![Mesh {
-                path: "assets\\meshes\\cube.fbx".to_string(),
+                path: "assets\\meshes\\vange_well.glb".to_string(),
                 material: crate::serializable::Material::default(),
             }],
             cameras: vec![],
@@ -53,14 +56,12 @@ impl Scene {
                     y: 1.0,
                     z: 1.0,
                 },
-                type_: crate::lighting::LightType::Directional,
+                type_: LightType::Directional,
                 shadow_distance: 100.0,
                 inner: 0.0,
                 outer: 0.0,
             }],
-            scripts: vec![ScriptObject {
-                script_path: "assets\\scripts\\sample.lua".to_string(),
-            }],
+            scripts: vec![],
         };
 
         let str_ = serde_json::to_string(&vec![entity1, entity2, entity3]).unwrap();

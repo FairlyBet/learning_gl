@@ -10,7 +10,7 @@ mod entity_system;
 mod gl_wrappers;
 mod lighting;
 mod linear;
-mod meterial;
+mod material;
 mod rendering;
 mod resources;
 mod runtime;
@@ -21,5 +21,6 @@ mod shader;
 mod utils;
 
 fn main() {
-    runtime::run();
+    // scene::Scene::sample();
+    // runtime::run();
 }

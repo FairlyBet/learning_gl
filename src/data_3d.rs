@@ -1,6 +1,6 @@
 use crate::{
     gl_wrappers::{self, BufferObject, VertexArrayObject},
-    resources::RangedIndex,
+    resources::RangedIndex, serializable::Material,
 };
 use gl::types::GLenum;
 use russimp::{Vector2D, Vector3D};
@@ -12,7 +12,7 @@ pub const QUAD_VERTICES_TEX_COORDS: &[f32] = &[
 ];
 
 #[repr(C)]
-pub struct VertexData {
+pub struct Vertex {
     pub position: Vector3D,
     pub normal: Vector3D,
     pub tex_coord: Vector2D,
@@ -67,7 +67,7 @@ impl MeshData {
     }
 
     pub fn from_vertex_index_data(
-        vertex_data: &Vec<VertexData>,
+        vertex_data: &Vec<Vertex>,
         index_data: &Vec<u32>,
         usage: GLenum,
     ) -> MeshData {
@@ -80,7 +80,7 @@ impl MeshData {
         let index_count = index_data.len() as i32;
         MeshData::new(
             vertex_count,
-            vertex_data.len() * size_of::<VertexData>(),
+            vertex_data.len() * size_of::<Vertex>(),
             vertex_data.as_ptr().cast(),
             attributes,
             index_count,
@@ -159,5 +159,5 @@ impl MeshData {
 
 pub struct Mesh {
     pub mesh_index: RangedIndex,
-    pub material_index: usize,
+    pub material_index: RangedIndex,
 }
