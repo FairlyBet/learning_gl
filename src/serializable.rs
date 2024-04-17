@@ -2,7 +2,6 @@ use crate::{
     camera,
     lighting::{self, LightData, LightType},
     linear::{self, Projection},
-    resources::ResourcePath,
 };
 use serde::{Deserialize, Serialize};
 
@@ -65,7 +64,7 @@ impl Into<glm::Vec3> for Vec3 {
 
 #[derive(Serialize, Deserialize)]
 pub struct Mesh {
-    pub path: ResourcePath,
+    pub path: String,
     pub material: Material,
 }
 

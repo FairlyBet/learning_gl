@@ -33,7 +33,7 @@ where
     let mut path = PathBuf::from_str(ASSETS_DIR).unwrap();
     path.push(T::folder_name());
 
-    fn search<T>(path: &Path) -> Vec<ResourcePath>
+    fn search<T>(path: &Path) -> Vec<String>
     where
         T: Resource,
     {
@@ -102,12 +102,11 @@ pub const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
     PostProcess::ImproveCacheLocality,
 ];
 
-pub type ResourcePath = String;
 pub type RangedIndex = Range<usize>;
 
 pub struct ResourceContainer<Resource, ResourceIndex: Clone> {
     // Add resource releasing logic along with free indecies accounting logic
-    table: FxHashMap<ResourcePath, ResourceIndex>,
+    table: FxHashMap<String, ResourceIndex>,
     vec: Vec<Resource>,
 }
 
@@ -119,11 +118,11 @@ impl<Resource, ResourceIndex: Clone> ResourceContainer<Resource, ResourceIndex> 
         }
     }
 
-    pub fn get_index(&self, name: &ResourcePath) -> ResourceIndex {
+    pub fn get_index(&self, name: &str) -> ResourceIndex {
         self.table[name].clone()
     }
 
-    pub fn contains_resource(&self, name: &ResourcePath) -> bool {
+    pub fn contains_resource(&self, name: &str) -> bool {
         self.table.contains_key(name)
     }
 
@@ -136,29 +135,18 @@ impl<Resource, ResourceIndex: Clone> ResourceContainer<Resource, ResourceIndex> 
 pub type RangeIndexContainer<Resource> = ResourceContainer<Resource, RangedIndex>;
 
 impl<Resource> RangeIndexContainer<Resource> {
-    pub fn push_resources(
-        &mut self,
-        name: &ResourcePath,
-        mut resources: Vec<Resource>,
-    ) -> RangedIndex {
-        let idx = Range {
-            start: self.vec.len(),
-            end: self.vec.len() + resources.len(),
-        };
+    pub fn push(&mut self, name: &str, mut resource: Vec<Resource>) -> RangedIndex {
         assert!(
-            self.table.insert(name.clone(), idx.clone()).is_none(),
+            !self.table.contains_key(name),
             "Container already has this resource"
         );
-        self.vec.append(&mut resources);
+        let idx = Range {
+            start: self.vec.len(),
+            end: self.vec.len() + resource.len(),
+        };
+        _ = self.table.insert(name.to_string(), idx.clone());
+        self.vec.append(&mut resource);
         idx
-    }
-
-    pub fn soft_push(&mut self, name: &ResourcePath, resources: Vec<Resource>) -> RangedIndex {
-        if self.table.contains_key(name) {
-            self.table[name].clone()
-        } else {
-            self.push_resources(name, resources)
-        }
     }
 
     pub fn get_resource(&self, idx: &RangedIndex) -> &[Resource] {
@@ -169,13 +157,13 @@ impl<Resource> RangeIndexContainer<Resource> {
 pub type SingleIndexContainer<Resource> = ResourceContainer<Resource, usize>;
 
 impl<Resource> SingleIndexContainer<Resource> {
-    pub fn push_resource(&mut self, name: &ResourcePath, resource: Resource) -> usize {
+    pub fn push_resource(&mut self, name: &str, resource: Resource) -> usize {
         assert!(
             !self.table.contains_key(name),
             "Container already has this resource"
         );
         let idx = self.vec.len();
-        _ = self.table.insert(name.clone(), idx);
+        _ = self.table.insert(name.to_string(), idx);
         self.vec.push(resource);
         idx
     }
@@ -192,17 +180,23 @@ pub struct ResourceManager<'a> {
     meshes:             RangeIndexContainer<MeshData>,
     textures:           SingleIndexContainer<Texture>,
     materials:          Vec<Material>,
-    scripts:            FxHashMap<ResourcePath, CompiledScript>,
+    scripts:            FxHashMap<String, CompiledScript>,
     scenes:             Vec<Scene>,
-    // base_color, metalness, roughness, ao, normal, displacement
+                        // base_color, metalness, roughness, ao, normal, displacement
     default_textures:   (Texture, Texture, Texture, Texture, Texture, Texture),
 }
 
 impl<'a> ResourceManager<'a> {
     pub fn new(_: &'a Gl) -> Self {
         let default_textures = Self::default_textures();
-        let tex_container =  SingleIndexContainer::new();
-        
+        let mut tex_container = SingleIndexContainer::new();
+        tex_container.push_resource("default_base_color", default_textures.0);
+        tex_container.push_resource("default_metalness", default_textures.1);
+        tex_container.push_resource("default_roughness", default_textures.2);
+        tex_container.push_resource("default_ao", default_textures.3);
+        tex_container.push_resource("default_normals", default_textures.4);
+        tex_container.push_resource("default_displacement", default_textures.5);
+
         Self {
             meshes: RangeIndexContainer::new(),
             scripts: Default::default(),
@@ -268,14 +262,14 @@ impl<'a> ResourceManager<'a> {
         if !self.meshes.contains_resource(&mesh.path) {
             self.load_mesh(&mesh, DEFAULT_POSTPROCESS.into());
         }
-        // let mesh_index = self.meshes.get_index(&mesh.path);
+        let mesh_index = self.meshes.get_index(&mesh.path);
         todo!()
     }
 
     fn load_mesh(&mut self, mesh: &serializable::Mesh, post_process: PostProcessSteps) {
         let scene = russimp::scene::Scene::from_file(&mesh.path, post_process).unwrap();
 
-        let mut meshes = Vec::with_capacity(scene.meshes.len());
+        let mut submeshes_data = Vec::with_capacity(scene.meshes.len());
         let mut material_indecies = Vec::with_capacity(scene.meshes.len());
         let mut vertex_data = Vec::<Vertex>::new();
         let mut index_data = Vec::<u32>::new();
@@ -307,14 +301,16 @@ impl<'a> ResourceManager<'a> {
                 }
             }
 
-            let mesh_data =
+            let submesh_data =
                 MeshData::from_vertex_index_data(&vertex_data, &index_data, gl::STATIC_DRAW);
-            meshes.push(mesh_data);
+            submeshes_data.push(submesh_data);
             material_indecies.push(submesh.material_index);
 
             vertex_data.clear();
             index_data.clear();
         }
+
+        _ = self.meshes.push(&mesh.path, submeshes_data);
 
         self.load_materials(&mesh.material, &mesh.path, &scene, &material_indecies);
     }
@@ -326,6 +322,71 @@ impl<'a> ResourceManager<'a> {
         scene: &russimp::scene::Scene,
         material_indecies: &Vec<u32>,
     ) {
+        match &material.textures {
+            serializable::Textures::Own => {
+                for index in material_indecies {
+                    // TODO: embeded textures loading
+
+                    let m = &scene.materials[*index as usize];
+
+                    // Find properties that are texture file paths
+                    let mut tex_files = Vec::<&MaterialProperty>::new();
+                    for property in &m.properties {
+                        if property.key == "$tex.file" {
+                            tex_files.push(property);
+                        }
+                    }
+
+                    // Filter out only PBR textures
+                    let base_color = tex_files
+                        .iter()
+                        .find(|p| p.semantic == TextureType::BaseColor)
+                        .or_else(|| {
+                            tex_files
+                                .iter()
+                                .find(|p| p.semantic == TextureType::Diffuse)
+                        })
+                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
+                        .unwrap_or("default_base_color".to_string());
+                    let metalness = tex_files
+                        .iter()
+                        .find(|p| p.semantic == TextureType::Metalness)
+                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
+                        .unwrap_or("default_metalness".to_string());
+                    let roughness = tex_files
+                        .iter()
+                        .find(|p| p.semantic == TextureType::Roughness)
+                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
+                        .unwrap_or("default_roughness".to_string());
+                    let ao = tex_files
+                        .iter()
+                        .find(|p| p.semantic == TextureType::AmbientOcclusion)
+                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
+                        .unwrap_or("default_ao".to_string());
+                    let normals = tex_files
+                        .iter()
+                        .find(|p| p.semantic == TextureType::Normals)
+                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
+                        .unwrap_or("default_normals".to_string());
+                    let displacement = tex_files
+                        .iter()
+                        .find(|p| p.semantic == TextureType::Displacement)
+                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
+                        .unwrap_or("default_displacement".to_string());
+                }
+            }
+            serializable::Textures::Custom {
+                base_color,
+                metalness,
+                roughness,
+                ao,
+                normals,
+                displacement,
+            } => { 
+                // let 
+            }
+        }
+
         // only for texture files
         for index in material_indecies {
             let (
@@ -337,8 +398,11 @@ impl<'a> ResourceManager<'a> {
                 displacement_path,
             ) = match &material.textures {
                 serializable::Textures::Own => {
+                    // TODO: embeded textures loading
+
                     let m = &scene.materials[*index as usize];
 
+                    // Find properties that are texture file paths
                     let mut tex_files = Vec::<&MaterialProperty>::new();
                     for property in &m.properties {
                         if property.key == "$tex.file" {
@@ -346,6 +410,7 @@ impl<'a> ResourceManager<'a> {
                         }
                     }
 
+                    // Filter out only pbr textures
                     let base_color = tex_files
                         .iter()
                         .find(|p| p.semantic == TextureType::BaseColor)
@@ -395,14 +460,14 @@ impl<'a> ResourceManager<'a> {
                 ),
             };
 
-            let mut base_color = &self.default_textures.0;
+            let mut base_color = self.textures.get_index("default_base_color");
             if let Some(path) = &base_color_path {
                 base_color = self.get_tex_lazily(&Self::load_img(&path), &path);
             }
 
-            let mut metalness = &self.default_textures.1;
-            let mut roughness = &self.default_textures.2;
-            let mut ao = &self.default_textures.3;
+            let mut metalness = self.textures.get_index("default_metalness");
+            let mut roughness = self.textures.get_index("default_roughness");
+            let mut ao = self.textures.get_index("default_ao");
 
             match &material.pbr_channels {
                 PBRTextures::Separated => {
@@ -448,12 +513,12 @@ impl<'a> ResourceManager<'a> {
                 }
             }
 
-            let mut normals = &self.default_textures.4;
+            let mut normals = self.textures.get_index("default_normals");
             if let Some(path) = &normals_path {
                 normals = self.get_tex_lazily(&Self::load_img(&path), &path)
             }
 
-            let mut displacement = &self.default_textures.5;
+            let mut displacement = self.textures.get_index("default_displacement");
             if let Some(path) = &displacement_path {
                 displacement = self.get_tex_lazily(&Self::load_img(&path), &path)
             }
@@ -511,8 +576,8 @@ impl<'a> ResourceManager<'a> {
     }
 
     fn get_tex_lazily(&mut self, img: &Image<u8>, path: &str) -> usize {
-        if self.textures.contains_resource(&path.to_owned()) {
-            return &self.textures.get_index(&path.to_owned());
+        if self.textures.contains_resource(path) {
+            return self.textures.get_index(path);
         }
 
         let channel_count = img.data.len() / img.width / img.height;
@@ -541,9 +606,10 @@ impl<'a> ResourceManager<'a> {
         tex.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
         tex.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
 
-        _ = self.textures.insert(path.to_string(), tex);
-        &self.textures[path]
+        self.textures.push_resource(path, tex)
     }
+
+    fn get_material(&mut self) {}
 
     pub fn get_script(&self, script: &ScriptObject) -> String {
         // will be replaced later with some binary storing logic
