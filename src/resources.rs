@@ -179,11 +179,10 @@ pub struct ResourceManager<'a> {
     pd:                 PhantomData<&'a ()>,
     meshes:             RangeIndexContainer<MeshData>,
     textures:           SingleIndexContainer<Texture>,
-    materials:          Vec<Material>,
+    materials:          RangeIndexContainer<Material>,
     scripts:            FxHashMap<String, CompiledScript>,
     scenes:             Vec<Scene>,
                         // base_color, metalness, roughness, ao, normal, displacement
-    default_textures:   (Texture, Texture, Texture, Texture, Texture, Texture),
 }
 
 impl<'a> ResourceManager<'a> {
@@ -198,16 +197,15 @@ impl<'a> ResourceManager<'a> {
         tex_container.push_resource("default_displacement", default_textures.5);
 
         Self {
+            pd: PhantomData::default(),
             meshes: RangeIndexContainer::new(),
+            textures: SingleIndexContainer::new(),
+            materials: RangeIndexContainer::new(),
             scripts: Default::default(),
             scenes: get_paths::<Scene>()
                 .iter()
                 .map(|path| Scene::new(path))
                 .collect(),
-            textures: SingleIndexContainer::new(),
-            pd: PhantomData::default(),
-            default_textures: Self::default_textures(),
-            materials: Vec::default(),
         }
     }
 
@@ -312,7 +310,18 @@ impl<'a> ResourceManager<'a> {
 
         _ = self.meshes.push(&mesh.path, submeshes_data);
 
-        self.load_materials(&mesh.material, &mesh.path, &scene, &material_indecies);
+        let material_index = self.get_material_lazily(&mesh.material, &mesh.path, &scene, &material_indecies);
+    }
+
+    fn get_material_lazily(
+        &mut self,
+        material: &serializable::Material,
+        scene_path: &String,
+        scene: &russimp::scene::Scene,
+        material_indecies: &Vec<u32>,
+    ) -> RangedIndex {
+
+        todo!()
     }
 
     fn load_materials(
@@ -382,8 +391,8 @@ impl<'a> ResourceManager<'a> {
                 ao,
                 normals,
                 displacement,
-            } => { 
-                // let 
+            } => {
+                // let
             }
         }
 
@@ -608,8 +617,6 @@ impl<'a> ResourceManager<'a> {
 
         self.textures.push_resource(path, tex)
     }
-
-    fn get_material(&mut self) {}
 
     pub fn get_script(&self, script: &ScriptObject) -> String {
         // will be replaced later with some binary storing logic
