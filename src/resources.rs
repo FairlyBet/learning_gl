@@ -9,17 +9,16 @@ use crate::{
 use fxhash::FxHashMap;
 use gl::types::GLenum;
 use russimp::{
-    material::{DataContent, MaterialProperty, PropertyTypeInfo, TextureType},
+    material::{MaterialProperty, PropertyTypeInfo, TextureType},
     scene::{PostProcess, PostProcessSteps},
     Vector2D,
 };
 use stb_image::image::{self, Image};
 use std::{
-    ffi::{c_void, CStr, CString},
     fs,
     marker::PhantomData,
     ops::Range,
-    path::{self, Path, PathBuf},
+    path::{Path, PathBuf},
     ptr,
     str::FromStr as _,
 };
@@ -147,6 +146,7 @@ impl<Resource> SingleIndexContainer<Resource> {
 
 pub struct ResourceManager<'a> {
     pd: PhantomData<&'a ()>,
+    mesh_manager: MeshManager,
     scripts: FxHashMap<String, CompiledScript>,
     scenes: Vec<Scene>,
 }
@@ -155,6 +155,7 @@ impl<'a> ResourceManager<'a> {
     pub fn new(_: &'a Gl) -> Self {
         Self {
             pd: PhantomData::default(),
+            mesh_manager: MeshManager::new(),
             scripts: Default::default(),
             scenes: get_paths::<Scene>()
                 .iter()
@@ -164,11 +165,11 @@ impl<'a> ResourceManager<'a> {
     }
 
     pub fn get_mesh(&mut self, mesh: &serializable::Mesh) -> Mesh {
-        todo!()
+        self.mesh_manager.get_mesh_lazily(mesh)
     }
 
-    pub fn mesh_data(&self) -> &RangeIndexContainer<MeshData> {
-        todo!()
+    pub fn mesh_container(&self) -> &RangeIndexContainer<MeshData> {
+        &self.mesh_manager.meshes
     }
 
     pub fn scenes(&self) -> &[Scene] {
@@ -253,11 +254,15 @@ impl MeshManager {
             self.load_mesh(&mesh, Self::DEFAULT_POSTPROCESS.into());
         }
         let mesh_index = self.meshes.get_index(&mesh.path);
-        
-        todo!()
+        let material_index = self.materials.get_index(&mesh.path);
+
+        Mesh {
+            mesh_index,
+            material_index,
+        }
     }
 
-    fn load_mesh(&mut self, mesh: &serializable::Mesh, post_process: PostProcessSteps) -> {
+    fn load_mesh(&mut self, mesh: &serializable::Mesh, post_process: PostProcessSteps) {
         let scene = russimp::scene::Scene::from_file(&mesh.path, post_process).unwrap();
 
         let mut submeshes_data = Vec::with_capacity(scene.meshes.len());
@@ -302,185 +307,118 @@ impl MeshManager {
         }
 
         _ = self.meshes.push(&mesh.path, submeshes_data);
-        _ = self.get_material_lazily(&mesh.material, &mesh.path, &scene, &material_indecies);
-    }
 
-    fn get_material_lazily(
-        &mut self,
-        material: &serializable::Material,
-        scene_path: &str,
-        scene: &russimp::scene::Scene,
-        material_indecies: &Vec<u32>,
-    ) -> RangeIndex {
-        let material_path = match &material.textures {
-            serializable::Textures::Own => scene_path.to_string(),
-            serializable::Textures::Custom {
-                base_color,
-                metalness,
-                roughness,
-                ao,
-                normals,
-                displacement,
-            } => Self::custom_material_name(
-                base_color,
-                metalness,
-                roughness,
-                ao,
-                normals,
-                displacement,
-            ),
-        };
-        if !self.materials.contains(&material_path) {
-            self.load_material(material, &material_path, scene, material_indecies);
-        }
-        self.materials.get_index(&material_path)
-    }
+        self.load_material(&scene, &material_indecies, &mesh.path, &mesh.material_info);
 
-    fn custom_material_name(
-        base_color: &Option<String>,
-        metalness: &Option<String>,
-        roughness: &Option<String>,
-        ao: &Option<String>,
-        normals: &Option<String>,
-        displacement: &Option<String>,
-    ) -> String {
-        let base_color = base_color
-            .clone()
-            .unwrap_or("default_base_color".to_string());
-        let metalness = metalness.clone().unwrap_or("default_metalness".to_string());
-        let roughness = roughness.clone().unwrap_or("default_roughness".to_string());
-        let ao = ao.clone().unwrap_or("default_ao".to_string());
-        let normals = normals.clone().unwrap_or("default_normals".to_string());
-        let displacement = displacement
-            .clone()
-            .unwrap_or("default_displacement".to_string());
+        // self.get_material_lazily(material, scene_path, &scene, &material_indecies);
 
-        let mut path = String::with_capacity(
-            base_color.len()
-                + metalness.len()
-                + roughness.len()
-                + ao.len()
-                + normals.len()
-                + displacement.len(),
-        );
-        path.push_str(&base_color);
-        path.push_str(&metalness);
-        path.push_str(&roughness);
-        path.push_str(&ao);
-        path.push_str(&normals);
-        path.push_str(&displacement);
-
-        path
+        // _ = self.get_material_lazily(&mesh.material, &mesh.path, &scene, &material_indecies);
     }
 
     fn load_material(
         &mut self,
-        material: &serializable::Material,
-        material_path: &str,
         scene: &russimp::scene::Scene,
         material_indecies: &Vec<u32>,
+        mesh_path: &str,
+        material_info: &serializable::MaterialInfo,
     ) {
-        let items = match &material.textures {
-            serializable::Textures::Own => {
-                let mut material_items = Vec::with_capacity(material_indecies.len());
+        let mut material_items = Vec::with_capacity(material_indecies.len());
+        let mut tex_files = Vec::new();
 
-                for index in material_indecies {
-                    // TODO: embeded textures loading
+        for index in material_indecies {
+            // TODO: embeded textures loading
 
-                    let m = &scene.materials[*index as usize];
+            let m = &scene.materials[*index as usize];
 
-                    // Find properties that are texture file paths
-                    let mut tex_files = Vec::new();
+            // Find properties that are texture file paths
+            tex_files.clear();
 
-                    for property in &m.properties {
-                        if property.key == "$tex.file" {
-                            tex_files.push(property);
-                        }
-                    }
-
-                    // Filter out only PBR textures
-                    let base_color = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::BaseColor)
-                        .or_else(|| {
-                            tex_files
-                                .iter()
-                                .find(|p| p.semantic == TextureType::Diffuse)
-                        })
-                        .map(|prop| Self::get_own_texture_path(prop, material_path));
-                    let metalness = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Metalness)
-                        .map(|prop| Self::get_own_texture_path(prop, material_path));
-                    let roughness = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Roughness)
-                        .map(|prop| Self::get_own_texture_path(prop, material_path));
-                    let ao = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::AmbientOcclusion)
-                        .map(|prop| Self::get_own_texture_path(prop, material_path));
-                    let normals = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Normals)
-                        .map(|prop| Self::get_own_texture_path(prop, material_path));
-                    let displacement = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Displacement)
-                        .map(|prop| Self::get_own_texture_path(prop, material_path));
-
-                    material_items.push((
-                        base_color,
-                        metalness,
-                        roughness,
-                        ao,
-                        normals,
-                        displacement,
-                    ));
+            for property in &m.properties {
+                if property.key == "$tex.file" {
+                    // "$tex.file" is just how it is marked by Assimp
+                    tex_files.push(property);
                 }
-
-                let mut items = Vec::with_capacity(material_items.len());
-                for item in material_items {
-                    items.push(self.load_material_textures(
-                        material,
-                        (&item.0, &item.1, &item.2, &item.3, &item.4, &item.5),
-                    ));
-                }
-                items
             }
-            serializable::Textures::Custom {
-                base_color,
-                metalness,
-                roughness,
-                ao,
-                normals,
-                displacement,
-            } => {
-                let m = self.load_material_textures(
-                    material,
-                    (base_color, metalness, roughness, ao, normals, displacement),
-                );
-                vec![m]
-            }
-        };
 
-        self.materials.push(material_path, items);
+            // Filter out only PBR textures
+            let base_color = tex_files
+                .iter()
+                .find(|p| p.semantic == TextureType::BaseColor)
+                .or_else(|| {
+                    tex_files
+                        .iter()
+                        .find(|p| p.semantic == TextureType::Diffuse)
+                })
+                .map(|prop| Self::get_texture_path(prop, mesh_path));
+            let metalness = tex_files
+                .iter()
+                .find(|p| p.semantic == TextureType::Metalness)
+                .map(|prop| Self::get_texture_path(prop, mesh_path));
+            let roughness = tex_files
+                .iter()
+                .find(|p| p.semantic == TextureType::Roughness)
+                .map(|prop| Self::get_texture_path(prop, mesh_path));
+            let ao = tex_files
+                .iter()
+                .find(|p| p.semantic == TextureType::AmbientOcclusion)
+                .map(|prop| Self::get_texture_path(prop, mesh_path));
+            let normals = tex_files
+                .iter()
+                .find(|p| p.semantic == TextureType::Normals)
+                .map(|prop| Self::get_texture_path(prop, mesh_path));
+            let displacement = tex_files
+                .iter()
+                .find(|p| p.semantic == TextureType::Displacement)
+                .map(|prop| Self::get_texture_path(prop, mesh_path));
+
+            material_items.push((base_color, metalness, roughness, ao, normals, displacement));
+        }
+
+        let mut items = Vec::with_capacity(material_items.len());
+        for item in material_items {
+            items.push(self.load_material_textures(
+                material_info,
+                &(item.0, item.1, item.2, item.3, item.4, item.5),
+            ));
+        }
+
+        _ = self.materials.push(mesh_path, items);
+
+        // let items = match &material.textures {
+        //     serializable::Textures::Own => {
+        //         items
+        //     }
+        //     serializable::Textures::Custom {
+        //         base_color,
+        //         metalness,
+        //         roughness,
+        //         ao,
+        //         normals,
+        //         displacement,
+        //     } => {
+        //         let m = self.load_material_textures(
+        //             material,
+        //             (base_color, metalness, roughness, ao, normals, displacement),
+        //         );
+        //         vec![m]
+        //     }
+        // };
     }
 
     fn load_material_textures(
         &mut self,
-        material: &serializable::Material,
-        texs: (
-            &Option<String>,
-            &Option<String>,
-            &Option<String>,
-            &Option<String>,
-            &Option<String>,
-            &Option<String>,
+        material: &serializable::MaterialInfo,
+        texs: &(
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
         ),
     ) -> Material {
         let mut base_color = self.textures.get_index("default_base_color");
-        if let Some(path) = texs.0 {
+        if let Some(path) = &texs.0 {
             base_color = self.load_tex(&Self::load_img(&path), &path);
         }
 
@@ -490,13 +428,13 @@ impl MeshManager {
 
         match &material.pbr_channels {
             PBRTextures::Separated => {
-                if let Some(path) = texs.1 {
+                if let Some(path) = &texs.1 {
                     metalness = self.load_tex(&Self::load_img(&path), &path);
                 }
-                if let Some(path) = texs.2 {
+                if let Some(path) = &texs.2 {
                     roughness = self.load_tex(&Self::load_img(&path), &path);
                 }
-                if let Some(path) = texs.3 {
+                if let Some(path) = &texs.3 {
                     ao = self.load_tex(&Self::load_img(&path), &path);
                 }
             }
@@ -504,21 +442,21 @@ impl MeshManager {
                 if let Some(path) = texs.1.as_ref().or(texs.2.as_ref()).or(texs.3.as_ref()) {
                     let img = Self::load_img(&path);
 
-                    if let Some(path) = texs.1 {
+                    if let Some(path) = &texs.1 {
                         let img = Self::extract_channel(&img, pbr_channels.metalness_offset());
                         let mut p = PathBuf::from(pbr_channels.metalness_offset().to_string());
                         p.push(path);
                         metalness = self.load_tex(&img, p.to_str().unwrap());
                     }
 
-                    if let Some(path) = texs.2 {
+                    if let Some(path) = &texs.2 {
                         let img = Self::extract_channel(&img, pbr_channels.roughness_offset());
                         let mut p = PathBuf::from(pbr_channels.roughness_offset().to_string());
                         p.push(path);
                         roughness = self.load_tex(&img, p.to_str().unwrap());
                     }
 
-                    if let Some(path) = texs.3 {
+                    if let Some(path) = &texs.3 {
                         let img = Self::extract_channel(&img, pbr_channels.ao_offset());
                         let mut p = PathBuf::from(pbr_channels.ao_offset().to_string());
                         p.push(path);
@@ -529,12 +467,12 @@ impl MeshManager {
         }
 
         let mut normals = self.textures.get_index("default_normals");
-        if let Some(path) = texs.4 {
+        if let Some(path) = &texs.4 {
             normals = self.load_tex(&Self::load_img(&path), &path)
         }
 
         let mut displacement = self.textures.get_index("default_displacement");
-        if let Some(path) = texs.5 {
+        if let Some(path) = &texs.5 {
             displacement = self.load_tex(&Self::load_img(&path), &path)
         }
 
@@ -548,9 +486,9 @@ impl MeshManager {
         }
     }
 
-    fn get_own_texture_path(prop: &MaterialProperty, scene_path: &str) -> String {
+    fn get_texture_path(prop: &MaterialProperty, mesh_path: &str) -> String {
         if let PropertyTypeInfo::String(s) = &prop.data {
-            let mut path = PathBuf::from(&scene_path);
+            let mut path = PathBuf::from(&mesh_path);
             path.pop();
             path.push(PathBuf::from(&s));
             return path.to_str().unwrap().to_string();
@@ -622,4 +560,74 @@ impl MeshManager {
 
         self.textures.push(path, tex)
     }
+
+    // fn get_material_lazily(
+    //     &mut self,
+    //     material: &serializable::MaterialInfo,
+    //     scene_path: &str,
+    //     scene: &russimp::scene::Scene,
+    //     material_indecies: &Vec<u32>,
+    // ) -> RangeIndex {
+    //     let material_path = Self::material_name(material, scene_path);
+    //     if !self.materials.contains(&material_path) {
+    //         self.load_material(material, &material_path, scene, material_indecies);
+    //     }
+    //     self.materials.get_index(&material_path)
+    // }
+
+    // fn material_name(material: &serializable::MaterialInfo, scene_path: &str) -> String {
+    //     match &material.textures {
+    //         serializable::Textures::Own => scene_path.to_string(),
+    //         serializable::Textures::Custom {
+    //             base_color,
+    //             metalness,
+    //             roughness,
+    //             ao,
+    //             normals,
+    //             displacement,
+    //         } => Self::custom_material_name(
+    //             base_color,
+    //             metalness,
+    //             roughness,
+    //             ao,
+    //             normals,
+    //             displacement,
+    //         ),
+    //     }
+    // }
+
+    // fn custom_material_name(
+    //     base_color: &Option<String>,
+    //     metalness: &Option<String>,
+    //     roughness: &Option<String>,
+    //     ao: &Option<String>,
+    //     normals: &Option<String>,
+    //     displacement: &Option<String>,
+    // ) -> String {
+    //     let base_color = base_color
+    //         .clone()
+    //         .unwrap_or("default_base_color".to_string());
+    //     let metalness = metalness.clone().unwrap_or("default_metalness".to_string());
+    //     let roughness = roughness.clone().unwrap_or("default_roughness".to_string());
+    //     let ao = ao.clone().unwrap_or("default_ao".to_string());
+    //     let normals = normals.clone().unwrap_or("default_normals".to_string());
+    //     let displacement = displacement
+    //         .clone()
+    //         .unwrap_or("default_displacement".to_string());
+    //     let mut path = String::with_capacity(
+    //         base_color.len()
+    //             + metalness.len()
+    //             + roughness.len()
+    //             + ao.len()
+    //             + normals.len()
+    //             + displacement.len(),
+    //     );
+    //     path.push_str(&base_color);
+    //     path.push_str(&metalness);
+    //     path.push_str(&roughness);
+    //     path.push_str(&ao);
+    //     path.push_str(&normals);
+    //     path.push_str(&displacement);
+    //     path
+    // }
 }

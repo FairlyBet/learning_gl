@@ -22,5 +22,5 @@ mod utils;
 
 fn main() {
     // scene::Scene::sample();
-    // runtime::run();
+    runtime::run();
 }

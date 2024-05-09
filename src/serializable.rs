@@ -19,7 +19,7 @@ pub struct Entity {
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct Transform {
     pub position: Vec3,
-    pub orientation: Vec3,
+    pub orientation: Vec3, // This could be needed to be replaced with Quaternions when loading complex rotation
     pub scale: Vec3,
 }
 
@@ -65,12 +65,12 @@ impl Into<glm::Vec3> for Vec3 {
 #[derive(Serialize, Deserialize)]
 pub struct Mesh {
     pub path: String,
-    pub material: Material,
+    pub material_info: MaterialInfo,
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct Material {
-    pub textures: Textures,
+pub struct MaterialInfo {
+    // pub textures: Textures,
     pub pbr_channels: PBRTextures,
 }
 

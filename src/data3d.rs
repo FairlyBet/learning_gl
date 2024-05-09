@@ -1,6 +1,6 @@
 use crate::{
     gl_wrappers::{self, BufferObject, VertexArrayObject},
-    resources::RangeIndex, serializable::Material,
+    resources::RangeIndex, serializable::MaterialInfo,
 };
 use gl::types::GLenum;
 use russimp::{Vector2D, Vector3D};

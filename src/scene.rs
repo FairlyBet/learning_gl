@@ -1,6 +1,9 @@
 use crate::{
     lighting::LightType,
-    serializable::{Camera, Entity, LightSource, Mesh, PBRTextures, ScriptObject, Transform, Vec3},
+    serializable::{
+        Camera, Entity, LightSource, MaterialInfo, Mesh, PBRChannels, PBRTextures, ScriptObject,
+        Transform, Vec3,
+    },
 };
 use serde::Serialize;
 use std::fs;
@@ -26,8 +29,10 @@ impl Scene {
             transform: Transform::default(),
             children: vec![],
             meshes: vec![Mesh {
-                path: "assets\\meshes\\vange_well.glb".to_string(),
-                material: crate::serializable::Material::default(),
+                path: "assets\\meshes\\boulder_01.gltf".to_string(),
+                material_info: MaterialInfo {
+                    pbr_channels: PBRTextures::Merged(PBRChannels::ARM),
+                },
             }],
             cameras: vec![],
             light_sources: vec![],

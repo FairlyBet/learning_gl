@@ -172,7 +172,7 @@ impl<'a> Renderer<'a> {
 
             Self::render_meshes(
                 resource_manager
-                    .mesh_data()
+                    .mesh_container()
                     .get(&mesh.data.mesh_index),
             );
         }
