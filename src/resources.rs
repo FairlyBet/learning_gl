@@ -1,7 +1,7 @@
 use crate::{
-    data3d::{self, Mesh, MeshData, Vertex},
+    data3d::{Mesh, MeshData, Vertex},
     gl_wrappers::{Gl, Texture},
-    material::{self, Material},
+    material::Material,
     scene::Scene,
     scripting::CompiledScript,
     serializable::{self, PBRTextures, ScriptObject},
@@ -74,14 +74,6 @@ impl Resource for Scene {
     }
 }
 
-pub const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
-    PostProcess::Triangulate,
-    PostProcess::OptimizeMeshes,
-    PostProcess::OptimizeGraph,
-    PostProcess::JoinIdenticalVertices,
-    PostProcess::ImproveCacheLocality,
-];
-
 pub type RangeIndex = Range<usize>;
 
 pub struct ResourceContainer<Resource, ResourceIndex: Clone> {
@@ -153,7 +145,6 @@ impl<Resource> SingleIndexContainer<Resource> {
     }
 }
 
-// Split logic into separate modules such as material manager or mesh manager
 pub struct ResourceManager<'a> {
     pd: PhantomData<&'a ()>,
     scripts: FxHashMap<String, CompiledScript>,
@@ -172,7 +163,7 @@ impl<'a> ResourceManager<'a> {
         }
     }
 
-    pub fn get_mesh(&mut self, mesh: &serializable::Mesh) -> data3d::Mesh {
+    pub fn get_mesh(&mut self, mesh: &serializable::Mesh) -> Mesh {
         todo!()
     }
 
@@ -192,11 +183,36 @@ impl<'a> ResourceManager<'a> {
 
 struct MeshManager {
     meshes: RangeIndexContainer<MeshData>,
-    textures: SingleIndexContainer<Texture>,
     materials: RangeIndexContainer<Material>,
+    textures: SingleIndexContainer<Texture>,
 }
 
 impl MeshManager {
+    const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
+        PostProcess::Triangulate,
+        PostProcess::OptimizeMeshes,
+        PostProcess::OptimizeGraph,
+        PostProcess::JoinIdenticalVertices,
+        PostProcess::ImproveCacheLocality,
+    ];
+
+    pub fn new() -> Self {
+        let mut textures = SingleIndexContainer::<Texture>::new();
+        let default_textures = Self::default_textures();
+        textures.push("default_base_color", default_textures.0);
+        textures.push("default_metalness", default_textures.1);
+        textures.push("default_roughness", default_textures.2);
+        textures.push("default_ao", default_textures.3);
+        textures.push("default_normals", default_textures.4);
+        textures.push("default_displacement", default_textures.5);
+
+        Self {
+            meshes: RangeIndexContainer::new(),
+            materials: RangeIndexContainer::new(),
+            textures,
+        }
+    }
+
     fn default_textures() -> (Texture, Texture, Texture, Texture, Texture, Texture) {
         let size = (1, 1);
 
@@ -232,15 +248,16 @@ impl MeshManager {
         tex
     }
 
-    pub fn get_mesh_lazily(&mut self, mesh: &serializable::Mesh) -> data3d::Mesh {
+    pub fn get_mesh_lazily(&mut self, mesh: &serializable::Mesh) -> Mesh {
         if !self.meshes.contains(&mesh.path) {
-            self.load_mesh(&mesh, DEFAULT_POSTPROCESS.into());
+            self.load_mesh(&mesh, Self::DEFAULT_POSTPROCESS.into());
         }
         let mesh_index = self.meshes.get_index(&mesh.path);
+        
         todo!()
     }
 
-    fn load_mesh(&mut self, mesh: &serializable::Mesh, post_process: PostProcessSteps) {
+    fn load_mesh(&mut self, mesh: &serializable::Mesh, post_process: PostProcessSteps) -> {
         let scene = russimp::scene::Scene::from_file(&mesh.path, post_process).unwrap();
 
         let mut submeshes_data = Vec::with_capacity(scene.meshes.len());
@@ -285,9 +302,7 @@ impl MeshManager {
         }
 
         _ = self.meshes.push(&mesh.path, submeshes_data);
-
-        let material_index =
-            self.get_material_lazily(&mesh.material, &mesh.path, &scene, &material_indecies);
+        _ = self.get_material_lazily(&mesh.material, &mesh.path, &scene, &material_indecies);
     }
 
     fn get_material_lazily(
@@ -318,8 +333,44 @@ impl MeshManager {
         if !self.materials.contains(&material_path) {
             self.load_material(material, &material_path, scene, material_indecies);
         }
-        let idx = self.materials.get_index(&scene_path);
-        todo!()
+        self.materials.get_index(&material_path)
+    }
+
+    fn custom_material_name(
+        base_color: &Option<String>,
+        metalness: &Option<String>,
+        roughness: &Option<String>,
+        ao: &Option<String>,
+        normals: &Option<String>,
+        displacement: &Option<String>,
+    ) -> String {
+        let base_color = base_color
+            .clone()
+            .unwrap_or("default_base_color".to_string());
+        let metalness = metalness.clone().unwrap_or("default_metalness".to_string());
+        let roughness = roughness.clone().unwrap_or("default_roughness".to_string());
+        let ao = ao.clone().unwrap_or("default_ao".to_string());
+        let normals = normals.clone().unwrap_or("default_normals".to_string());
+        let displacement = displacement
+            .clone()
+            .unwrap_or("default_displacement".to_string());
+
+        let mut path = String::with_capacity(
+            base_color.len()
+                + metalness.len()
+                + roughness.len()
+                + ao.len()
+                + normals.len()
+                + displacement.len(),
+        );
+        path.push_str(&base_color);
+        path.push_str(&metalness);
+        path.push_str(&roughness);
+        path.push_str(&ao);
+        path.push_str(&normals);
+        path.push_str(&displacement);
+
+        path
     }
 
     fn load_material(
@@ -329,9 +380,10 @@ impl MeshManager {
         scene: &russimp::scene::Scene,
         material_indecies: &Vec<u32>,
     ) {
-        match &material.textures {
+        let items = match &material.textures {
             serializable::Textures::Own => {
-                let mut texs = Vec::with_capacity(material_indecies.len());
+                let mut material_items = Vec::with_capacity(material_indecies.len());
+
                 for index in material_indecies {
                     // TODO: embeded textures loading
 
@@ -377,12 +429,24 @@ impl MeshManager {
                         .find(|p| p.semantic == TextureType::Displacement)
                         .map(|prop| Self::get_own_texture_path(prop, material_path));
 
-                    texs.push((base_color, metalness, roughness, ao, normals, displacement));
+                    material_items.push((
+                        base_color,
+                        metalness,
+                        roughness,
+                        ao,
+                        normals,
+                        displacement,
+                    ));
                 }
 
-                for item in texs {
-                    self.fun_name(material, item);
+                let mut items = Vec::with_capacity(material_items.len());
+                for item in material_items {
+                    items.push(self.load_material_textures(
+                        material,
+                        (&item.0, &item.1, &item.2, &item.3, &item.4, &item.5),
+                    ));
                 }
+                items
             }
             serializable::Textures::Custom {
                 base_color,
@@ -392,34 +456,29 @@ impl MeshManager {
                 normals,
                 displacement,
             } => {
-                // let
+                let m = self.load_material_textures(
+                    material,
+                    (base_color, metalness, roughness, ao, normals, displacement),
+                );
+                vec![m]
             }
-        }
+        };
 
-        // self.fun_name(material);
-
-        // let material = Material{
-        //     base_color,
-        //     metalness,
-        //     roughness,
-        //     ao,
-        //     normals,
-        //     displacement,
-        // };
+        self.materials.push(material_path, items);
     }
 
-    fn fun_name(
+    fn load_material_textures(
         &mut self,
         material: &serializable::Material,
         texs: (
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
+            &Option<String>,
+            &Option<String>,
+            &Option<String>,
+            &Option<String>,
+            &Option<String>,
+            &Option<String>,
         ),
-    ) -> material::Material {
+    ) -> Material {
         let mut base_color = self.textures.get_index("default_base_color");
         if let Some(path) = texs.0 {
             base_color = self.load_tex(&Self::load_img(&path), &path);
@@ -497,43 +556,6 @@ impl MeshManager {
             return path.to_str().unwrap().to_string();
         }
         unreachable!()
-    }
-
-    fn custom_material_name(
-        base_color: &Option<String>,
-        metalness: &Option<String>,
-        roughness: &Option<String>,
-        ao: &Option<String>,
-        normals: &Option<String>,
-        displacement: &Option<String>,
-    ) -> String {
-        let base_color = base_color
-            .clone()
-            .unwrap_or("default_base_color".to_string());
-        let metalness = metalness.clone().unwrap_or("default_metalness".to_string());
-        let roughness = roughness.clone().unwrap_or("default_roughness".to_string());
-        let ao = ao.clone().unwrap_or("default_ao".to_string());
-        let normals = normals.clone().unwrap_or("default_normals".to_string());
-        let displacement = displacement
-            .clone()
-            .unwrap_or("default_displacement".to_string());
-
-        let mut path = String::with_capacity(
-            base_color.len()
-                + metalness.len()
-                + roughness.len()
-                + ao.len()
-                + normals.len()
-                + displacement.len(),
-        );
-        path.push_str(&base_color);
-        path.push_str(&metalness);
-        path.push_str(&roughness);
-        path.push_str(&ao);
-        path.push_str(&normals);
-        path.push_str(&displacement);
-
-        path
     }
 
     fn load_img(path: &str) -> Image<u8> {
