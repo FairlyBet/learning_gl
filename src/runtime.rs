@@ -60,7 +60,7 @@ pub fn run() {
     let mut scene_manager = SceneManager::default();
     let mut events = WindowEvents::new();
     let mut frametime = 0.0;
-    let mut sleep_period = Duration::ZERO;
+    let mut sleep_time = Duration::ZERO;
 
     scripting.load_api(&mut scene_manager, &events, &window, &frametime);
     scene_manager.load_scene(0, &mut resource_manager, &scripting);
@@ -73,7 +73,7 @@ pub fn run() {
             &mut window,
             &receiver,
             &mut events,
-            &mut sleep_period,
+            &mut sleep_time,
             &mut [&mut renderer, &mut screen, &mut scene_manager],
         );
         script_iteration(&scripting);
@@ -83,7 +83,7 @@ pub fn run() {
             &renderer,
             &scene_manager,
             &resource_manager,
-            &sleep_period,
+            &sleep_time,
         );
         frametime = window.glfw.get_time();
     }

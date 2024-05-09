@@ -1,6 +1,6 @@
 use crate::{
     camera::Camera,
-    data_3d::Mesh,
+    data3d::Mesh,
     lighting::LightSource,
     linear::Transform,
     resources::ResourceManager,
@@ -61,7 +61,7 @@ impl SceneManager {
                 entity
                     .meshes
                     .iter()
-                    .map(|item| resource_manager.get_mesh_lazily(&item))
+                    .map(|item| resource_manager.get_mesh(&item))
                     .collect::<Vec<Mesh>>(),
             );
             self.attach_components(

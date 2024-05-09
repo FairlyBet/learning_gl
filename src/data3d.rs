@@ -1,6 +1,6 @@
 use crate::{
     gl_wrappers::{self, BufferObject, VertexArrayObject},
-    resources::RangedIndex, serializable::Material,
+    resources::RangeIndex, serializable::Material,
 };
 use gl::types::GLenum;
 use russimp::{Vector2D, Vector3D};
@@ -158,6 +158,6 @@ impl MeshData {
 }
 
 pub struct Mesh {
-    pub mesh_index: RangedIndex,
-    pub material_index: RangedIndex,
+    pub mesh_index: RangeIndex,
+    pub material_index: RangeIndex,
 }

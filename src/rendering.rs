@@ -1,6 +1,6 @@
 use crate::{
     camera::Camera,
-    data_3d::{self, Mesh, MeshData, VertexAttribute},
+    data3d::{self, Mesh, MeshData, VertexAttribute},
     entity_system::SceneManager,
     gl_wrappers::{self, BufferObject, Gl, Renderbuffer, ShaderProgram, Texture},
     lighting::{LightData, LightSource},
@@ -173,7 +173,7 @@ impl<'a> Renderer<'a> {
             Self::render_meshes(
                 resource_manager
                     .mesh_data()
-                    .get_resource(&mesh.data.mesh_index),
+                    .get(&mesh.data.mesh_index),
             );
         }
     }
@@ -234,8 +234,8 @@ impl<'a> Screen<'a> {
         }
         let quad = MeshData::new(
             6,
-            size_of_val(data_3d::QUAD_VERTICES_TEX_COORDS),
-            data_3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
+            size_of_val(data3d::QUAD_VERTICES_TEX_COORDS),
+            data3d::QUAD_VERTICES_TEX_COORDS.as_ptr().cast(),
             vec![VertexAttribute::Position, VertexAttribute::TexCoord],
             0,
             ptr::null(),

@@ -1,7 +1,7 @@
 use crate::{
-    data_3d::{self, Mesh, MeshData, Vertex},
+    data3d::{self, Mesh, MeshData, Vertex},
     gl_wrappers::{Gl, Texture},
-    material::Material,
+    material::{self, Material},
     scene::Scene,
     scripting::CompiledScript,
     serializable::{self, PBRTextures, ScriptObject},
@@ -64,26 +64,6 @@ pub trait Resource {
     fn acceptable_extensions() -> Vec<String>;
 }
 
-impl Resource for MeshData {
-    fn folder_name() -> &'static Path {
-        Path::new("meshes")
-    }
-
-    fn acceptable_extensions() -> Vec<String> {
-        vec!["fbx".to_string()]
-    }
-}
-
-impl Resource for CompiledScript {
-    fn folder_name() -> &'static Path {
-        Path::new("scripts")
-    }
-
-    fn acceptable_extensions() -> Vec<String> {
-        vec!["lua".to_string()]
-    }
-}
-
 impl Resource for Scene {
     fn folder_name() -> &'static Path {
         Path::new("scenes")
@@ -102,7 +82,7 @@ pub const DEFAULT_POSTPROCESS: [PostProcess; 5] = [
     PostProcess::ImproveCacheLocality,
 ];
 
-pub type RangedIndex = Range<usize>;
+pub type RangeIndex = Range<usize>;
 
 pub struct ResourceContainer<Resource, ResourceIndex: Clone> {
     // Add resource releasing logic along with free indecies accounting logic
@@ -122,7 +102,7 @@ impl<Resource, ResourceIndex: Clone> ResourceContainer<Resource, ResourceIndex> 
         self.table[name].clone()
     }
 
-    pub fn contains_resource(&self, name: &str) -> bool {
+    pub fn contains(&self, name: &str) -> bool {
         self.table.contains_key(name)
     }
 
@@ -132,10 +112,10 @@ impl<Resource, ResourceIndex: Clone> ResourceContainer<Resource, ResourceIndex> 
     }
 }
 
-pub type RangeIndexContainer<Resource> = ResourceContainer<Resource, RangedIndex>;
+pub type RangeIndexContainer<Resource> = ResourceContainer<Resource, RangeIndex>;
 
 impl<Resource> RangeIndexContainer<Resource> {
-    pub fn push(&mut self, name: &str, mut resource: Vec<Resource>) -> RangedIndex {
+    pub fn push(&mut self, name: &str, mut resource: Vec<Resource>) -> RangeIndex {
         assert!(
             !self.table.contains_key(name),
             "Container already has this resource"
@@ -149,7 +129,7 @@ impl<Resource> RangeIndexContainer<Resource> {
         idx
     }
 
-    pub fn get_resource(&self, idx: &RangedIndex) -> &[Resource] {
+    pub fn get(&self, idx: &RangeIndex) -> &[Resource] {
         &self.vec[idx.start..idx.end]
     }
 }
@@ -157,7 +137,7 @@ impl<Resource> RangeIndexContainer<Resource> {
 pub type SingleIndexContainer<Resource> = ResourceContainer<Resource, usize>;
 
 impl<Resource> SingleIndexContainer<Resource> {
-    pub fn push_resource(&mut self, name: &str, resource: Resource) -> usize {
+    pub fn push(&mut self, name: &str, resource: Resource) -> usize {
         assert!(
             !self.table.contains_key(name),
             "Container already has this resource"
@@ -168,39 +148,22 @@ impl<Resource> SingleIndexContainer<Resource> {
         idx
     }
 
-    pub fn get_resource(&self, idx: usize) -> &Resource {
+    pub fn get(&self, idx: usize) -> &Resource {
         &self.vec[idx]
     }
 }
 
 // Split logic into separate modules such as material manager or mesh manager
-#[rustfmt::skip]
 pub struct ResourceManager<'a> {
-    pd:                 PhantomData<&'a ()>,
-    meshes:             RangeIndexContainer<MeshData>,
-    textures:           SingleIndexContainer<Texture>,
-    materials:          RangeIndexContainer<Material>,
-    scripts:            FxHashMap<String, CompiledScript>,
-    scenes:             Vec<Scene>,
-                        // base_color, metalness, roughness, ao, normal, displacement
+    pd: PhantomData<&'a ()>,
+    scripts: FxHashMap<String, CompiledScript>,
+    scenes: Vec<Scene>,
 }
 
 impl<'a> ResourceManager<'a> {
     pub fn new(_: &'a Gl) -> Self {
-        let default_textures = Self::default_textures();
-        let mut tex_container = SingleIndexContainer::new();
-        tex_container.push_resource("default_base_color", default_textures.0);
-        tex_container.push_resource("default_metalness", default_textures.1);
-        tex_container.push_resource("default_roughness", default_textures.2);
-        tex_container.push_resource("default_ao", default_textures.3);
-        tex_container.push_resource("default_normals", default_textures.4);
-        tex_container.push_resource("default_displacement", default_textures.5);
-
         Self {
             pd: PhantomData::default(),
-            meshes: RangeIndexContainer::new(),
-            textures: SingleIndexContainer::new(),
-            materials: RangeIndexContainer::new(),
             scripts: Default::default(),
             scenes: get_paths::<Scene>()
                 .iter()
@@ -209,6 +172,31 @@ impl<'a> ResourceManager<'a> {
         }
     }
 
+    pub fn get_mesh(&mut self, mesh: &serializable::Mesh) -> data3d::Mesh {
+        todo!()
+    }
+
+    pub fn mesh_data(&self) -> &RangeIndexContainer<MeshData> {
+        todo!()
+    }
+
+    pub fn scenes(&self) -> &[Scene] {
+        &self.scenes
+    }
+
+    pub fn get_script(&self, script: &ScriptObject) -> String {
+        // will be replaced later with some binary storing logic
+        fs::read_to_string(&script.script_path).unwrap()
+    }
+}
+
+struct MeshManager {
+    meshes: RangeIndexContainer<MeshData>,
+    textures: SingleIndexContainer<Texture>,
+    materials: RangeIndexContainer<Material>,
+}
+
+impl MeshManager {
     fn default_textures() -> (Texture, Texture, Texture, Texture, Texture, Texture) {
         let size = (1, 1);
 
@@ -244,20 +232,8 @@ impl<'a> ResourceManager<'a> {
         tex
     }
 
-    pub fn scenes(&self) -> &[Scene] {
-        &self.scenes
-    }
-
-    pub fn mesh_data(&self) -> &RangeIndexContainer<MeshData> {
-        &self.meshes
-    }
-
-    pub fn mesh_data_mut(&mut self) -> &mut RangeIndexContainer<MeshData> {
-        &mut self.meshes
-    }
-
-    pub fn get_mesh_lazily(&mut self, mesh: &serializable::Mesh) -> data_3d::Mesh {
-        if !self.meshes.contains_resource(&mesh.path) {
+    pub fn get_mesh_lazily(&mut self, mesh: &serializable::Mesh) -> data3d::Mesh {
+        if !self.meshes.contains(&mesh.path) {
             self.load_mesh(&mesh, DEFAULT_POSTPROCESS.into());
         }
         let mesh_index = self.meshes.get_index(&mesh.path);
@@ -310,36 +286,60 @@ impl<'a> ResourceManager<'a> {
 
         _ = self.meshes.push(&mesh.path, submeshes_data);
 
-        let material_index = self.get_material_lazily(&mesh.material, &mesh.path, &scene, &material_indecies);
+        let material_index =
+            self.get_material_lazily(&mesh.material, &mesh.path, &scene, &material_indecies);
     }
 
     fn get_material_lazily(
         &mut self,
         material: &serializable::Material,
-        scene_path: &String,
+        scene_path: &str,
         scene: &russimp::scene::Scene,
         material_indecies: &Vec<u32>,
-    ) -> RangedIndex {
-
+    ) -> RangeIndex {
+        let material_path = match &material.textures {
+            serializable::Textures::Own => scene_path.to_string(),
+            serializable::Textures::Custom {
+                base_color,
+                metalness,
+                roughness,
+                ao,
+                normals,
+                displacement,
+            } => Self::custom_material_name(
+                base_color,
+                metalness,
+                roughness,
+                ao,
+                normals,
+                displacement,
+            ),
+        };
+        if !self.materials.contains(&material_path) {
+            self.load_material(material, &material_path, scene, material_indecies);
+        }
+        let idx = self.materials.get_index(&scene_path);
         todo!()
     }
 
-    fn load_materials(
+    fn load_material(
         &mut self,
         material: &serializable::Material,
-        scene_path: &String,
+        material_path: &str,
         scene: &russimp::scene::Scene,
         material_indecies: &Vec<u32>,
     ) {
         match &material.textures {
             serializable::Textures::Own => {
+                let mut texs = Vec::with_capacity(material_indecies.len());
                 for index in material_indecies {
                     // TODO: embeded textures loading
 
                     let m = &scene.materials[*index as usize];
 
                     // Find properties that are texture file paths
-                    let mut tex_files = Vec::<&MaterialProperty>::new();
+                    let mut tex_files = Vec::new();
+
                     for property in &m.properties {
                         if property.key == "$tex.file" {
                             tex_files.push(property);
@@ -355,33 +355,33 @@ impl<'a> ResourceManager<'a> {
                                 .iter()
                                 .find(|p| p.semantic == TextureType::Diffuse)
                         })
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
-                        .unwrap_or("default_base_color".to_string());
+                        .map(|prop| Self::get_own_texture_path(prop, material_path));
                     let metalness = tex_files
                         .iter()
                         .find(|p| p.semantic == TextureType::Metalness)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
-                        .unwrap_or("default_metalness".to_string());
+                        .map(|prop| Self::get_own_texture_path(prop, material_path));
                     let roughness = tex_files
                         .iter()
                         .find(|p| p.semantic == TextureType::Roughness)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
-                        .unwrap_or("default_roughness".to_string());
+                        .map(|prop| Self::get_own_texture_path(prop, material_path));
                     let ao = tex_files
                         .iter()
                         .find(|p| p.semantic == TextureType::AmbientOcclusion)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
-                        .unwrap_or("default_ao".to_string());
+                        .map(|prop| Self::get_own_texture_path(prop, material_path));
                     let normals = tex_files
                         .iter()
                         .find(|p| p.semantic == TextureType::Normals)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
-                        .unwrap_or("default_normals".to_string());
+                        .map(|prop| Self::get_own_texture_path(prop, material_path));
                     let displacement = tex_files
                         .iter()
                         .find(|p| p.semantic == TextureType::Displacement)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path))
-                        .unwrap_or("default_displacement".to_string());
+                        .map(|prop| Self::get_own_texture_path(prop, material_path));
+
+                    texs.push((base_color, metalness, roughness, ao, normals, displacement));
+                }
+
+                for item in texs {
+                    self.fun_name(material, item);
                 }
             }
             serializable::Textures::Custom {
@@ -396,154 +396,100 @@ impl<'a> ResourceManager<'a> {
             }
         }
 
-        // only for texture files
-        for index in material_indecies {
-            let (
-                base_color_path,
-                metalness_path,
-                roughness_path,
-                ao_path,
-                normals_path,
-                displacement_path,
-            ) = match &material.textures {
-                serializable::Textures::Own => {
-                    // TODO: embeded textures loading
+        // self.fun_name(material);
 
-                    let m = &scene.materials[*index as usize];
+        // let material = Material{
+        //     base_color,
+        //     metalness,
+        //     roughness,
+        //     ao,
+        //     normals,
+        //     displacement,
+        // };
+    }
 
-                    // Find properties that are texture file paths
-                    let mut tex_files = Vec::<&MaterialProperty>::new();
-                    for property in &m.properties {
-                        if property.key == "$tex.file" {
-                            tex_files.push(property);
-                        }
-                    }
+    fn fun_name(
+        &mut self,
+        material: &serializable::Material,
+        texs: (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ),
+    ) -> material::Material {
+        let mut base_color = self.textures.get_index("default_base_color");
+        if let Some(path) = texs.0 {
+            base_color = self.load_tex(&Self::load_img(&path), &path);
+        }
 
-                    // Filter out only pbr textures
-                    let base_color = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::BaseColor)
-                        .or_else(|| {
-                            tex_files
-                                .iter()
-                                .find(|p| p.semantic == TextureType::Diffuse)
-                        })
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path));
-                    let metalness = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Metalness)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path));
-                    let roughness = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Roughness)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path));
-                    let ao = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::AmbientOcclusion)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path));
-                    let normal = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Normals)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path));
-                    let displacement = tex_files
-                        .iter()
-                        .find(|p| p.semantic == TextureType::Displacement)
-                        .map(|prop| Self::get_material_texture_path(prop, scene_path));
+        let mut metalness = self.textures.get_index("default_metalness");
+        let mut roughness = self.textures.get_index("default_roughness");
+        let mut ao = self.textures.get_index("default_ao");
 
-                    (base_color, metalness, roughness, ao, normal, displacement)
+        match &material.pbr_channels {
+            PBRTextures::Separated => {
+                if let Some(path) = texs.1 {
+                    metalness = self.load_tex(&Self::load_img(&path), &path);
                 }
-                serializable::Textures::Custom {
-                    base_color,
-                    metalness,
-                    roughness,
-                    ao,
-                    normals,
-                    displacement,
-                } => (
-                    base_color.clone(),
-                    metalness.clone(),
-                    roughness.clone(),
-                    ao.clone(),
-                    normals.clone(),
-                    displacement.clone(),
-                ),
-            };
-
-            let mut base_color = self.textures.get_index("default_base_color");
-            if let Some(path) = &base_color_path {
-                base_color = self.get_tex_lazily(&Self::load_img(&path), &path);
+                if let Some(path) = texs.2 {
+                    roughness = self.load_tex(&Self::load_img(&path), &path);
+                }
+                if let Some(path) = texs.3 {
+                    ao = self.load_tex(&Self::load_img(&path), &path);
+                }
             }
+            PBRTextures::Merged(pbr_channels) => {
+                if let Some(path) = texs.1.as_ref().or(texs.2.as_ref()).or(texs.3.as_ref()) {
+                    let img = Self::load_img(&path);
 
-            let mut metalness = self.textures.get_index("default_metalness");
-            let mut roughness = self.textures.get_index("default_roughness");
-            let mut ao = self.textures.get_index("default_ao");
-
-            match &material.pbr_channels {
-                PBRTextures::Separated => {
-                    if let Some(path) = &metalness_path {
-                        metalness = self.get_tex_lazily(&Self::load_img(&path), &path);
+                    if let Some(path) = texs.1 {
+                        let img = Self::extract_channel(&img, pbr_channels.metalness_offset());
+                        let mut p = PathBuf::from(pbr_channels.metalness_offset().to_string());
+                        p.push(path);
+                        metalness = self.load_tex(&img, p.to_str().unwrap());
                     }
-                    if let Some(path) = &roughness_path {
-                        roughness = self.get_tex_lazily(&Self::load_img(&path), &path);
+
+                    if let Some(path) = texs.2 {
+                        let img = Self::extract_channel(&img, pbr_channels.roughness_offset());
+                        let mut p = PathBuf::from(pbr_channels.roughness_offset().to_string());
+                        p.push(path);
+                        roughness = self.load_tex(&img, p.to_str().unwrap());
                     }
-                    if let Some(path) = &ao_path {
-                        ao = self.get_tex_lazily(&Self::load_img(&path), &path);
-                    }
-                }
-                PBRTextures::Merged(pbr_channels) => {
-                    if let Some(path) = metalness_path
-                        .as_ref()
-                        .or(roughness_path.as_ref())
-                        .or(ao_path.as_ref())
-                    {
-                        let img = Self::load_img(path);
 
-                        if let Some(path) = &metalness_path {
-                            let img = Self::extract_channel(&img, pbr_channels.metalness_offset());
-                            let mut p = PathBuf::from(pbr_channels.metalness_offset().to_string());
-                            p.push(path);
-                            metalness = self.get_tex_lazily(&img, p.to_str().unwrap());
-                        }
-
-                        if let Some(path) = &roughness_path {
-                            let img = Self::extract_channel(&img, pbr_channels.roughness_offset());
-                            let mut p = PathBuf::from(pbr_channels.roughness_offset().to_string());
-                            p.push(path);
-                            roughness = self.get_tex_lazily(&img, p.to_str().unwrap());
-                        }
-
-                        if let Some(path) = &ao_path {
-                            let img = Self::extract_channel(&img, pbr_channels.ao_offset());
-                            let mut p = PathBuf::from(pbr_channels.ao_offset().to_string());
-                            p.push(path);
-                            ao = self.get_tex_lazily(&img, p.to_str().unwrap());
-                        }
+                    if let Some(path) = texs.3 {
+                        let img = Self::extract_channel(&img, pbr_channels.ao_offset());
+                        let mut p = PathBuf::from(pbr_channels.ao_offset().to_string());
+                        p.push(path);
+                        ao = self.load_tex(&img, p.to_str().unwrap());
                     }
                 }
             }
+        }
 
-            let mut normals = self.textures.get_index("default_normals");
-            if let Some(path) = &normals_path {
-                normals = self.get_tex_lazily(&Self::load_img(&path), &path)
-            }
+        let mut normals = self.textures.get_index("default_normals");
+        if let Some(path) = texs.4 {
+            normals = self.load_tex(&Self::load_img(&path), &path)
+        }
 
-            let mut displacement = self.textures.get_index("default_displacement");
-            if let Some(path) = &displacement_path {
-                displacement = self.get_tex_lazily(&Self::load_img(&path), &path)
-            }
+        let mut displacement = self.textures.get_index("default_displacement");
+        if let Some(path) = texs.5 {
+            displacement = self.load_tex(&Self::load_img(&path), &path)
+        }
 
-            // let material = Material{
-            //     base_color,
-            //     metalness,
-            //     roughness,
-            //     ao,
-            //     normals,
-            //     displacement,
-            // };
+        Material {
+            base_color,
+            metalness,
+            roughness,
+            ao,
+            normals,
+            displacement,
         }
     }
 
-    fn get_material_texture_path(prop: &MaterialProperty, scene_path: &str) -> String {
+    fn get_own_texture_path(prop: &MaterialProperty, scene_path: &str) -> String {
         if let PropertyTypeInfo::String(s) = &prop.data {
             let mut path = PathBuf::from(&scene_path);
             path.pop();
@@ -551,6 +497,43 @@ impl<'a> ResourceManager<'a> {
             return path.to_str().unwrap().to_string();
         }
         unreachable!()
+    }
+
+    fn custom_material_name(
+        base_color: &Option<String>,
+        metalness: &Option<String>,
+        roughness: &Option<String>,
+        ao: &Option<String>,
+        normals: &Option<String>,
+        displacement: &Option<String>,
+    ) -> String {
+        let base_color = base_color
+            .clone()
+            .unwrap_or("default_base_color".to_string());
+        let metalness = metalness.clone().unwrap_or("default_metalness".to_string());
+        let roughness = roughness.clone().unwrap_or("default_roughness".to_string());
+        let ao = ao.clone().unwrap_or("default_ao".to_string());
+        let normals = normals.clone().unwrap_or("default_normals".to_string());
+        let displacement = displacement
+            .clone()
+            .unwrap_or("default_displacement".to_string());
+
+        let mut path = String::with_capacity(
+            base_color.len()
+                + metalness.len()
+                + roughness.len()
+                + ao.len()
+                + normals.len()
+                + displacement.len(),
+        );
+        path.push_str(&base_color);
+        path.push_str(&metalness);
+        path.push_str(&roughness);
+        path.push_str(&ao);
+        path.push_str(&normals);
+        path.push_str(&displacement);
+
+        path
     }
 
     fn load_img(path: &str) -> Image<u8> {
@@ -584,8 +567,8 @@ impl<'a> ResourceManager<'a> {
         Image::new(img.width, img.height, img.depth, res)
     }
 
-    fn get_tex_lazily(&mut self, img: &Image<u8>, path: &str) -> usize {
-        if self.textures.contains_resource(path) {
+    fn load_tex(&mut self, img: &Image<u8>, path: &str) -> usize {
+        if self.textures.contains(path) {
             return self.textures.get_index(path);
         }
 
@@ -615,11 +598,6 @@ impl<'a> ResourceManager<'a> {
         tex.parameter(gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR);
         tex.parameter(gl::TEXTURE_MAG_FILTER, gl::LINEAR);
 
-        self.textures.push_resource(path, tex)
-    }
-
-    pub fn get_script(&self, script: &ScriptObject) -> String {
-        // will be replaced later with some binary storing logic
-        fs::read_to_string(&script.script_path).unwrap()
+        self.textures.push(path, tex)
     }
 }
