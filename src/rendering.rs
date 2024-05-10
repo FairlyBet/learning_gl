@@ -5,7 +5,8 @@ use crate::{
     gl_wrappers::{self, BufferObject, Gl, Renderbuffer, ShaderProgram, Texture},
     lighting::{LightData, LightSource},
     main,
-    resources::ResourceManager,
+    material::Material,
+    resources::{MeshManager, ResourceManager},
     runtime::FramebufferSizeCallback,
     shader::{
         self, BlinnPhongLighting, DirectPBR, FragShader, MainShader, ScreenShaderFrag,
@@ -36,12 +37,12 @@ pub struct MatrixData {
     pub light_space: Mat4,
 }
 
-pub const MAX_SOURCES_PER_FRAME: usize = 16;
+pub const MAX_LIGHT_SOURCES_PER_FRAME: usize = 16;
 
 #[derive(Debug)]
 #[repr(C)]
 pub struct LightingData {
-    pub light_sources: [MaybeUninit<LightData>; MAX_SOURCES_PER_FRAME],
+    pub light_sources: [MaybeUninit<LightData>; MAX_LIGHT_SOURCES_PER_FRAME],
     pub viewer_position: Vec3,
     pub source_count: u32,
 }
@@ -49,7 +50,7 @@ pub struct LightingData {
 impl LightingData {
     fn new() -> Self {
         Self {
-            light_sources: [MaybeUninit::zeroed(); MAX_SOURCES_PER_FRAME],
+            light_sources: [MaybeUninit::zeroed(); MAX_LIGHT_SOURCES_PER_FRAME],
             viewer_position: Default::default(),
             source_count: Default::default(),
         }
@@ -117,15 +118,14 @@ impl<'a> Renderer<'a> {
         &self.framebuffer
     }
 
-    pub fn render(&self, scene_manager: &SceneManager, resource_manager: &ResourceManager) {
+    pub fn render(&self, scene_manager: &SceneManager, mesh_manager: &MeshManager) {
         let camera = match scene_manager.component_slice::<Camera>().first() {
             Some(cam) => cam,
             None => return,
         };
-        let light = match scene_manager.component_slice::<LightSource>().first() {
-            Some(light) => light,
-            None => return,
-        };
+        if scene_manager.component_slice::<LightSource>().is_empty() {
+            return;
+        }
 
         let camera_transform = scene_manager.get_transform(camera.owner_id());
 
@@ -133,7 +133,7 @@ impl<'a> Renderer<'a> {
         let lights = scene_manager.component_slice::<LightSource>();
         let mut i = 0;
         for light_source in lights {
-            if i == MAX_SOURCES_PER_FRAME {
+            if i == MAX_LIGHT_SOURCES_PER_FRAME {
                 break;
             }
             let light_transform = scene_manager.get_transform(light_source.owner_id());
@@ -155,8 +155,8 @@ impl<'a> Renderer<'a> {
         Self::gl_enable();
         gl_wrappers::clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-        for mesh in scene_manager.component_slice::<Mesh>() {
-            let mesh_transform = scene_manager.get_transform(mesh.owner_id());
+        for mesh_comp in scene_manager.component_slice::<Mesh>() {
+            let mesh_transform = scene_manager.get_transform(mesh_comp.owner_id());
             let matrix_data = MatrixData {
                 mvp: camera.data.projection_view(camera_transform) * mesh_transform.model(),
                 model: mesh_transform.model(),
@@ -170,11 +170,27 @@ impl<'a> Renderer<'a> {
                 0,
             );
 
-            Self::render_meshes(
-                resource_manager
-                    .mesh_container()
-                    .get(&mesh.data.mesh_index),
-            );
+            let mesh_data = mesh_manager.meshes().get(&mesh_comp.data.mesh_index);
+            let materials = mesh_manager.materials().get(&mesh_comp.data.material_index);
+            
+            // Assuming that mesh_data and materials are same length
+            for (mesh_data, material) in mesh_data.iter().zip(materials) {
+                mesh_manager.textures().get(material.base_color).bind_to_unit(gl::TEXTURE0);
+                mesh_manager.textures().get(material.metalness).bind_to_unit(gl::TEXTURE1);
+                mesh_manager.textures().get(material.roughness).bind_to_unit(gl::TEXTURE2);
+                mesh_manager.textures().get(material.ao).bind_to_unit(gl::TEXTURE3);
+                mesh_manager.textures().get(material.normals).bind_to_unit(gl::TEXTURE4);
+                mesh_manager.textures().get(material.displacement).bind_to_unit(gl::TEXTURE5);
+                mesh_data.bind();
+                unsafe {
+                    gl::DrawElements(
+                        gl::TRIANGLES,
+                        mesh_data.index_count,
+                        gl::UNSIGNED_INT,
+                        0 as *const _,
+                    );
+                }
+            }
         }
     }
 
@@ -182,20 +198,6 @@ impl<'a> Renderer<'a> {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
-        }
-    }
-
-    fn render_meshes(meshes: &[MeshData]) {
-        for mesh in meshes {
-            mesh.bind();
-            unsafe {
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    mesh.index_count,
-                    gl::UNSIGNED_INT,
-                    0 as *const _,
-                );
-            }
         }
     }
 }

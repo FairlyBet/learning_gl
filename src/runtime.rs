@@ -151,7 +151,7 @@ fn render_iteration(
     resource_manager: &ResourceManager,
     sleep_period: &Duration,
 ) {
-    renderer.render(scene_manager, resource_manager);
+    renderer.render(scene_manager, &resource_manager.mesh_manager());
     screen.render_offscreen(renderer.framebuffer());
     window.swap_buffers();
     unsafe {

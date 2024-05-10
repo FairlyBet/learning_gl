@@ -1,7 +1,9 @@
 use fxhash::FxHasher32;
+use stb_image::stb_image;
 use std::{
     alloc::{self, Layout},
     collections::HashMap,
+    ffi::CString,
     hash::BuildHasherDefault,
     marker::PhantomData,
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
@@ -69,8 +71,10 @@ impl TypelessVec {
 
     fn resize<T>(&mut self, new_capacity: usize) {
         let (buf, layout) = Self::alloc_buf::<T>(new_capacity);
-        unsafe {
-            buf.copy_from_nonoverlapping(self.buf, self.len);
+        if self.buf != ptr::null_mut() {
+            unsafe {
+                buf.copy_from_nonoverlapping(self.buf, self.len);
+            }
         }
         self.dealloc();
         self.buf = buf;
@@ -273,4 +277,69 @@ where
         vec.push(item.into());
     }
     vec
+}
+
+#[derive(Debug)]
+pub struct StbImage {
+    data: *mut u8,
+    x: usize,
+    y: usize,
+    channels: usize,
+}
+
+impl StbImage {
+    pub fn load(path: &str, vflip: bool) -> Self {
+        let filename = CString::new(path.as_bytes()).unwrap();
+
+        let mut x = 0;
+        let mut y = 0;
+        let mut channels = 0;
+        let data = unsafe {
+            stb_image::stbi_set_flip_vertically_on_load(vflip as i32); // Could be needed
+            stb_image::stbi_load(filename.as_ptr(), &mut x, &mut y, &mut channels, 0)
+        };
+        assert_ne!(data, std::ptr::null_mut());
+
+        Self {
+            data,
+            x: x as usize,
+            y: y as usize,
+            channels: channels as usize,
+        }
+    }
+
+    pub fn x(&self) -> usize {
+        self.x
+    }
+
+    pub fn y(&self) -> usize {
+        self.y
+    }
+
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
+    pub fn data(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.data, (self.x * self.y * self.channels) as usize) }
+    }
+
+    pub fn extract_channel(&self, channel_offset: usize) -> Vec<u8> {
+        assert!(channel_offset < self.channels);
+        let mut result = Vec::with_capacity(self.x * self.y);
+        let data = self.data();
+        for i in (0..self.x * self.y * self.channels).step_by(self.channels) {
+            result.push(data[i + channel_offset]);
+        }
+
+        result
+    }
+}
+
+impl Drop for StbImage {
+    fn drop(&mut self) {
+        unsafe {
+            stb_image::stbi_image_free(self.data.cast());
+        }
+    }
 }

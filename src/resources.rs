@@ -5,6 +5,7 @@ use crate::{
     scene::Scene,
     scripting::CompiledScript,
     serializable::{self, PBRTextures, ScriptObject},
+    utils::StbImage,
 };
 use fxhash::FxHashMap;
 use gl::types::GLenum;
@@ -13,7 +14,6 @@ use russimp::{
     scene::{PostProcess, PostProcessSteps},
     Vector2D,
 };
-use stb_image::image::{self, Image};
 use std::{
     fs,
     marker::PhantomData,
@@ -164,12 +164,12 @@ impl<'a> ResourceManager<'a> {
         }
     }
 
-    pub fn get_mesh(&mut self, mesh: &serializable::Mesh) -> Mesh {
-        self.mesh_manager.get_mesh_lazily(mesh)
+    pub fn mesh_manager(&self) -> &MeshManager {
+        &self.mesh_manager
     }
 
-    pub fn mesh_container(&self) -> &RangeIndexContainer<MeshData> {
-        &self.mesh_manager.meshes
+    pub fn mesh_manager_mut(&mut self) -> &mut MeshManager {
+        &mut self.mesh_manager
     }
 
     pub fn scenes(&self) -> &[Scene] {
@@ -182,7 +182,7 @@ impl<'a> ResourceManager<'a> {
     }
 }
 
-struct MeshManager {
+pub struct MeshManager {
     meshes: RangeIndexContainer<MeshData>,
     materials: RangeIndexContainer<Material>,
     textures: SingleIndexContainer<Texture>,
@@ -212,6 +212,18 @@ impl MeshManager {
             materials: RangeIndexContainer::new(),
             textures,
         }
+    }
+
+    pub fn meshes(&self) -> &RangeIndexContainer<MeshData> {
+        &self.meshes
+    }
+
+    pub fn materials(&self) -> &RangeIndexContainer<Material> {
+        &self.materials
+    }
+
+    pub fn textures(&self) -> &SingleIndexContainer<Texture> {
+        &self.textures
     }
 
     fn default_textures() -> (Texture, Texture, Texture, Texture, Texture, Texture) {
@@ -330,15 +342,20 @@ impl MeshManager {
 
             let m = &scene.materials[*index as usize];
 
-            // Find properties that are texture file paths
             tex_files.clear();
 
-            for property in &m.properties {
-                if property.key == "$tex.file" {
-                    // "$tex.file" is just how it is marked by Assimp
-                    tex_files.push(property);
-                }
-            }
+            // Find properties that are texture file paths
+            m.properties
+                .iter()
+                .filter(|item| item.key == "$tex.file")
+                .for_each(|item| tex_files.push(item));
+
+            // for property in &m.properties {
+            //     if property.key == "$tex.file" {
+            //         // "$tex.file" is just how it is marked by Assimp
+            //         tex_files.push(property);
+            //     }
+            // }
 
             // Filter out only PBR textures
             let base_color = tex_files
@@ -405,6 +422,16 @@ impl MeshManager {
         // };
     }
 
+    fn get_texture_path(prop: &MaterialProperty, mesh_path: &str) -> String {
+        if let PropertyTypeInfo::String(s) = &prop.data {
+            let mut path = PathBuf::from(&mesh_path);
+            path.pop();
+            path.push(PathBuf::from(&s));
+            return path.to_str().unwrap().to_string();
+        }
+        unreachable!()
+    }
+
     fn load_material_textures(
         &mut self,
         material: &serializable::MaterialInfo,
@@ -419,7 +446,8 @@ impl MeshManager {
     ) -> Material {
         let mut base_color = self.textures.get_index("default_base_color");
         if let Some(path) = &texs.0 {
-            base_color = self.load_tex(&Self::load_img(&path), &path);
+            let img = StbImage::load(path, true);
+            base_color = self.load_tex(img.data(), (img.x(), img.y()), img.channels(), path, true);
         }
 
         let mut metalness = self.textures.get_index("default_metalness");
@@ -429,38 +457,45 @@ impl MeshManager {
         match &material.pbr_channels {
             PBRTextures::Separated => {
                 if let Some(path) = &texs.1 {
-                    metalness = self.load_tex(&Self::load_img(&path), &path);
+                    let img = StbImage::load(path, true);
+                    metalness =
+                        self.load_tex(img.data(), (img.x(), img.y()), img.channels(), path, false);
                 }
                 if let Some(path) = &texs.2 {
-                    roughness = self.load_tex(&Self::load_img(&path), &path);
+                    let img = StbImage::load(path, true);
+                    roughness =
+                        self.load_tex(img.data(), (img.x(), img.y()), img.channels(), path, false);
                 }
                 if let Some(path) = &texs.3 {
-                    ao = self.load_tex(&Self::load_img(&path), &path);
+                    let img = StbImage::load(path, true);
+                    ao = self.load_tex(img.data(), (img.x(), img.y()), img.channels(), path, false);
                 }
             }
             PBRTextures::Merged(pbr_channels) => {
                 if let Some(path) = texs.1.as_ref().or(texs.2.as_ref()).or(texs.3.as_ref()) {
-                    let img = Self::load_img(&path);
+                    let img = StbImage::load(path, true);
 
                     if let Some(path) = &texs.1 {
-                        let img = Self::extract_channel(&img, pbr_channels.metalness_offset());
+                        let ch = img.extract_channel(pbr_channels.metalness_offset());
                         let mut p = PathBuf::from(pbr_channels.metalness_offset().to_string());
                         p.push(path);
-                        metalness = self.load_tex(&img, p.to_str().unwrap());
+                        metalness =
+                            self.load_tex(&ch, (img.x(), img.y()), 1, p.to_str().unwrap(), false);
                     }
 
                     if let Some(path) = &texs.2 {
-                        let img = Self::extract_channel(&img, pbr_channels.roughness_offset());
+                        let ch = img.extract_channel(pbr_channels.roughness_offset());
                         let mut p = PathBuf::from(pbr_channels.roughness_offset().to_string());
                         p.push(path);
-                        roughness = self.load_tex(&img, p.to_str().unwrap());
+                        roughness =
+                            self.load_tex(&ch, (img.x(), img.y()), 1, p.to_str().unwrap(), false);
                     }
 
                     if let Some(path) = &texs.3 {
-                        let img = Self::extract_channel(&img, pbr_channels.ao_offset());
+                        let ch = img.extract_channel(pbr_channels.ao_offset());
                         let mut p = PathBuf::from(pbr_channels.ao_offset().to_string());
                         p.push(path);
-                        ao = self.load_tex(&img, p.to_str().unwrap());
+                        ao = self.load_tex(&ch, (img.x(), img.y()), 1, p.to_str().unwrap(), false);
                     }
                 }
             }
@@ -468,12 +503,15 @@ impl MeshManager {
 
         let mut normals = self.textures.get_index("default_normals");
         if let Some(path) = &texs.4 {
-            normals = self.load_tex(&Self::load_img(&path), &path)
+            let img = StbImage::load(path, true);
+            normals = self.load_tex(img.data(), (img.x(), img.y()), img.channels(), path, false);
         }
 
         let mut displacement = self.textures.get_index("default_displacement");
         if let Some(path) = &texs.5 {
-            displacement = self.load_tex(&Self::load_img(&path), &path)
+            let img = StbImage::load(path, true);
+            displacement =
+                self.load_tex(img.data(), (img.x(), img.y()), img.channels(), path, false);
         }
 
         Material {
@@ -486,59 +524,27 @@ impl MeshManager {
         }
     }
 
-    fn get_texture_path(prop: &MaterialProperty, mesh_path: &str) -> String {
-        if let PropertyTypeInfo::String(s) = &prop.data {
-            let mut path = PathBuf::from(&mesh_path);
-            path.pop();
-            path.push(PathBuf::from(&s));
-            return path.to_str().unwrap().to_string();
-        }
-        unreachable!()
-    }
-
-    fn load_img(path: &str) -> Image<u8> {
-        // let filename = CString::new(path.as_bytes()).unwrap();
-        // let mut x = 0;
-        // let mut y = 0;
-        // let mut channels = 0;
-        // let data = unsafe {
-        //     // stb_image::stbi_set_flip_vertically_on_load(1); // Could be needed
-        //     stb_image::stbi_load(filename.as_ptr(), &mut x, &mut y, &mut channels, 0)
-        // };
-        // assert_ne!(data, std::ptr::null_mut());
-        // unsafe { stb_image::stbi_image_free(data.cast()); }
-
-        match image::load(path) {
-            image::LoadResult::Error(s) => panic!("{}", s),
-            image::LoadResult::ImageU8(img) => img,
-            image::LoadResult::ImageF32(_) => unreachable!(),
-        }
-    }
-
-    fn extract_channel(img: &Image<u8>, channel_offset: usize) -> Image<u8> {
-        let channel_count = img.data.len() / img.width / img.height;
-        let mut res = Vec::with_capacity(img.width * img.height);
-        for y in 0..img.height {
-            for x in (0..img.width).step_by(channel_count) {
-                res.push(img.data[y * img.width + x + channel_offset]);
-            }
-        }
-
-        Image::new(img.width, img.height, img.depth, res)
-    }
-
-    fn load_tex(&mut self, img: &Image<u8>, path: &str) -> usize {
+    fn load_tex(
+        &mut self,
+        img: &[u8],
+        size: (usize, usize),
+        channels: usize,
+        path: &str,
+        srgb: bool,
+    ) -> usize {
         if self.textures.contains(path) {
             return self.textures.get_index(path);
         }
 
-        let channel_count = img.data.len() / img.width / img.height;
-        let format = if channel_count == 1 {
-            gl::RED
-        } else if channel_count == 3 {
-            gl::RGB // or SRGB
-        } else if channel_count == 4 {
-            gl::RGBA
+        let (format, internal_format) = if channels == 1 {
+            (gl::RED, gl::RED)
+        } else if channels == 3 {
+            (gl::RGB, gl::RGB * (!srgb as u32) + gl::SRGB * (srgb as u32)) // or SRGB
+        } else if channels == 4 {
+            (
+                gl::RGBA,
+                gl::RGBA * (!srgb as u32) + gl::SRGB_ALPHA * (srgb as u32),
+            )
         } else {
             unreachable!()
         };
@@ -546,11 +552,11 @@ impl MeshManager {
         let tex = Texture::new(gl::TEXTURE_2D).unwrap();
         tex.bind();
         tex.texture_data(
-            (img.width as i32, img.height as i32),
-            img.data.as_ptr().cast(),
+            (size.0 as i32, size.1 as i32),
+            img.as_ptr().cast(),
             gl::UNSIGNED_BYTE,
             format,
-            format,
+            internal_format,
         );
         tex.generate_mipmaps();
         tex.parameter(gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE); // Not sure about CLAMP_TO_EDGE, could be REPEAT

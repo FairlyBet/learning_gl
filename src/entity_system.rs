@@ -31,7 +31,7 @@ impl SceneManager {
         scripting: &Scripting,
     ) {
         let scene = resource_manager.scenes().get(index).unwrap();
-        let entities = scene.load_entities();
+        let entities = scene.read_entities();
         self.load_entities(None, entities, resource_manager, scripting);
     }
 
@@ -61,7 +61,7 @@ impl SceneManager {
                 entity
                     .meshes
                     .iter()
-                    .map(|item| resource_manager.get_mesh(&item))
+                    .map(|item| resource_manager.mesh_manager_mut().get_mesh_lazily(&item))
                     .collect::<Vec<Mesh>>(),
             );
             self.attach_components(
