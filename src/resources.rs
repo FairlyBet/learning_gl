@@ -15,12 +15,7 @@ use russimp::{
     Vector2D,
 };
 use std::{
-    fs,
-    marker::PhantomData,
-    ops::Range,
-    path::{Path, PathBuf},
-    ptr,
-    str::FromStr as _,
+    fs, iter::Zip, marker::PhantomData, ops::Range, path::{Path, PathBuf}, ptr, slice::Iter, str::FromStr as _
 };
 
 pub fn get_paths<T>() -> Vec<String>
@@ -212,6 +207,12 @@ impl MeshManager {
             materials: RangeIndexContainer::new(),
             textures,
         }
+    }
+
+    pub fn mesh_n_material(&self, mesh: &Mesh) -> Zip<Iter<MeshData>, Iter<Material>> {
+        let mesh_data = self.meshes.get(&mesh.mesh_index);
+        let materials = self.materials.get(&mesh.material_index);
+        mesh_data.iter().zip(materials)
     }
 
     pub fn meshes(&self) -> &RangeIndexContainer<MeshData> {

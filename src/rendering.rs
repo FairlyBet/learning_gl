@@ -170,11 +170,7 @@ impl<'a> Renderer<'a> {
                 0,
             );
 
-            let mesh_data = mesh_manager.meshes().get(&mesh_comp.data.mesh_index);
-            let materials = mesh_manager.materials().get(&mesh_comp.data.material_index);
-            
-            // Assuming that mesh_data and materials are same length
-            for (mesh_data, material) in mesh_data.iter().zip(materials) {
+            for (mesh_data, material) in mesh_manager.mesh_n_material(&mesh_comp.data) {
                 mesh_manager.textures().get(material.base_color).bind_to_unit(gl::TEXTURE0);
                 mesh_manager.textures().get(material.metalness).bind_to_unit(gl::TEXTURE1);
                 mesh_manager.textures().get(material.roughness).bind_to_unit(gl::TEXTURE2);
