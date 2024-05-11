@@ -4,12 +4,10 @@ use crate::{
     entity_system::SceneManager,
     gl_wrappers::{self, BufferObject, Gl, Renderbuffer, ShaderProgram, Texture},
     lighting::{LightData, LightSource},
-    main,
-    material::Material,
-    resources::{MeshManager, ResourceManager},
+    resources::MeshManager,
     runtime::FramebufferSizeCallback,
     shader::{
-        self, BlinnPhongLighting, DirectPBR, FragShader, MainShader, ScreenShaderFrag,
+        self, DirectPBR, FragShader, MainShader, ScreenShaderFrag,
         ScreenShaderVert, VertShader,
     },
 };
