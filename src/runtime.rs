@@ -10,7 +10,7 @@ use glfw::{
     MouseButton, OpenGlProfileHint, PWindow, SwapInterval, WindowEvent, WindowHint, WindowMode,
 };
 use spin_sleep::{SpinSleeper, SpinStrategy};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const MAJOR: u32 = 4;
 const MINOR: u32 = 3;
@@ -30,8 +30,13 @@ pub fn run() {
     let (mut window, receiver) = glfw.with_primary_monitor(|glfw, monitor| match monitor {
         Some(monitor) => {
             let mode = monitor.get_video_mode().unwrap();
-            glfw.create_window(WIDTH, HEIGHT, "v0.0.1", WindowMode::Windowed)
-                .unwrap()
+            glfw.create_window(
+                mode.width,
+                mode.height,
+                "v0.0.1",
+                WindowMode::FullScreen(monitor),
+            )
+            .unwrap()
         }
         None => unreachable!(),
     });

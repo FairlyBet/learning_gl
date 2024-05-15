@@ -7,8 +7,7 @@ use crate::{
     resources::MeshManager,
     runtime::FramebufferSizeCallback,
     shader::{
-        self, DirectPBR, FragShader, MainShader, ScreenShaderFrag,
-        ScreenShaderVert, VertShader,
+        self, DirectPBR, FragShader, MainShader, ScreenShaderFrag, ScreenShaderVert, VertShader,
     },
 };
 use gl::types::GLenum;
@@ -169,12 +168,30 @@ impl<'a> Renderer<'a> {
             );
 
             for (mesh_data, material) in mesh_manager.mesh_n_material(&mesh_comp.data) {
-                mesh_manager.textures().get(material.base_color).bind_to_unit(gl::TEXTURE0);
-                mesh_manager.textures().get(material.metalness).bind_to_unit(gl::TEXTURE1);
-                mesh_manager.textures().get(material.roughness).bind_to_unit(gl::TEXTURE2);
-                mesh_manager.textures().get(material.ao).bind_to_unit(gl::TEXTURE3);
-                mesh_manager.textures().get(material.normals).bind_to_unit(gl::TEXTURE4);
-                mesh_manager.textures().get(material.displacement).bind_to_unit(gl::TEXTURE5);
+                mesh_manager
+                    .textures()
+                    .get(material.base_color)
+                    .bind_to_unit(gl::TEXTURE0);
+                mesh_manager
+                    .textures()
+                    .get(material.metalness)
+                    .bind_to_unit(gl::TEXTURE1);
+                mesh_manager
+                    .textures()
+                    .get(material.roughness)
+                    .bind_to_unit(gl::TEXTURE2);
+                mesh_manager
+                    .textures()
+                    .get(material.ao)
+                    .bind_to_unit(gl::TEXTURE3);
+                mesh_manager
+                    .textures()
+                    .get(material.normals)
+                    .bind_to_unit(gl::TEXTURE4);
+                mesh_manager
+                    .textures()
+                    .get(material.displacement)
+                    .bind_to_unit(gl::TEXTURE5);
                 mesh_data.bind();
                 unsafe {
                     gl::DrawElements(
