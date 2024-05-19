@@ -33,7 +33,7 @@ impl DataManager {
 
         unsafe {
             ptr = alloc::alloc(layout);
-            ptr.cast::<Block>().write(workspace);
+            Self::write_back((ptr, PAGE_SIZE), workspace, 0);
             IS_INSTANTIATED = true;
         }
 
@@ -46,8 +46,15 @@ impl DataManager {
         }
     }
 
+    fn write_back<T>(buff: (*mut u8, usize), value: T, count: usize) {
+        unsafe {
+            let ptr = buff.0.add(buff.1 - size_of::<T>() * (count + 1));
+            ptr.cast::<T>().write(value);
+        };
+    }
+
     pub fn register_data<T>(&mut self, count: usize) -> DataKey<T> {
-        if self.header_freespace() < size_of::<Block>() {
+        if self.header_zone_freespace() < size_of::<Block>() {
             self.resize_header_zone();
         }
 
@@ -59,7 +66,7 @@ impl DataManager {
             );
             ptr.cast::<Block>().write(b);
         };
-        
+
         let key = DataKey {
             pd: Default::default(),
             key: self.registered_data_count,
@@ -69,7 +76,7 @@ impl DataManager {
         key
     }
 
-    fn header_freespace(&self) -> usize {
+    fn header_zone_freespace(&self) -> usize {
         self.data_zone_offset
             - (self.free_blocks_count + self.registered_data_count) * size_of::<Block>()
     }
