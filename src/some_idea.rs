@@ -2,46 +2,79 @@ use std::{
     alloc::{self, Layout, LayoutError},
     cell::Cell,
     marker::PhantomData,
-    mem::align_of,
+    mem::{align_of, size_of},
 };
 
-pub const PAGE_SIZE: usize = 4096;
+const PAGE_SIZE: usize = 4096;
 
-#[derive(Debug, Default, Clone, Copy)]
-struct Block {
-    pub offset: usize,
-    pub len: usize,
-}
+static mut IS_INSTANTIATED: bool = false;
 
 #[derive(Debug)]
 pub struct DataManager {
     base: *mut u8,
     layout: Layout,
-    header_space: Block,
-    work_space: Block,
-    registered_data: u32,
-    free_blocks: usize,
+    data_zone_offset: usize,
+    registered_data_count: usize,
+    free_blocks_count: usize,
 }
 
 impl DataManager {
     pub fn new() -> Self {
+        assert!(!unsafe { IS_INSTANTIATED });
+
         let initial_size = 16 * PAGE_SIZE;
-        let layout = Layout::from_size_align(initial_size, align_of::<usize>()).unwrap();
-        let ptr = unsafe { alloc::alloc_zeroed(layout) };
-        let header_space = Block {
-            offset: 0,
-            len: PAGE_SIZE,
-        };
-        let work_space = Block {
+        let workspace = Block {
             offset: PAGE_SIZE,
             len: PAGE_SIZE * 15,
         };
-        let free_blocks = 1;
-        unsafe { ptr.add(work_space.offset).cast::<Block>().write(work_space) }
-        todo!()
+        let layout = Layout::from_size_align(initial_size, align_of::<usize>()).unwrap();
+
+        let ptr;
+
+        unsafe {
+            ptr = alloc::alloc(layout);
+            ptr.cast::<Block>().write(workspace);
+            IS_INSTANTIATED = true;
+        }
+
+        Self {
+            base: ptr,
+            layout,
+            data_zone_offset: PAGE_SIZE,
+            registered_data_count: 0,
+            free_blocks_count: 1,
+        }
     }
 
     pub fn register_data<T>(&mut self, count: usize) -> DataKey<T> {
+        if self.header_freespace() < size_of::<Block>() {
+            self.resize_header_zone();
+        }
+
+        let b = Block { offset: 0, len: 0 };
+        let ptr;
+        unsafe {
+            ptr = self.base.add(
+                self.data_zone_offset - 1 - size_of::<Block>() * (self.registered_data_count + 1),
+            );
+            ptr.cast::<Block>().write(b);
+        };
+        
+        let key = DataKey {
+            pd: Default::default(),
+            key: self.registered_data_count,
+        };
+        self.registered_data_count += 1;
+
+        key
+    }
+
+    fn header_freespace(&self) -> usize {
+        self.data_zone_offset
+            - (self.free_blocks_count + self.registered_data_count) * size_of::<Block>()
+    }
+
+    fn resize_header_zone(&mut self) {
         todo!()
     }
 
@@ -56,10 +89,16 @@ impl DataManager {
     pub fn temporal_data() {}
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+struct Block {
+    offset: usize,
+    len: usize,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct DataKey<T> {
     pd: PhantomData<T>,
-    key: u32,
+    key: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
