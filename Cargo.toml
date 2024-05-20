@@ -1,6 +1,6 @@
 [package]
 name = "learning_gl"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -13,13 +13,17 @@ nalgebra-glm = "0.18.0"
 strum = { version = "0.26.2", features = ["derive"] }
 russimp = { version = "3.2.0", features = ["prebuilt"] }
 stb_image = "0.3.0"
-mlua = { version = "0.9.7", features = ["lua54", "vendored"] }
-serde = { version = "1.0.197", features = ["derive"] }
+mlua = { version = "0.9.8", features = ["lua54", "vendored"] }
+serde = { version = "1.0.202", features = ["derive"] }
 serde_json = "1.0.115"
 fxhash = "0.2.1"
 bitflags = "2.5.0"
 spin_sleep = "1.2.0"
+windows = { version = "0.56.0", features = [
+    "Win32_System_Memory",
+    "Win32_System_SystemInformation",
+] }
 # rayon = "1.7.0"
 
-[profile.release]
-panic = "abort"
+# [profile.release]
+# panic = "abort"

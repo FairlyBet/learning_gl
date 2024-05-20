@@ -18,8 +18,8 @@ mod scene;
 mod scripting;
 mod serializable;
 mod shader;
-mod utils;
 mod some_idea;
+mod utils;
 
 fn main() {
     // utils::StbImage::load("assets\\textures\\4px.png", false).extract_channel(0);
