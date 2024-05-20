@@ -22,7 +22,8 @@ mod some_idea;
 mod utils;
 
 fn main() {
+    let heap_obj = some_idea::HeapObject::new(1);
     // utils::StbImage::load("assets\\textures\\4px.png", false).extract_channel(0);
     // scene::Scene::sample();
-    runtime::run();
+    // runtime::run();
 }

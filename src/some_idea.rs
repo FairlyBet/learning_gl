@@ -20,13 +20,14 @@ const MEMORY_ALLOCATION_ALIGNMENT: usize = 0x10;
 #[cfg(not(target_pointer_width = "64"))]
 const MEMORY_ALLOCATION_ALIGNMENT: usize = 0x8;
 
-struct HeapObject {
+#[derive(Debug)]
+pub struct HeapObject {
     handle: HANDLE,
     page_size: usize,
 }
 
 impl HeapObject {
-    fn new(page_count: usize) -> Self {
+    pub fn new(page_count: usize) -> Self {
         unsafe {
             let mut system_info = SYSTEM_INFO::default();
             SystemInformation::GetSystemInfo(&mut system_info);
@@ -78,7 +79,7 @@ pub struct DataManager {
 impl DataManager {
     pub fn new() -> Self {
         assert!(!unsafe { IS_INSTANTIATED });
-
+        let heap_obj = HeapObject::new(20);
         let initial_size = 16 * PAGE_SIZE;
         let workspace = Block {
             offset: PAGE_SIZE,
