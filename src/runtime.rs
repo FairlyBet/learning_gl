@@ -12,12 +12,10 @@ use glfw::{
 use spin_sleep::{SpinSleeper, SpinStrategy};
 use std::time::Duration;
 
-const MAJOR: u32 = 4;
-const MINOR: u32 = 3;
-const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(MAJOR, MINOR);
+const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 6);
 const OPENGL_PROFILE: WindowHint = WindowHint::OpenGlProfile(OpenGlProfileHint::Core);
 const CLIENT_API: WindowHint = WindowHint::ClientApi(ClientApiHint::OpenGl);
-const MODE: WindowMode<'_> = WindowMode::Windowed;
+const MODE: WindowMode<'static> = WindowMode::Windowed;
 const SWAP_INTERVAL: SwapInterval = SwapInterval::Sync(1);
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -241,4 +239,10 @@ impl WindowEvents {
 
 pub trait FramebufferSizeCallback {
     fn framebuffer_size(&mut self, size: (i32, i32));
+}
+
+pub type Result<T> = core::result::Result<T, Error>;
+
+pub enum Error {
+    MemoryError,
 }
