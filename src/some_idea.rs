@@ -129,19 +129,44 @@ impl DataMemoryManager {
     }
 
     pub fn register_data<T>(&mut self, count: usize) -> DataKey<T> {
-        if !self.header.is_enuogh_for_data_record() {}
-        todo!()
+        if !self.header.is_enuogh_for_data_record() {
+            self.resize_header_zone();
+        }
+
+        let data_key = DataKey::<T>::new(self.header.data_record_len);
+        self.header.push_data_record(DataBlock::default());
+        
+        data_key
     }
 
     fn data_pages(&self) -> usize {
         self.total_pages - self.header_pages
     }
 
+    fn data_ptr(&self) -> *mut u8 {
+        unsafe {
+            self.ptr
+                .as_ptr()
+                .add(self.header_pages * self.heap.page_size)
+        }
+    }
+
     fn resize_header_zone(&mut self) {
-        let new_size = self.header_pages * 2 + self.data_pages();
+        let new_header_pages = self.header_pages * 2;
+        let new_size = (new_header_pages + self.data_pages()) * self.heap.page_size;
         let ptr = self.heap.realloc(self.ptr.cast(), new_size);
+
         // Move data zone
-        // let data_ptr = self.ptr.as_ptr().add()
+        unsafe {
+            let new_data_ptr = self
+                .ptr
+                .as_ptr()
+                .add(new_header_pages * self.heap.page_size);
+            new_data_ptr.copy_from(self.data_ptr(), self.data_pages() * self.heap.page_size);
+        }
+
+        self.total_pages = self.data_pages() + new_header_pages;
+        self.header_pages = new_header_pages;
     }
 
     pub fn get_data<T>(&self, key: &DataKey<T>) -> DataCell<T> {
@@ -264,12 +289,9 @@ struct DataBlock {
 }
 
 impl DataBlock {
-    fn new(offset: usize, capacity: usize, len: usize) -> Self {
+    fn new(offset: usize, size: usize, len: usize) -> Self {
         Self {
-            block: MemoryBlock {
-                offset,
-                size: capacity,
-            },
+            block: MemoryBlock { offset, size },
             len,
         }
     }
@@ -278,7 +300,16 @@ impl DataBlock {
 #[derive(Debug, Clone, Copy)]
 pub struct DataKey<T> {
     pd: PhantomData<T>,
-    data_block_offset: usize,
+    record_index: usize,
+}
+
+impl<T> DataKey<T> {
+    fn new(index: usize) -> Self {
+        Self {
+            pd: Default::default(),
+            record_index: index,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
