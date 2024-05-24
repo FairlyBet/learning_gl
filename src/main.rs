@@ -24,5 +24,5 @@ mod utils;
 fn main() {
     // utils::StbImage::load("assets\\textures\\4px.png", false).extract_channel(0);
     // scene::Scene::sample();
-    // runtime::run();
+    runtime::run();
 }

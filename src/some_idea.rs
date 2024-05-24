@@ -13,8 +13,23 @@ use windows::Win32::{
     },
 };
 
+fn aligned_ptr<T>(ptr: *const u8) -> *mut T {
+    let addr = ptr as usize;
+    let align = align_of::<T>();
+    let aligned_addr = (addr + align - 1) & !(align - 1);
+
+    aligned_addr as *mut T
+}
+
+fn write_backwards<T>(buff: (*mut u8, usize), value: T, count: usize) {
+    unsafe {
+        let ptr = buff.0.add(buff.1 - size_of::<T>() * (count + 1));
+        ptr.cast::<T>().write(value);
+    };
+}
+
 #[derive(Debug)]
-pub struct PrivateHeap {
+struct PrivateHeap {
     handle: HANDLE,
     page_size: usize,
 }
@@ -22,14 +37,14 @@ pub struct PrivateHeap {
 impl PrivateHeap {
     const ALLOCATION_ALIGNMENT: usize = 0x10;
 
-    pub fn new(page_count: usize) -> Result<Self> {
+    fn new(pages: usize) -> Result<Self> {
         unsafe {
             let mut system_info = SYSTEM_INFO::default();
             SystemInformation::GetSystemInfo(&mut system_info);
             let page_size = system_info.dwPageSize as usize;
             match Memory::HeapCreate(
                 Memory::HEAP_NO_SERIALIZE | Memory::HEAP_CREATE_ALIGN_16,
-                page_size * page_count,
+                page_size * pages,
                 0,
             ) {
                 Ok(handle) => Ok(Self { handle, page_size }),
@@ -80,88 +95,53 @@ static mut IS_INSTANTIATED: bool = false;
 
 #[derive(Debug)]
 pub struct DataMemoryManager {
-    base: NonNull<c_void>,
-    size: usize,
-    header_zone_len: usize,
-    data_zone_len: usize,
-    registered_data_count: usize,
-    free_blocks_count: usize,
     heap: PrivateHeap,
+    ptr: NonNull<u8>,
+    total_pages: usize,
+    header: HeaderZone,
+    header_pages: usize,
 }
 
 impl DataMemoryManager {
     pub fn new() -> Result<Self> {
         assert!(!unsafe { IS_INSTANTIATED }, "This type has to be singleton");
 
-        let heap = PrivateHeap::new(21)?;
-        let initial_size = 21 * heap.page_size;
-        let ptr = heap.alloc(initial_size)?;
-        let mut self_ = Self {
-            base: ptr,
-            size: initial_size,
-            header_zone_len: heap.page_size,
-            data_zone_len: heap.page_size * 20,
-            registered_data_count: 0,
-            free_blocks_count: 0,
-            heap,
-        };
-        assert_eq!(
-            PrivateHeap::ALLOCATION_ALIGNMENT % align_of::<MemoryBlock>(),
-            0,
-            "Unsupported alignment"
-        );
-        assert_eq!(
-            PrivateHeap::ALLOCATION_ALIGNMENT % align_of::<DataBlock>(),
-            0,
-            "Unsupported alignment"
-        );
+        let total_pages = 20;
+        let heap = PrivateHeap::new(total_pages)?;
+        let ptr = heap.alloc(total_pages * heap.page_size)?.cast();
+        let header_pages = 1;
+        let mut header = HeaderZone::new(ptr, header_pages * heap.page_size);
 
-        // self_.
-        unsafe { IS_INSTANTIATED = true };
+        let free_block = MemoryBlock::new(0, (total_pages - header_pages) * heap.page_size);
+        header.push_free_block(free_block);
 
-        Ok(self_)
-    }
-
-    fn write_backwards<T>(buff: (*mut u8, usize), value: T, count: usize) {
         unsafe {
-            let ptr = buff.0.add(buff.1 - size_of::<T>() * (count + 1));
-            ptr.cast::<T>().write(value);
-        };
+            IS_INSTANTIATED = true;
+        }
+
+        Ok(Self {
+            heap,
+            ptr,
+            total_pages,
+            header,
+            header_pages,
+        })
     }
 
     pub fn register_data<T>(&mut self, count: usize) -> DataKey<T> {
+        if !self.header.is_enuogh_for_data_record() {}
         todo!()
-        // if self.header_zone_freespace() < size_of::<DataBlock>() {
-        //     self.resize_header_zone();
-        // }
-
-        // let b = DataBlock::default();
-
-        // unsafe {
-        //     self.base
-        //         .add(self.registered_data_count * size_of::<DataBlock>())
-        //         .cast::<DataBlock>()
-        //         .write(b);
-        // };
-
-        // let key = DataKey {
-        //     pd: Default::default(),
-        //     data_block_offset: self.registered_data_count,
-        // };
-
-        // self.registered_data_count += 1;
-
-        // key
     }
 
-    fn header_zone_freespace(&self) -> usize {
-        self.header_zone_len
-            - (self.free_blocks_count * size_of::<MemoryBlock>()
-                + self.registered_data_count * size_of::<DataBlock>())
+    fn data_pages(&self) -> usize {
+        self.total_pages - self.header_pages
     }
 
     fn resize_header_zone(&mut self) {
-        todo!()
+        let new_size = self.header_pages * 2 + self.data_pages();
+        let ptr = self.heap.realloc(self.ptr.cast(), new_size);
+        // Move data zone
+        // let data_ptr = self.ptr.as_ptr().add()
     }
 
     pub fn get_data<T>(&self, key: &DataKey<T>) -> DataCell<T> {
@@ -175,96 +155,106 @@ impl DataMemoryManager {
     pub fn optimize_fragmentation() {
         todo!()
     }
-
-    pub fn temporal_data() {
-        todo!()
-    }
 }
 
 #[derive(Debug)]
 struct HeaderZone {
     ptr: NonNull<u8>,
-    capacity: usize,
-    // data_records_offset = 0
-    data_records_len: usize,
-    free_blocks_len: usize,
-    free_blocks_offset: usize,
-
-    // free_blocks: NonNull<MemoryBlock>,
-    // data_records: NonNull<DataBlock>,
+    size: usize,
+    data_record_len: usize,
+    free_block_offset: usize,
+    free_block_len: usize,
 }
 
 impl HeaderZone {
-    // fn is_enuogh_for_data_record(&self) -> bool {
-    //     self.data_records.as_ptr() as usize + (self.data_records_len + 1) * size_of::<DataBlock>()
-    //         - 1
-    //         < self.free_blocks.as_ptr() as usize
-    // }
+    fn new(ptr: NonNull<u8>, size: usize) -> Self {
+        assert_eq!(
+            ptr.as_ptr() as usize % align_of::<MemoryBlock>(),
+            0,
+            "Invalid pointer alignment"
+        );
+        assert_eq!(align_of::<MemoryBlock>(), align_of::<DataBlock>());
+        let free_block_offset = size / 2;
 
-    // fn is_enough_for_free_block(&self) -> bool {
-    //     self.free_blocks.as_ptr() as usize + (self.free_blocks_len + 1) * size_of::<MemoryBlock>()
-    //         - 1
-    //         < self.end.as_ptr() as usize
-    // }
+        Self {
+            ptr,
+            size,
+            data_record_len: 0,
+            free_block_offset,
+            free_block_len: 0,
+        }
+    }
 
-    // fn push_data_record(&mut self, value: DataBlock) {
-    //     assert!(self.is_enuogh_for_data_record());
-    //     unsafe {
-    //         self.data_records
-    //             .as_ptr()
-    //             .add(self.data_records_len)
-    //             .write(value);
-    //     }
-    //     self.data_records_len += 1;
-    // }
+    fn is_enuogh_for_data_record(&self) -> bool {
+        (self.data_record_len + 1) * size_of::<DataBlock>() <= self.free_block_offset
+    }
 
-    // fn push_free_block(&mut self, value: MemoryBlock) {
-    //     assert!(self.is_enough_for_free_block());
-    //     unsafe {
-    //         self.free_blocks
-    //             .as_ptr()
-    //             .add(self.free_blocks_len)
-    //             .write(value);
-    //     }
-    //     self.free_blocks_len += 1;
-    // }
+    fn is_enough_for_free_block(&self) -> bool {
+        self.free_block_offset + (self.free_block_len + 1) * size_of::<MemoryBlock>() <= self.size
+    }
 
-    // fn upsize(&mut self, start: NonNull<u8>, end: NonNull<u8>) {
-    // Assuming that data was reallocated
-    // assert!(
-    //     end.as_ptr() as usize - start.as_ptr() as usize
-    //         > self.end.as_ptr() as usize - self.data_records.as_ptr() as usize
-    // );
-    // unsafe {
-    //     let old_free_blocks_offset =
-    //         self.free_blocks.as_ptr() as usize - self.data_records.as_ptr() as usize;
-    //     let old_free_blocks = start
-    //         .as_ptr()
-    //         .add(old_free_blocks_offset)
-    //         .cast::<MemoryBlock>();
-    //     let new_free_blocks = start
-    //         .as_ptr()
-    //         .add((end.as_ptr() as usize - start.as_ptr() as usize) / 2)
-    //         .cast::<MemoryBlock>();
-    //     new_free_blocks.copy_from(old_free_blocks, self.free_blocks_len);
-    //     self.free_blocks = NonNull::new_unchecked(new_free_blocks);
-    //     self.data_records = start.cast();
-    // }
-    // }
-}
+    fn push_data_record(&mut self, value: DataBlock) {
+        assert!(self.is_enuogh_for_data_record());
+        unsafe {
+            self.ptr
+                .as_ptr()
+                .cast::<DataBlock>()
+                .add(self.data_record_len)
+                .write(value);
+        }
+        self.data_record_len += 1;
+    }
 
-fn aligned_ptr<T>(ptr: *const c_void) -> *mut T {
-    let addr = ptr as usize;
-    let align = align_of::<T>();
-    let aligned_addr = (addr + align - 1) & !(align - 1);
+    fn push_free_block(&mut self, value: MemoryBlock) {
+        assert!(self.is_enough_for_free_block());
+        unsafe {
+            self.ptr
+                .as_ptr()
+                .add(self.free_block_offset)
+                .cast::<MemoryBlock>()
+                .add(self.free_block_len)
+                .write(value);
+        }
+        self.free_block_len += 1;
+    }
 
-    aligned_addr as *mut T
+    fn upsize_on_reallocation(&mut self, new_ptr: NonNull<u8>, new_size: usize) {
+        assert!(new_size >= self.size);
+
+        if new_size == self.size {
+            return;
+        }
+
+        unsafe {
+            let old_free_block_ptr = new_ptr
+                .as_ptr()
+                .add(self.free_block_offset)
+                .cast::<MemoryBlock>();
+
+            let new_free_block_offset = new_size / 2;
+            let new_free_block_ptr = new_ptr
+                .as_ptr()
+                .add(new_free_block_offset)
+                .cast::<MemoryBlock>();
+
+            new_free_block_ptr.copy_from(old_free_block_ptr, self.free_block_len);
+        }
+
+        self.ptr = new_ptr;
+        self.size = new_size;
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
 struct MemoryBlock {
     offset: usize,
-    capacity: usize,
+    size: usize,
+}
+
+impl MemoryBlock {
+    fn new(offset: usize, size: usize) -> Self {
+        Self { offset, size }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -276,7 +266,10 @@ struct DataBlock {
 impl DataBlock {
     fn new(offset: usize, capacity: usize, len: usize) -> Self {
         Self {
-            block: MemoryBlock { offset, capacity },
+            block: MemoryBlock {
+                offset,
+                size: capacity,
+            },
             len,
         }
     }
