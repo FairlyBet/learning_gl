@@ -4,6 +4,7 @@ use std::{
     marker::PhantomData,
     mem::{align_of, size_of},
     ptr::{self, NonNull},
+    slice,
 };
 use windows::Win32::{
     Foundation::HANDLE,
@@ -91,8 +92,6 @@ impl Drop for PrivateHeap {
     }
 }
 
-static mut IS_INSTANTIATED: bool = false;
-
 #[derive(Debug)]
 pub struct DataMemoryManager {
     heap: PrivateHeap,
@@ -102,12 +101,14 @@ pub struct DataMemoryManager {
     header_pages: usize,
 }
 
+static mut IS_INSTANTIATED: bool = false;
+
 impl DataMemoryManager {
     pub fn new() -> Result<Self> {
         assert!(!unsafe { IS_INSTANTIATED }, "This type has to be singleton");
 
         let total_pages = 20;
-        let heap = PrivateHeap::new(total_pages)?;
+        let heap = PrivateHeap::new(total_pages + 1)?;
         let ptr = heap.alloc(total_pages * heap.page_size)?.cast();
         let header_pages = 1;
         let mut header = HeaderZone::new(ptr, header_pages * heap.page_size);
@@ -128,15 +129,15 @@ impl DataMemoryManager {
         })
     }
 
-    pub fn register_data<T>(&mut self, count: usize) -> DataKey<T> {
+    pub fn register_data<T>(&mut self, count: usize) -> Result<DataKey<T>> {
         if !self.header.is_enuogh_for_data_record() {
-            self.resize_header_zone();
+            self.resize_header_zone()?;
         }
 
         let data_key = DataKey::<T>::new(self.header.data_record_len);
         self.header.push_data_record(DataBlock::default());
-        
-        data_key
+
+        Ok(data_key)
     }
 
     fn data_pages(&self) -> usize {
@@ -151,10 +152,10 @@ impl DataMemoryManager {
         }
     }
 
-    fn resize_header_zone(&mut self) {
+    fn resize_header_zone(&mut self) -> Result<()> {
         let new_header_pages = self.header_pages * 2;
         let new_size = (new_header_pages + self.data_pages()) * self.heap.page_size;
-        let ptr = self.heap.realloc(self.ptr.cast(), new_size);
+        let ptr = self.heap.realloc(self.ptr.cast(), new_size)?.cast::<u8>();
 
         // Move data zone
         unsafe {
@@ -165,8 +166,13 @@ impl DataMemoryManager {
             new_data_ptr.copy_from(self.data_ptr(), self.data_pages() * self.heap.page_size);
         }
 
+        self.ptr = ptr;
         self.total_pages = self.data_pages() + new_header_pages;
         self.header_pages = new_header_pages;
+        self.header
+            .upsize_on_reallocation(ptr, new_header_pages * self.heap.page_size);
+
+        Ok(())
     }
 
     pub fn get_data<T>(&self, key: &DataKey<T>) -> DataCell<T> {
@@ -267,6 +273,31 @@ impl HeaderZone {
 
         self.ptr = new_ptr;
         self.size = new_size;
+    }
+
+    fn free_blocks_mut(&mut self) -> &mut [MemoryBlock] {
+        unsafe {
+            let ptr = self
+                .ptr
+                .as_ptr()
+                .add(self.free_block_offset)
+                .cast::<MemoryBlock>();
+            slice::from_raw_parts_mut(ptr, self.free_block_len)
+        }
+    }
+
+    fn remove_free_block(&mut self, index: usize) {
+        assert!(index < self.free_block_len, "Index is out of bounds");
+        unsafe {
+            let ptr = self
+                .ptr
+                .as_ptr()
+                .add(self.free_block_offset)
+                .cast::<MemoryBlock>()
+                .add(index);
+            ptr.copy_from(ptr.add(1), self.free_block_len - index - 1);
+        }
+        self.free_block_len -= 1;
     }
 }
 
