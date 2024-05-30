@@ -107,17 +107,17 @@ impl MemoryBlock {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct DataBlock {
     block: MemoryBlock,
-    len: usize,
+    aligned_ptr: NonNull<u8>,
 }
 
 impl DataBlock {
-    fn new(offset: usize, size: usize, len: usize) -> Self {
+    fn new(offset: usize, size: usize, aligned_ptr: NonNull<u8>) -> Self {
         Self {
             block: MemoryBlock { offset, size },
-            len,
+            aligned_ptr,
         }
     }
 }
@@ -317,11 +317,12 @@ impl MemoryManager {
     }
 
     fn get_data<T>(&self, descriptor: &Descriptor) -> &mut [T] {
-        let data_block = self.header.get_data_block(descriptor);
-        unsafe {
-            let ptr = self.ptr.as_ptr().add(data_block.block.offset).cast::<T>();
-            slice::from_raw_parts_mut(ptr, data_block.len)
-        }
+        todo!()
+        // let data_block = self.header.get_data_block(descriptor);
+        // unsafe {
+        //     let ptr = self.ptr.as_ptr().add(data_block.block.offset).cast::<T>();
+        //     slice::from_raw_parts_mut(ptr, data_block.len)
+        // }
     }
 
     fn get_data_block(&self, descriptor: &Descriptor) -> &DataBlock {
@@ -329,15 +330,16 @@ impl MemoryManager {
     }
 
     pub fn create_data_cell<T>(&mut self) -> Result<DataCell<T>> {
-        if !self.header.is_enuogh_for_data_record() {
-            self.resize_header()?;
-        }
+        // if !self.header.is_enuogh_for_data_record() {
+        //     self.resize_header()?;
+        // }
 
-        let descriptor = Descriptor(self.header.data_record_len);
-        let data_cell = DataCell::new(descriptor);
-        self.header.push_data_record(DataBlock::default());
+        // let descriptor = Descriptor(self.header.data_record_len);
+        // let data_cell = DataCell::new(descriptor);
+        // self.header.push_data_record(DataBlock::default());
 
-        Ok(data_cell)
+        // Ok(data_cell)
+        todo!()
     }
 
     pub fn optimize_fragmentation(&mut self) {
@@ -350,7 +352,6 @@ pub struct DataCell<T> {
     pd: PhantomData<T>,
     descriptor: Descriptor,
     len: usize,
-    capacity: usize,
 }
 
 impl<T> DataCell<T> {
@@ -359,25 +360,21 @@ impl<T> DataCell<T> {
             pd: Default::default(),
             descriptor,
             len: 0,
-            capacity: 0,
         }
     }
 
     pub fn len(&self, mm: &MemoryManager) -> usize {
-        mm.get_data_block(&self.descriptor).len
-    }
-
-    pub fn capacity(&self, mm: &MemoryManager) -> usize {
-        // Assuming that size of T is not zero
-        mm.get_data_block(&self.descriptor).block.size / size_of::<T>()
+        self.len
     }
 
     pub fn slice<'a>(&self, mm: &'a MemoryManager) -> &'a [T] {
-        mm.get_data(&self.descriptor)
+        // mm.get_data(&self.descriptor)
+        todo!()
     }
 
     pub fn slice_mut<'a>(&mut self, mm: &'a MemoryManager) -> &'a mut [T] {
-        mm.get_data(&self.descriptor)
+        // mm.get_data(&self.descriptor)
+        todo!()
     }
 
     pub fn push(&mut self, value: T, mm: &mut MemoryManager) {
