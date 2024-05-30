@@ -258,7 +258,7 @@ impl DataZone {
     }
 
     fn get_data_ptr<T>(&self, data_block: &DataBlock) -> *mut T {
-       todo!() 
+        todo!()
     }
 }
 
@@ -328,7 +328,7 @@ impl MemoryManager {
         self.header.get_data_block(descriptor)
     }
 
-    pub fn register_data<T>(&mut self) -> Result<DataCell<T>> {
+    pub fn create_data_cell<T>(&mut self) -> Result<DataCell<T>> {
         if !self.header.is_enuogh_for_data_record() {
             self.resize_header()?;
         }
@@ -349,6 +349,8 @@ impl MemoryManager {
 pub struct DataCell<T> {
     pd: PhantomData<T>,
     descriptor: Descriptor,
+    len: usize,
+    capacity: usize,
 }
 
 impl<T> DataCell<T> {
@@ -356,6 +358,8 @@ impl<T> DataCell<T> {
         Self {
             pd: Default::default(),
             descriptor,
+            len: 0,
+            capacity: 0,
         }
     }
 
