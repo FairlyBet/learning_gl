@@ -247,6 +247,17 @@ impl HeaderZone {
     }
 }
 
+struct DataZone {
+    ptr: NonNull<u8>,
+    size: usize,
+}
+
+impl DataZone {
+    fn new(ptr: NonNull<u8>, size: usize) -> Self {
+        Self { ptr, size }
+    }
+}
+
 #[derive(Debug)]
 pub struct MemoryManager {
     heap: WindowsHeap,
@@ -272,11 +283,6 @@ impl MemoryManager {
             total_size: total_pages * page_size,
             header,
         })
-    }
-
-    fn data_pages(&self) -> usize {
-        todo!()
-        // self.total_size - self.header_pages
     }
 
     fn data_ptr(&self) -> *mut u8 {
@@ -314,6 +320,10 @@ impl MemoryManager {
         }
     }
 
+    fn get_data_block(&self, descriptor: &Descriptor) -> &DataBlock {
+        self.header.get_data_block(descriptor)
+    }
+
     pub fn register_data<T>(&mut self) -> Result<DataCell<T>> {
         if !self.header.is_enuogh_for_data_record() {
             self.resize_header()?;
@@ -346,19 +356,20 @@ impl<T> DataCell<T> {
     }
 
     pub fn len(&self, mm: &MemoryManager) -> usize {
-        todo!()
+        mm.get_data_block(&self.descriptor).len
     }
 
     pub fn capacity(&self, mm: &MemoryManager) -> usize {
-        todo!()
+        // Assuming that size of T is not zero
+        mm.get_data_block(&self.descriptor).block.size / size_of::<T>()
     }
 
     pub fn slice<'a>(&self, mm: &'a MemoryManager) -> &'a [T] {
-        todo!()
+        mm.get_data(&self.descriptor)
     }
 
     pub fn slice_mut<'a>(&mut self, mm: &'a MemoryManager) -> &'a mut [T] {
-        todo!()
+        mm.get_data(&self.descriptor)
     }
 
     pub fn push(&mut self, value: T, mm: &mut MemoryManager) {
