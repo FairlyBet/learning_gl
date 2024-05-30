@@ -256,6 +256,10 @@ impl DataZone {
     fn new(ptr: NonNull<u8>, size: usize) -> Self {
         Self { ptr, size }
     }
+
+    fn get_data_ptr<T>(&self, data_block: &DataBlock) -> *mut T {
+        
+    }
 }
 
 #[derive(Debug)]
