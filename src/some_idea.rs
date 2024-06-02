@@ -1,4 +1,7 @@
-use crate::runtime::{Error, Result};
+use crate::{
+    linear::Transform,
+    runtime::{Error, Result},
+};
 use std::{
     marker::PhantomData,
     mem::{align_of, size_of},
@@ -404,10 +407,59 @@ impl<T> DataCell<T> {
     }
 }
 
-// struct Engine {
-//     mm: MemoryManager,
-// }
+pub struct Engine {
+    mm: MemoryManager,
+}
 
-// impl Engine {
-//     fn run(mut self) {}
-// }
+impl Engine {
+    pub fn new() -> Result<Self> {
+        let mm = MemoryManager::new()?;
+        Ok(Self { mm })
+    }
+
+    fn run(mut self, f: impl FnOnce(&mut MemoryManager) -> Result<()>) -> Result<()> {
+        f(&mut self.mm)
+    }
+}
+
+fn f(mm: &mut MemoryManager) -> Result<()> {
+    let mut scene = Scene {};
+    let transforms = mm.new_data_cell::<Transform>()?;
+    let mut updates = mm.new_data_cell::<fn(&mut Scene)>()?;
+    updates.push(CameraSystem::update, mm);
+    updates.push(CharacterSystem::update, mm);
+    updates.slice(mm).iter().for_each(|item| item(&mut scene));
+    Ok(())
+}
+
+pub struct Scene;
+
+impl Scene {
+    pub fn get_component<T>() -> DataCell<T> {
+        // This function has to do some magic
+        // Somehow transform type T into a number and retrieve actual data cell by this number
+        todo!()
+    }
+}
+
+pub trait Component {
+    fn create() -> Self
+    where
+        Self: Sized;
+}
+
+struct CameraSystem;
+
+impl CameraSystem {
+    fn update(scene: &mut Scene) {
+        todo!()
+    }
+}
+
+struct CharacterSystem;
+
+impl CharacterSystem {
+    fn update(scene: &mut Scene) {
+        todo!()
+    }
+}

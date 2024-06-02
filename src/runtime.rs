@@ -10,6 +10,7 @@ use glfw::{
     MouseButton, OpenGlProfileHint, PWindow, SwapInterval, WindowEvent, WindowHint, WindowMode,
 };
 use spin_sleep::{SpinSleeper, SpinStrategy};
+use core::result;
 use std::time::Duration;
 
 const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 6);
@@ -241,7 +242,7 @@ pub trait FramebufferSizeCallback {
     fn framebuffer_size(&mut self, size: (i32, i32));
 }
 
-pub type Result<T> = core::result::Result<T, Error>;
+pub type Result<T> = result::Result<T, Error>;
 
 pub enum Error {
     MemoryError,

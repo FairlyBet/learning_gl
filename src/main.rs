@@ -22,5 +22,7 @@ mod utils;
 
 fn main() {
     // scene::Scene::sample();
-    runtime::run();
+    // runtime::run();
+    println!("{}", std::any::type_name::<i32>());
+    println!("{}", std::any::type_name::<camera::Camera>());
 }
