@@ -21,7 +21,6 @@ mod some_idea;
 mod utils;
 
 fn main() {
-    
     // scene::Scene::sample();
     runtime::run();
 }

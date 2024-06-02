@@ -1,6 +1,5 @@
 use crate::runtime::{Error, Result};
 use std::{
-    ffi::c_void,
     marker::PhantomData,
     mem::{align_of, size_of},
     ptr::{self, NonNull},
@@ -29,20 +28,10 @@ fn write_backwards<T>(buff: (*mut u8, usize), value: T, count: usize) {
     };
 }
 
-fn windows_page_size() -> usize {
-    let mut system_info = SYSTEM_INFO::default();
-    unsafe {
-        SystemInformation::GetSystemInfo(&mut system_info);
-    }
-    system_info.dwPageSize as usize
-}
-
 #[derive(Debug)]
 struct WindowsHeap(HANDLE);
 
 impl WindowsHeap {
-    const ALLOCATION_ALIGNMENT: usize = 0x10;
-
     fn new(size: usize) -> Result<Self> {
         unsafe {
             match Memory::HeapCreate(
@@ -85,6 +74,22 @@ impl WindowsHeap {
             return Err(Error::MemoryError);
         }
     }
+
+    fn page_size() -> usize {
+        let mut system_info = SYSTEM_INFO::default();
+        unsafe {
+            SystemInformation::GetSystemInfo(&mut system_info);
+        }
+        system_info.dwPageSize as usize
+    }
+
+    fn allocation_granularity() -> usize {
+        let mut system_info = SYSTEM_INFO::default();
+        unsafe {
+            SystemInformation::GetSystemInfo(&mut system_info);
+        }
+        system_info.dwAllocationGranularity as usize
+    }
 }
 
 impl Drop for WindowsHeap {
@@ -124,25 +129,22 @@ struct Descriptor(usize);
 
 #[derive(Debug)]
 struct Header {
-    data_block_ptr: NonNull<DataBlock>,
+    data_block_ptr: *mut MemoryBlock,
     data_block_len: usize,
-    free_block_ptr: NonNull<MemoryBlock>,
+    free_block_ptr: *mut MemoryBlock,
     free_block_len: usize,
     size: usize,
 }
 
 impl Header {
     fn new(ptr: NonNull<u8>, size: usize) -> Self {
-        assert_eq!(align_of::<MemoryBlock>(), align_of::<DataBlock>()); // Just in case
-
         Self::assert_align(ptr);
 
-        let offset = size / size_of::<DataBlock>() / 2 * size_of::<DataBlock>();
-        let free_block_ptr =
-            unsafe { NonNull::new_unchecked(ptr.cast::<MemoryBlock>().as_ptr().byte_add(offset)) };
+        let offset = size / size_of::<MemoryBlock>() / 2 * size_of::<MemoryBlock>(); // Calculating aligned offset
+        let free_block_ptr = unsafe { ptr.cast::<MemoryBlock>().as_ptr().byte_add(offset) };
 
         Self {
-            data_block_ptr: ptr.cast(),
+            data_block_ptr: ptr.cast().as_ptr(),
             data_block_len: 0,
             free_block_ptr,
             free_block_len: 0,
@@ -155,19 +157,18 @@ impl Header {
 
         assert!(new_size >= self.size);
 
-        // Shift forward free block data
+        // Shift forward free blocks data
         unsafe {
-            let offset =
-                self.free_block_ptr.as_ptr() as usize - self.data_block_ptr.as_ptr() as usize;
+            let offset = self.free_block_ptr as usize - self.data_block_ptr as usize;
             let old_free_block_ptr = new_ptr.cast::<MemoryBlock>().as_ptr().byte_add(offset);
-            let offset = new_size / size_of::<DataBlock>() / 2 * size_of::<DataBlock>();
+            let offset = new_size / size_of::<MemoryBlock>() / 2 * size_of::<MemoryBlock>(); // Calculating aligned offset
             let new_free_block_ptr = new_ptr.cast::<MemoryBlock>().as_ptr().byte_add(offset);
 
             new_free_block_ptr.copy_from(old_free_block_ptr, self.free_block_len);
-            self.free_block_ptr = NonNull::new_unchecked(new_free_block_ptr);
+            self.free_block_ptr = new_free_block_ptr;
         }
-        todo!("Update data block aligned pointers on reallocation");
-        self.data_block_ptr = new_ptr.cast();
+
+        self.data_block_ptr = new_ptr.cast().as_ptr();
         self.size = new_size;
     }
 
@@ -177,26 +178,21 @@ impl Header {
     }
 
     fn is_enough_for_data_block(&self) -> bool {
-        let addr_bound =
-            unsafe { self.data_block_ptr.as_ptr().add(self.data_block_len + 1) as usize };
-        let free_block_addr = self.free_block_ptr.as_ptr() as usize;
+        let addr_bound = unsafe { self.data_block_ptr.add(self.data_block_len + 1) as usize };
+        let free_block_addr = self.free_block_ptr as usize;
         addr_bound <= free_block_addr
     }
 
     fn is_enough_for_free_block(&self) -> bool {
-        let addr_bound =
-            unsafe { self.free_block_ptr.as_ptr().add(self.free_block_len + 1) as usize };
-        let data_addr = unsafe { self.data_block_ptr.as_ptr().byte_add(self.size) as usize };
+        let addr_bound = unsafe { self.free_block_ptr.add(self.free_block_len + 1) as usize };
+        let data_addr = unsafe { self.data_block_ptr.byte_add(self.size) as usize };
         addr_bound <= data_addr
     }
 
-    fn push_data_block(&mut self, value: DataBlock) {
+    fn push_data_block(&mut self, value: MemoryBlock) {
         assert!(self.is_enough_for_data_block());
         unsafe {
-            self.data_block_ptr
-                .as_ptr()
-                .add(self.data_block_len)
-                .write(value);
+            self.data_block_ptr.add(self.data_block_len).write(value);
         }
         self.data_block_len += 1;
     }
@@ -204,10 +200,7 @@ impl Header {
     fn push_free_block(&mut self, value: MemoryBlock) {
         assert!(self.is_enough_for_free_block());
         unsafe {
-            self.free_block_ptr
-                .as_ptr()
-                .add(self.free_block_len)
-                .write(value);
+            self.free_block_ptr.add(self.free_block_len).write(value);
         }
         self.free_block_len += 1;
     }
@@ -215,13 +208,13 @@ impl Header {
     fn remove_free_block(&mut self, index: usize) {
         assert!(index < self.free_block_len, "Index is out of bounds");
         unsafe {
-            let ptr = self.free_block_ptr.as_ptr().add(index);
+            let ptr = self.free_block_ptr.add(index);
             ptr.copy_from(ptr.add(1), self.free_block_len - index - 1);
         }
         self.free_block_len -= 1;
     }
 
-    fn base_ptr(&self) -> NonNull<u8> {
+    fn base_ptr(&self) -> *mut u8 {
         // data block pointer is the pointer returned by alloc
         self.data_block_ptr.cast()
     }
@@ -246,40 +239,84 @@ pub struct MemoryManager {
 }
 
 impl MemoryManager {
+    pub const ALLOCATION_GRANULARITY: usize = align_of::<u128>();
+
     fn new() -> Result<Self> {
-        let page_size = windows_page_size();
+        // Choose allocation granularity for data blocks sush as all the alignments would be satisfied
+        // Currently the biggest align of primitive type is 16 bytes (u128)
+        // Assuming that we choose granularity of each data block as 16 bytes
+        // This way all storing types would be properly aligned as their alignments is 16 bytes of less
+        // And data reallocation wouldn't require any relocation of data blocks for alignment assurance
+
+        assert!(WindowsHeap::allocation_granularity() >= Self::ALLOCATION_GRANULARITY);
+
+        let page_size = WindowsHeap::page_size();
         let size = page_size * 31;
         let heap = WindowsHeap::new(size + page_size)?;
         let ptr = heap.alloc(size)?;
-        let header_size = WindowsHeap::ALLOCATION_ALIGNMENT * 128;
+
+        let header_size = Self::ALLOCATION_GRANULARITY * 128;
         let header = Header::new(ptr, header_size);
         let data = Data::new(size - header_size);
 
         Ok(Self { heap, header, data })
     }
 
-    pub fn create_data_cell<T>(&mut self) -> Result<DataCell<T>> {
-        if WindowsHeap::ALLOCATION_ALIGNMENT < align_of::<T>() {
-            return Err(Error::UnsupportedAlignment);
-        }
+    pub fn new_data_cell<T>(&mut self) -> Result<DataCell<T>> {
+        _ = Self::assert_align::<T>()?;
 
         if !self.header.is_enough_for_data_block() {
-            self.resize_header()?;
+            _ = self.upsize_header()?;
         }
 
         let descriptor = Descriptor(self.header.data_block_len);
         let data_cell = DataCell::new(descriptor);
-        let data_block = DataBlock::new(Default::default(), self.header.base_ptr().cast());
+        let data_block = MemoryBlock::default();
         self.header.push_data_block(data_block);
 
         Ok(data_cell)
     }
 
-    fn resize_header(&mut self) -> Result<()> {
+    pub fn data_cell_with_capacity<T>(&mut self) -> Result<DataCell<T>> {
+        todo!()
+    }
+
+    fn assert_align<T>() -> Result<()> {
+        if Self::ALLOCATION_GRANULARITY >= align_of::<T>() {
+            Ok(())
+        } else {
+            Err(Error::UnsupportedAlignment(stringify!(T)))
+        }
+    }
+
+    fn upsize_data_cell(&mut self, descriptor: &Descriptor) {
+        todo!()
+    }
+
+    fn shrink_data_cell(&mut self, descriptor: &Descriptor) {
+        todo!()
+    }
+
+    fn upsize_data(&mut self) -> Result<()> {
+        let new_data_size = self.data.size * 2;
+        let new_total_size = new_data_size + self.header.size;
+        let ptr = self.heap.realloc(
+            unsafe { NonNull::new_unchecked(self.header.base_ptr()).cast() },
+            new_total_size,
+        )?;
+        self.header.upsize_on_reallocation(ptr, self.header.size);
+        todo!("Update free block data");
+        Ok(())
+    }
+
+    fn upsize_header(&mut self) -> Result<()> {
         let data_size = self.data.size;
         let new_header_size = self.header.size * 2;
         let new_total_size = new_header_size + data_size;
-        let ptr = self.heap.realloc(self.header.base_ptr(), new_total_size)?;
+        let ptr = self.heap.realloc(
+            unsafe { NonNull::new_unchecked(self.header.base_ptr()).cast() },
+            new_total_size,
+        )?;
 
         // Shift forward data
         unsafe {
@@ -292,11 +329,15 @@ impl MemoryManager {
         Ok(())
     }
 
-    fn get_data_block(&self, descriptor: &Descriptor) -> &DataBlock {
+    fn get_data_block(&self, descriptor: &Descriptor) -> &MemoryBlock {
         unsafe {
-            let ptr = self.header.data_block_ptr.as_ptr().add(descriptor.0);
+            let ptr = self.header.data_block_ptr.add(descriptor.0);
             &*ptr
         }
+    }
+
+    fn optimize_fragmentation(&mut self) {
+        todo!()
     }
 }
 
@@ -322,41 +363,29 @@ impl<T> DataCell<T> {
 
     pub fn slice<'a>(&self, mm: &'a MemoryManager) -> &'a [T] {
         let data_block = mm.get_data_block(&self.descriptor);
-        unsafe { slice::from_raw_parts(data_block.aligned_ptr.cast().as_ptr(), self.len) }
+        unsafe {
+            let ptr = mm.header.base_ptr().cast::<T>().byte_add(data_block.offset);
+            slice::from_raw_parts(ptr, self.len)
+        }
     }
 
     pub fn slice_mut<'a>(&mut self, mm: &'a MemoryManager) -> &'a mut [T] {
         let data_block = mm.get_data_block(&self.descriptor);
-        unsafe { slice::from_raw_parts_mut(data_block.aligned_ptr.cast().as_ptr(), self.len) }
+        unsafe {
+            let ptr = mm.header.base_ptr().cast::<T>().byte_add(data_block.offset);
+            slice::from_raw_parts_mut(ptr, self.len)
+        }
     }
 
     pub fn push(&mut self, value: T, mm: &mut MemoryManager) {
         let data_block = mm.get_data_block(&self.descriptor);
-        let addr_bound = unsafe {
-            data_block
-                .aligned_ptr
-                .cast::<T>()
-                .as_ptr()
-                .add(self.len + 1) as usize
-        };
-        let block_bound = unsafe {
-            mm.header
-                .base_ptr()
-                .as_ptr()
-                .add(data_block.block.offset + data_block.block.size) as usize
-        };
 
-        if addr_bound > block_bound {
-            todo!("Resize block")
+        if self.len * size_of::<T>() > data_block.size {
+            mm.upsize_data_cell(&self.descriptor);
         }
 
         unsafe {
-            data_block
-                .aligned_ptr
-                .cast::<T>()
-                .as_ptr()
-                .add(self.len)
-                .write(value);
+            mm.header.base_ptr().cast::<T>().add(self.len).write(value);
         }
 
         self.len += 1;
