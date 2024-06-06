@@ -1,6 +1,8 @@
 #![allow(unused)]
 // #![windows_subsystem = "windows"]
 
+use std::io;
+
 extern crate nalgebra_glm as glm;
 
 mod camera;
@@ -21,8 +23,15 @@ mod some_idea;
 mod utils;
 
 fn main() {
+    let mm = some_idea::MemoryManager::new().unwrap();
+    io::stdin().read_line(&mut String::new());
     // scene::Scene::sample();
     // runtime::run();
-    println!("{}", std::any::type_name::<i32>());
-    println!("{}", std::any::type_name::<camera::Camera>());
+    // v.iter().for_each(|item| item());
+    // println!("{}", size_of::<fn()>());
+
+    // println!("{}", std::any::type_name::<i32>());
+    // println!("{:?}", std::any::TypeId::of::<camera::Camera>());
+    // println!("{:?}", std::any::TypeId::of::<scene::Scene>());
+    // println!("{:?}", std::any::TypeId::of::<S>());
 }

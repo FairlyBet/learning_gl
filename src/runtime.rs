@@ -5,12 +5,12 @@ use crate::{
     resources::ResourceManager,
     scripting::Scripting,
 };
+use core::result;
 use glfw::{
     fail_on_errors, Action, ClientApiHint, Context, CursorMode, GlfwReceiver, Key, Modifiers,
     MouseButton, OpenGlProfileHint, PWindow, SwapInterval, WindowEvent, WindowHint, WindowMode,
 };
 use spin_sleep::{SpinSleeper, SpinStrategy};
-use core::result;
 use std::time::Duration;
 
 const CONTEXT_VERSION: WindowHint = WindowHint::ContextVersion(4, 6);
@@ -244,6 +244,7 @@ pub trait FramebufferSizeCallback {
 
 pub type Result<T> = result::Result<T, Error>;
 
+#[derive(Debug)]
 pub enum Error {
     MemoryError,
     UnsupportedAlignment(&'static str),

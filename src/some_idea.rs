@@ -2,10 +2,13 @@ use crate::{
     linear::Transform,
     runtime::{Error, Result},
 };
+use serde::{Deserialize, Serialize};
 use std::{
+    alloc::{self, Layout},
+    any::{self, TypeId},
     marker::PhantomData,
     mem::{align_of, size_of},
-    ptr::{self, NonNull},
+    ptr::{self, addr_of, NonNull},
     slice,
 };
 use windows::Win32::{
@@ -234,39 +237,54 @@ impl Data {
     }
 }
 
-#[derive(Debug)]
 pub struct MemoryManager {
     heap: WindowsHeap,
     header: Header,
     data: Data,
+    drops: Vec<fn(*mut u8, usize)>,
 }
 
 impl MemoryManager {
-    pub const ALLOCATION_GRANULARITY: usize = align_of::<u128>();
+    pub const ALLOCATION_GRANULARITY: usize = 16;
 
-    fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         // Choose allocation granularity for data blocks sush as all the alignments would be satisfied
         // Currently the biggest align of primitive type is 16 bytes (u128)
         // Assuming that we choose granularity of each data block as 16 bytes
-        // This way all storing types would be properly aligned as their alignments is 16 bytes of less
-        // And data reallocation wouldn't require any relocation of data blocks for alignment assurance
+        // This way all storing types would be properly aligned as their alignments is 16 bytes or less
+        // And data reallocation wouldn't require any relocation of data blocks for proper alignment assurance
 
-        assert!(WindowsHeap::allocation_granularity() >= Self::ALLOCATION_GRANULARITY);
+        assert_eq!(
+            WindowsHeap::allocation_granularity() % Self::ALLOCATION_GRANULARITY,
+            0
+        );
 
         let page_size = WindowsHeap::page_size();
         let size = page_size * 31;
         let heap = WindowsHeap::new(size + page_size)?;
         let ptr = heap.alloc(size)?;
 
-        let header_size = Self::ALLOCATION_GRANULARITY * 128;
+        let header_size = Self::ALLOCATION_GRANULARITY * 256;
         let header = Header::new(ptr, header_size);
         let data = Data::new(size - header_size);
 
-        Ok(Self { heap, header, data })
+        Ok(Self {
+            heap,
+            header,
+            data,
+            drops: Vec::new(),
+        })
     }
 
     pub fn new_data_cell<T>(&mut self) -> Result<DataCell<T>> {
         _ = Self::assert_align::<T>()?;
+
+        let drop = |ptr: *mut u8, len: usize| unsafe {
+            let ptr: *mut [T] = slice::from_raw_parts_mut(ptr.cast(), len);
+            ptr::drop_in_place(ptr);
+        };
+
+        self.drops.push(drop);
 
         if !self.header.is_enough_for_data_block() {
             _ = self.upsize_header()?;
@@ -288,7 +306,14 @@ impl MemoryManager {
         if Self::ALLOCATION_GRANULARITY >= align_of::<T>() {
             Ok(())
         } else {
-            Err(Error::UnsupportedAlignment(stringify!(T)))
+            Err(Error::UnsupportedAlignment(any::type_name::<T>()))
+        }
+    }
+
+    fn get_data_block(&self, descriptor: &Descriptor) -> &MemoryBlock {
+        unsafe {
+            let ptr = self.header.data_block_ptr.add(descriptor.0);
+            &*ptr
         }
     }
 
@@ -332,15 +357,14 @@ impl MemoryManager {
         Ok(())
     }
 
-    fn get_data_block(&self, descriptor: &Descriptor) -> &MemoryBlock {
-        unsafe {
-            let ptr = self.header.data_block_ptr.add(descriptor.0);
-            &*ptr
-        }
-    }
-
     fn optimize_fragmentation(&mut self) {
         todo!()
+    }
+}
+
+impl Drop for MemoryManager {
+    fn drop(&mut self) {
+        todo!("call drop functions for each data");
     }
 }
 
@@ -422,16 +446,6 @@ impl Engine {
     }
 }
 
-fn f(mm: &mut MemoryManager) -> Result<()> {
-    let mut scene = Scene {};
-    let transforms = mm.new_data_cell::<Transform>()?;
-    let mut updates = mm.new_data_cell::<fn(&mut Scene)>()?;
-    updates.push(CameraSystem::update, mm);
-    updates.push(CharacterSystem::update, mm);
-    updates.slice(mm).iter().for_each(|item| item(&mut scene));
-    Ok(())
-}
-
 pub struct Scene;
 
 impl Scene {
@@ -442,24 +456,110 @@ impl Scene {
     }
 }
 
-pub trait Component {
-    fn create() -> Self
+pub trait Component<T: Sized + Serialize + for<'a> Deserialize<'a> = Self> {
+    fn create() -> Self;
+}
+
+enum Serialized {
+    Json(String),
+    Binary, // something here
+}
+
+pub struct TypeInfo {
+    id: TypeId,
+    name: &'static str,
+    size: usize,
+    align: usize,
+    create: fn() -> *mut u8,
+    serialize: fn() -> Serialized,
+    deserialize: fn() -> *mut u8,
+}
+
+pub struct TypeRegistry {
+    reg: DataCell<TypeInfo>,
+}
+
+impl TypeRegistry {
+    pub fn add_type<T: 'static + Component + Serialize + for<'a> Deserialize<'a>>(&mut self) {
+        let type_name = any::type_name::<T>();
+        let type_id = any::TypeId::of::<T>();
+
+        let create = || -> *mut u8 {
+            let component = T::create();
+            let layout = Layout::for_value(&component);
+            let ptr = unsafe { alloc::alloc(layout) };
+            ptr.cast()
+        };
+        todo!();
+    }
+}
+
+pub enum SystemType {
+    Update,
+    Init,
+    Trigger,
+    Start,
+    End,
+}
+
+struct SystemInfo<T> {
+    name: &'static str,
+    ptr: T,
+}
+
+pub struct SystemRegistry {
+    // arrays of systems
+}
+
+impl SystemRegistry {}
+
+struct Systems {
+    sys: Vec<fn()>,
+}
+
+impl Systems {
+    fn add<S>(&mut self)
     where
-        Self: Sized;
-}
-
-struct CameraSystem;
-
-impl CameraSystem {
-    fn update(scene: &mut Scene) {
-        todo!()
+        S: UpdateSystem,
+    {
+        let ptr: fn() = S::update;
+        self.sys.push(ptr);
     }
 }
 
-struct CharacterSystem;
+trait UpdateSystem {
+    fn update();
+}
 
-impl CharacterSystem {
-    fn update(scene: &mut Scene) {
-        todo!()
-    }
+trait InitSystem {
+    fn init();
+}
+
+trait TriggerSystem {
+    fn on_trigger();
+}
+
+trait SceneStartSystem {
+    fn start();
+}
+
+trait SceneEndSystem {
+    fn end();
+}
+
+#[derive(Debug)]
+struct Entity {
+    id: EntityId,
+    is_alive: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EntityId {
+    id: u32,
+    gen: u32,
+}
+
+struct ComponentWrapper<T: Component + Serialize + for<'a> Deserialize<'a> + Sized> {
+    component: T,
+    owner: EntityId,
 }
