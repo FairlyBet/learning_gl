@@ -532,10 +532,12 @@ trait UpdateSystem {
 }
 
 trait InitSystem {
+    // pass entities that has a newly created component attached (somehow mark those components)
     fn init();
 }
 
 trait TriggerSystem {
+    // pass entities that are to be notified of trigger collision
     fn on_trigger();
 }
 
