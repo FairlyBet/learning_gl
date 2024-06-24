@@ -21,6 +21,7 @@ mod serializable;
 mod shader;
 mod some_idea;
 mod utils;
+mod idea2;
 
 fn main() {
     let mm = some_idea::MemoryManager::new().unwrap();

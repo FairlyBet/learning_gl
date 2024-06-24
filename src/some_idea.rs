@@ -1,14 +1,16 @@
 use crate::{
+    gl_wrappers::Gl,
     linear::Transform,
     runtime::{Error, Result},
 };
+use glfw::PWindow;
 use serde::{Deserialize, Serialize};
 use std::{
     alloc::{self, Layout},
     any::{self, TypeId},
     marker::PhantomData,
-    mem::{align_of, size_of},
-    ptr::{self, addr_of, NonNull},
+    mem::{align_of, size_of, ManuallyDrop},
+    ptr::{self, addr_of, drop_in_place, NonNull},
     slice,
 };
 use windows::Win32::{
@@ -19,12 +21,11 @@ use windows::Win32::{
     },
 };
 
-fn aligned_ptr<T>(ptr: *const u8) -> *mut T {
-    let addr = ptr as usize;
+fn aligned_addr<T>(addr: usize) -> usize {
     let align = align_of::<T>();
     let aligned_addr = (addr + align - 1) & !(align - 1);
 
-    aligned_addr as *mut T
+    aligned_addr
 }
 
 fn write_backwards<T>(buff: (*mut u8, usize), value: T, count: usize) {
@@ -32,6 +33,10 @@ fn write_backwards<T>(buff: (*mut u8, usize), value: T, count: usize) {
         let ptr = buff.0.add(buff.1 - size_of::<T>() * (count + 1));
         ptr.cast::<T>().write(value);
     };
+}
+
+fn kilo(bytes: usize) -> usize {
+    bytes * 1024
 }
 
 #[derive(Debug)]
@@ -107,26 +112,34 @@ impl Drop for WindowsHeap {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-struct MemoryBlock {
+struct MemoryBlockInfo {
     offset: usize,
     size: usize,
 }
 
-impl MemoryBlock {
+impl MemoryBlockInfo {
     fn new(offset: usize, size: usize) -> Self {
         Self { offset, size }
     }
+
+    fn reduce(&mut self, size: usize) -> Self {
+        assert!(self.size >= size);
+        self.size -= size;
+        self.offset += size;
+
+        Self::new(self.offset, size)
+    }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct DataBlock {
-    block: MemoryBlock,
-    aligned_ptr: NonNull<u8>,
+#[derive(Debug, Default, Clone, Copy)]
+struct DataBlockInfo {
+    bl: MemoryBlockInfo,
+    len: usize,
 }
 
-impl DataBlock {
-    fn new(block: MemoryBlock, aligned_ptr: NonNull<u8>) -> Self {
-        Self { block, aligned_ptr }
+impl DataBlockInfo {
+    fn new(block: MemoryBlockInfo, len: usize) -> Self {
+        Self { bl: block, len }
     }
 }
 
@@ -135,9 +148,9 @@ struct Descriptor(usize);
 
 #[derive(Debug)]
 struct Header {
-    data_block_ptr: *mut MemoryBlock,
+    data_block_ptr: *mut DataBlockInfo,
     data_block_len: usize,
-    free_block_ptr: *mut MemoryBlock,
+    free_block_ptr: *mut MemoryBlockInfo,
     free_block_len: usize,
     size: usize,
 }
@@ -146,8 +159,8 @@ impl Header {
     fn new(ptr: NonNull<u8>, size: usize) -> Self {
         Self::assert_align(ptr);
 
-        let offset = size / size_of::<MemoryBlock>() / 2 * size_of::<MemoryBlock>(); // Calculating aligned offset
-        let free_block_ptr = unsafe { ptr.cast::<MemoryBlock>().as_ptr().byte_add(offset) };
+        let offset = Self::aligned_offset(size);
+        let free_block_ptr = unsafe { ptr.cast::<MemoryBlockInfo>().as_ptr().byte_add(offset) };
 
         Self {
             data_block_ptr: ptr.cast().as_ptr(),
@@ -158,6 +171,10 @@ impl Header {
         }
     }
 
+    fn aligned_offset(size: usize) -> usize {
+        aligned_addr::<MemoryBlockInfo>(size / 2)
+    }
+
     fn upsize_on_reallocation(&mut self, new_ptr: NonNull<u8>, new_size: usize) {
         Self::assert_align(new_ptr);
 
@@ -166,9 +183,9 @@ impl Header {
         // Shift forward free blocks data
         unsafe {
             let offset = self.free_block_ptr as usize - self.data_block_ptr as usize;
-            let old_free_block_ptr = new_ptr.cast::<MemoryBlock>().as_ptr().byte_add(offset);
-            let offset = new_size / size_of::<MemoryBlock>() / 2 * size_of::<MemoryBlock>(); // Calculating aligned offset
-            let new_free_block_ptr = new_ptr.cast::<MemoryBlock>().as_ptr().byte_add(offset);
+            let old_free_block_ptr = new_ptr.cast::<MemoryBlockInfo>().as_ptr().byte_add(offset);
+            let offset = Self::aligned_offset(new_size);
+            let new_free_block_ptr = new_ptr.cast::<MemoryBlockInfo>().as_ptr().byte_add(offset);
 
             new_free_block_ptr.copy_from(old_free_block_ptr, self.free_block_len);
             self.free_block_ptr = new_free_block_ptr;
@@ -180,7 +197,7 @@ impl Header {
 
     fn assert_align(ptr: NonNull<u8>) {
         let addr = ptr.as_ptr() as usize;
-        assert_eq!(addr % align_of::<MemoryBlock>(), 0);
+        assert_eq!(addr % align_of::<DataBlockInfo>(), 0);
     }
 
     fn is_enough_for_data_block(&self) -> bool {
@@ -195,7 +212,7 @@ impl Header {
         addr_bound <= data_addr
     }
 
-    fn push_data_block(&mut self, value: MemoryBlock) {
+    fn push_data_block(&mut self, value: DataBlockInfo) {
         assert!(self.is_enough_for_data_block());
         unsafe {
             self.data_block_ptr.add(self.data_block_len).write(value);
@@ -203,7 +220,8 @@ impl Header {
         self.data_block_len += 1;
     }
 
-    fn push_free_block(&mut self, value: MemoryBlock) {
+    fn merge_push_free_block(&mut self, value: MemoryBlockInfo) {
+        todo!("merge");
         assert!(self.is_enough_for_free_block());
         unsafe {
             self.free_block_ptr.add(self.free_block_len).write(value);
@@ -211,13 +229,19 @@ impl Header {
         self.free_block_len += 1;
     }
 
-    fn remove_free_block(&mut self, index: usize) {
+    fn take_free_block(&mut self, index: usize) -> MemoryBlockInfo {
         assert!(index < self.free_block_len, "Index is out of bounds");
         unsafe {
             let ptr = self.free_block_ptr.add(index);
+            let block = ptr.read();
             ptr.copy_from(ptr.add(1), self.free_block_len - index - 1);
+            self.free_block_len -= 1;
+            block
         }
-        self.free_block_len -= 1;
+    }
+
+    fn free_blocks(&self) -> &[MemoryBlockInfo] {
+        unsafe { slice::from_raw_parts(self.free_block_ptr, self.free_block_len) }
     }
 
     fn base_ptr(&self) -> *mut u8 {
@@ -254,17 +278,14 @@ impl MemoryManager {
         // This way all storing types would be properly aligned as their alignments is 16 bytes or less
         // And data reallocation wouldn't require any relocation of data blocks for proper alignment assurance
 
-        assert_eq!(
-            WindowsHeap::allocation_granularity() % Self::ALLOCATION_GRANULARITY,
-            0
-        );
+        assert!(WindowsHeap::allocation_granularity() >= Self::ALLOCATION_GRANULARITY);
 
         let page_size = WindowsHeap::page_size();
-        let size = page_size * 31;
-        let heap = WindowsHeap::new(size + page_size)?;
+        let heap = WindowsHeap::new(page_size * 32)?;
+        let size = Self::get_granular_size(kilo(100));
         let ptr = heap.alloc(size)?;
 
-        let header_size = Self::ALLOCATION_GRANULARITY * 256;
+        let header_size = Self::get_granular_size(kilo(4));
         let header = Header::new(ptr, header_size);
         let data = Data::new(size - header_size);
 
@@ -287,12 +308,12 @@ impl MemoryManager {
         self.drops.push(drop);
 
         if !self.header.is_enough_for_data_block() {
-            _ = self.upsize_header()?;
+            _ = self.extend_header()?;
         }
 
         let descriptor = Descriptor(self.header.data_block_len);
         let data_cell = DataCell::new(descriptor);
-        let data_block = MemoryBlock::default();
+        let data_block = DataBlockInfo::default();
         self.header.push_data_block(data_block);
 
         Ok(data_cell)
@@ -310,36 +331,66 @@ impl MemoryManager {
         }
     }
 
-    fn get_data_block(&self, descriptor: &Descriptor) -> &MemoryBlock {
+    fn get_granular_size(size: usize) -> usize {
+        size + size % Self::ALLOCATION_GRANULARITY
+    }
+
+    fn get_data_block(&self, descriptor: &Descriptor) -> &mut DataBlockInfo {
         unsafe {
             let ptr = self.header.data_block_ptr.add(descriptor.0);
-            &*ptr
+            &mut *ptr
         }
     }
 
-    fn upsize_data_cell(&mut self, descriptor: &Descriptor) {
+    fn extend_data_cell(&mut self, descriptor: &Descriptor, new_size: usize) {
+        let data_block = self.get_data_block(descriptor);
+        assert!(new_size >= data_block.bl.size);
+
+        let granular_size = Self::get_granular_size(new_size);
+        let opt = self.find_fit(granular_size);
+        if opt.is_none() {
+            self.extend_data(granular_size * 2);
+        }
+        let index = opt.unwrap_or(self.find_fit(granular_size).unwrap());
+
+        let mut block = self.header.take_free_block(index);
+        let occupied = block.reduce(granular_size);
+        if block.size > 0 {
+            self.header.merge_push_free_block(block);
+        }
+
         todo!()
     }
 
-    fn shrink_data_cell(&mut self, descriptor: &Descriptor) {
-        todo!()
+    fn find_fit(&self, size: usize) -> Option<usize> {
+        let mut ret = None;
+        for (i, block) in self.header.free_blocks().iter().enumerate() {
+            if block.size >= size {
+                ret = Some(i);
+                break;
+            }
+        }
+        ret
     }
 
-    fn upsize_data(&mut self) -> Result<()> {
-        let new_data_size = self.data.size * 2;
-        let new_total_size = new_data_size + self.header.size;
+    fn extend_data(&mut self, by: usize) -> Result<()> {
+        let new_total_size = self.header.size + self.data.size + by;
         let ptr = self.heap.realloc(
             unsafe { NonNull::new_unchecked(self.header.base_ptr()).cast() },
             new_total_size,
         )?;
         self.header.upsize_on_reallocation(ptr, self.header.size);
-        todo!("Update free block data");
+        todo!("Update new free space");
         Ok(())
     }
 
-    fn upsize_header(&mut self) -> Result<()> {
+    fn reduce_data_cell(&mut self, descriptor: &Descriptor) {
+        todo!()
+    }
+
+    fn extend_header(&mut self) -> Result<()> {
         let data_size = self.data.size;
-        let new_header_size = self.header.size * 2;
+        let new_header_size = Self::get_granular_size(self.header.size * 2);
         let new_total_size = new_header_size + data_size;
         let ptr = self.heap.realloc(
             unsafe { NonNull::new_unchecked(self.header.base_ptr()).cast() },
@@ -391,31 +442,40 @@ impl<T> DataCell<T> {
     pub fn slice<'a>(&self, mm: &'a MemoryManager) -> &'a [T] {
         let data_block = mm.get_data_block(&self.descriptor);
         unsafe {
-            let ptr = mm.header.base_ptr().cast::<T>().byte_add(data_block.offset);
-            slice::from_raw_parts(ptr, self.len)
+            let ptr = mm
+                .header
+                .base_ptr()
+                .cast::<T>()
+                .byte_add(data_block.bl.offset);
+            slice::from_raw_parts(ptr, data_block.len)
         }
     }
 
     pub fn slice_mut<'a>(&mut self, mm: &'a MemoryManager) -> &'a mut [T] {
         let data_block = mm.get_data_block(&self.descriptor);
         unsafe {
-            let ptr = mm.header.base_ptr().cast::<T>().byte_add(data_block.offset);
-            slice::from_raw_parts_mut(ptr, self.len)
+            let ptr = mm
+                .header
+                .base_ptr()
+                .cast::<T>()
+                .byte_add(data_block.bl.offset);
+            slice::from_raw_parts_mut(ptr, data_block.len)
         }
     }
 
     pub fn push(&mut self, value: T, mm: &mut MemoryManager) {
         let data_block = mm.get_data_block(&self.descriptor);
-
-        if self.len * size_of::<T>() > data_block.size {
-            mm.upsize_data_cell(&self.descriptor);
+        let is_enough_space = data_block.len * size_of::<T>() <= data_block.bl.size;
+        if !is_enough_space {
+            let new_size = size_of::<T>() * data_block.len * 2;
+            mm.extend_data_cell(&self.descriptor, new_size);
         }
 
         unsafe {
             mm.header.base_ptr().cast::<T>().add(self.len).write(value);
         }
 
-        self.len += 1;
+        mm.get_data_block(&self.descriptor).len += 1;
     }
 
     pub fn take_at(&mut self, index: usize, mm: &MemoryManager) -> T {
@@ -431,22 +491,43 @@ impl<T> DataCell<T> {
     }
 }
 
-pub struct Engine {
-    mm: MemoryManager,
-}
+pub struct Engine;
 
 impl Engine {
-    pub fn new() -> Result<Self> {
+    pub fn run(f: impl Fn(&mut MemoryManager) -> Result<()>) -> Result<()> {
         let mm = MemoryManager::new()?;
-        Ok(Self { mm })
-    }
+        let rm = ResourceManager::new();
 
-    fn run(mut self, f: impl FnOnce(&mut MemoryManager) -> Result<()>) -> Result<()> {
-        f(&mut self.mm)
+        todo!()
     }
 }
 
-pub struct Scene;
+struct GraphicsBackend {
+    gl: Gl,
+    window: PWindow,
+}
+
+pub struct Context {
+    pub mm: MemoryManager,
+    pub rm: ResourceManager,
+    pub scene: Scene,
+}
+
+pub struct ResourceManager {
+    // ...
+}
+
+impl ResourceManager {
+    fn new() -> Self {
+        Self {}
+    }
+}
+
+pub struct Scene {
+    // active systems
+    // components
+    // some data
+}
 
 impl Scene {
     pub fn get_component<T>() -> DataCell<T> {
@@ -465,14 +546,45 @@ enum Serialized {
     Binary, // something here
 }
 
+struct RawValue(*mut u8, Layout);
+
+impl RawValue {
+    fn create<T>(value: T) -> Result<Self> {
+        unsafe {
+            let layout = Layout::for_value(&value);
+            let ptr = alloc::alloc(layout);
+            if ptr.is_null() {
+                return Err(Error::MemoryError);
+            }
+            ptr.cast::<T>().write(value);
+
+            Ok(Self(ptr, layout))
+        }
+    }
+
+    fn dealloc<T>(self) -> T {
+        unsafe {
+            let ret = self.0.cast::<T>().read();
+            alloc::dealloc(self.0, self.1);
+            ret
+        }
+    }
+}
+
+impl Drop for RawValue {
+    fn drop(&mut self) {
+        todo!()
+    }
+}
+
 pub struct TypeInfo {
     id: TypeId,
     name: &'static str,
     size: usize,
     align: usize,
-    create: fn() -> *mut u8,
+    create: fn() -> Result<RawValue>,
     serialize: fn() -> Serialized,
-    deserialize: fn() -> *mut u8,
+    deserialize: fn(Serialized) -> Result<RawValue>,
 }
 
 pub struct TypeRegistry {
@@ -480,15 +592,16 @@ pub struct TypeRegistry {
 }
 
 impl TypeRegistry {
-    pub fn add_type<T: 'static + Component + Serialize + for<'a> Deserialize<'a>>(&mut self) {
+    pub fn add_type<T>(&mut self)
+    where
+        T: 'static + Component + Serialize + for<'a> Deserialize<'a>,
+    {
         let type_name = any::type_name::<T>();
         let type_id = any::TypeId::of::<T>();
 
-        let create = || -> *mut u8 {
+        let create = || -> Result<RawValue> {
             let component = T::create();
-            let layout = Layout::for_value(&component);
-            let ptr = unsafe { alloc::alloc(layout) };
-            ptr.cast()
+            RawValue::create(component)
         };
         todo!();
     }
@@ -507,11 +620,23 @@ struct SystemInfo<T> {
     ptr: T,
 }
 
-pub struct SystemRegistry {
-    // arrays of systems
+pub struct SystemContainer {
+    update: DataCell<fn()>,
+    init: DataCell<fn()>,
+    trigger: DataCell<fn()>,
+    start: DataCell<fn()>,
+    end: DataCell<fn()>,
 }
 
-impl SystemRegistry {}
+impl SystemContainer {}
+
+pub struct SystemContainerBuilder {
+    update: Vec<fn()>,
+    init: Vec<fn()>,
+    trigger: Vec<fn()>,
+    start: Vec<fn()>,
+    end: Vec<fn()>,
+}
 
 struct Systems {
     sys: Vec<fn()>,
@@ -522,6 +647,8 @@ impl Systems {
     where
         S: UpdateSystem,
     {
+        let a = [1, 2, 3];
+        for num in a.iter().take(3) {}
         let ptr: fn() = S::update;
         self.sys.push(ptr);
     }
